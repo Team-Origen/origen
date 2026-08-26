@@ -286,6 +286,16 @@ La IA no publica issues, no cierra issues, no hace merge ni modifica la fuente f
 
 Los futuros artefactos de operación deben referenciar estas fuentes, no copiarlas ni redefinirlas.
 
-Añadir que las issues se vinculen a su archive de openspec
+a- Añadir que las issues se vinculen a su archive de openspec
 
-El agente tiene que saber que existe tidewave
+b- El agente tiene que saber que existe tidewave
+
+c- dailys
+
+d- Pr en draft luego de primer commit
+
+e- La persona debe linkear la issue al PR
+
+f- Bloquear de manera las issues
+
+g- Feature branch chain
