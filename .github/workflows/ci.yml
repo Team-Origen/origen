@@ -12,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validar nomenclatura de la rama
+        env:
+          BRANCH: ${{ github.head_ref }}
         run: |
-          BRANCH="${{ github.head_ref }}"
           # La rama debe empezar con un tipo válido o ser un hotfix
           if [[ ! "$BRANCH" =~ ^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)/.*$ ]] && [[ ! "$BRANCH" =~ ^hotfix/.*$ ]]; then
             echo "Error: La rama debe cumplir con el estándar (ej. feat/1-scaffold-ci o hotfix/bug-urgente)."
@@ -21,8 +22,9 @@ jobs:
           fi
 
       - name: Validar issue vinculada en el PR
+        env:
+          BODY: ${{ github.event.pull_request.body }}
         run: |
-          BODY="${{ github.event.pull_request.body }}"
           if [[ ! "$BODY" =~ (Closes|Fixes|Resolves)\ #[0-9]+ ]]; then
             echo "Error: La descripción del PR debe vincular una issue aprobada (ej. 'Closes #1')."
             exit 1
