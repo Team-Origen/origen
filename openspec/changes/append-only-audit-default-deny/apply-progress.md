@@ -3,8 +3,8 @@
 ## Delivery
 - Mode: Strict TDD
 - Strategy: `exception-ok`; overall `size:exception` accepted
-- Completed: WU1 tasks 1.1–1.3 and WU2 tasks 2.1–2.4
-- Remaining: WU3
+- Completed: WU1 tasks 1.1–1.3, WU2 tasks 2.1–2.4, and WU3 tasks 3.1–3.4
+- Remaining: None
 
 ## TDD Cycle Evidence
 | Task | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
@@ -16,6 +16,10 @@
 | 2.2 | Integration | N/A (new) | Transaction outcomes referenced absent writer | Runtime trace passed 5/5 | Commit, rollback, denial, failure, and unavailable paths | Shared failure mapping; 5/5 |
 | 2.3 | Integration | N/A (new) | Tests existed before migration/modules | Focused run passed 12/12 | Row and statement trigger levels exercised | Separate append and multi boundaries |
 | 2.4 | PostgreSQL runtime | N/A (new) | Rollback requirements encoded before migration | Empty rollback/re-migrate passed | Populated rollback returned SQLSTATE 55000 in disposable database | All fixture cleanup used database drop |
+| 3.1 | PostgreSQL runtime | WU2 audit baseline passed 12/12 | Initial focused run failed 1 test with 3 invalid before repository/provisioning existed | Disposable PostgreSQL 17.11 run passed 4/4 | Runtime ACL, verifier trigger, ownership, membership, grants, and trigger metadata paths | Catalog checks use role-aware privilege functions and `pg_trigger` event bits; 4/4 |
+| 3.2 | PostgreSQL runtime | N/A (new repository and provisioning) | Security assertions existed before role/config/CI implementation | Two-pass provisioning and migration as migrator passed | Provision-before-migrate and idempotent grant-after-migrate paths | Migration repository remains unsupervised and validates the owner identifier |
+| 3.3 | Integration | Focused security run passed 4/4 | Missing-configuration path initially failed without URLs | Harness reports variable names only and never credential values | Runtime, migration, verifier, and admin prerequisites remain separate | Connection cleanup tolerates already-stopped processes; 4/4 |
+| 3.4 | Verification | 25/25 ordinary tests | Verification commands were specified before execution | Full tests, warnings-as-errors compile, and focused format checks exited 0 | Triangulation skipped: this task executes structural quality gates | Repository-wide format failure isolated to pre-existing CRLF churn; no unrelated normalization |
 
 ## Work Unit Evidence
 | Evidence | Result |
@@ -33,5 +37,14 @@
 | Migration runtime | `MIX_ENV=test mix ecto.rollback -n 1` then `mix ecto.migrate` passed on empty `origen_test`; a disposable partition database rejected populated rollback with PostgreSQL SQLSTATE 55000 and was dropped afterward. |
 | Compile/format | Focused `mix format --check-formatted` and `MIX_ENV=test mix compile --warnings-as-errors` exited 0. Repository-wide format check remains blocked by pre-existing CRLF churn outside WU2. |
 | Rollback boundary | Revert only the WU2 migration, two audit modules, three audit test files, and WU2 progress marks. Database down is safe only while `audit_events` is empty; populated history requires preserve/export and separately approved destructive handling. |
+
+### WU3 Evidence
+| Evidence | Result |
+|---|---|
+| Focused test | Disposable PostgreSQL 17.11 provisioning plus `mix test test/origen/audit/postgres_security_test.exs --include postgres_security` passed 4 tests, 0 failures. Assertions independently proved `current_user`, role flags, SET-only owner membership, ownership, exact grants, PUBLIC revocations, runtime SQLSTATE 42501, verifier SQLSTATE 55000, trigger levels/events, and unchanged rows. |
+| Runtime harness | Roles were provisioned before migration and provisioned again after migration without errors; `mix ecto.security.migrate` ran through unsupervised `Origen.MigrationRepo` as migrator after `SET ROLE` to the NOLOGIN owner. The disposable database and all four disposable roles were dropped; follow-up catalog queries returned 0 residual databases and 0 residual roles. |
+| Full verification | `mix test` passed 25 tests, 0 failures, 4 PostgreSQL-security tests excluded by default. `mix compile --warnings-as-errors` exited 0 with the known non-fatal Windows LiveView symlink warning. Focused `mix format --check-formatted` for WU3 Elixir files exited 0. Repository-wide `mix format --check-formatted` remains blocked by pre-existing CRLF files, including unrelated files; none were normalized. |
+| CI boundary | CI provisions owner/migrator/runtime/verifier identities from service-scoped environment credentials, migrates separately, runs the ordinary suite, then runs the PostgreSQL security suite with `Origen.Repo` authenticated as runtime and an independent verifier connection. |
+| Rollback boundary | Revert only the WU3 migration repository, separated configuration and alias, role provisioning SQL, PostgreSQL security harness/tests, CI steps, test tag exclusion, and WU3 progress marks. Do not revoke deployed audit ACLs or triggers; external role deprovisioning requires a separately approved operational rollback. |
 
 No design deviations. Database credentials were imported from user-scoped environment variables per command and were never printed or persisted.

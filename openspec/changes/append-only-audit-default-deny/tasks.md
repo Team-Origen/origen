@@ -41,7 +41,7 @@ Apply is blocked until the user selects `stacked-to-main`, `feature-branch-chain
 
 ## Phase 3: WU3 — PostgreSQL 17 Proof (RED → GREEN → REFACTOR)
 
-- [ ] 3.1 **RED:** Add non-sandbox assertions for `current_user`, NOLOGIN owner, NOINHERIT roles, migrator SET-only membership, ownership/grants, approved-column INSERT, trigger events/levels, unchanged rows, runtime `42501`, verifier `55000`.
-- [ ] 3.2 **GREEN:** Provision roles outside migrations; separate runtime/migration/security URLs; revoke PUBLIC CONNECT/schema CREATE/object access; migrate via unsupervised `Origen.MigrationRepo`; make CI run `mix test` as runtime.
-- [ ] 3.3 **REFACTOR:** Redact secrets and document local `ORIGEN_TEST_DB_USERNAME`, `ORIGEN_TEST_DB_PASSWORD`, `ORIGEN_MIGRATION_DATABASE_URL`, and `ORIGEN_SECURITY_DATABASE_URL` prerequisites in harness output.
-- [ ] 3.4 Verify `mix test`, `mix compile --warnings-as-errors`, and `mix format --check-formatted`; inspect diffs for CRLF-only churn and fix line endings without weakening formatter checks.
+- [x] 3.1 **RED:** Add non-sandbox assertions for `current_user`, NOLOGIN owner, NOINHERIT roles, migrator SET-only membership, ownership/grants, approved-column INSERT, trigger events/levels, unchanged rows, runtime `42501`, verifier `55000`.
+- [x] 3.2 **GREEN:** Provision roles outside migrations; separate runtime/migration/security URLs; revoke PUBLIC CONNECT/schema CREATE/object access; migrate via unsupervised `Origen.MigrationRepo`; make CI run `mix test` as runtime.
+- [x] 3.3 **REFACTOR:** Redact secrets and document local `ORIGEN_TEST_DB_USERNAME`, `ORIGEN_TEST_DB_PASSWORD`, `ORIGEN_MIGRATION_DATABASE_URL`, and `ORIGEN_SECURITY_DATABASE_URL` prerequisites in harness output.
+- [x] 3.4 Verify `mix test`, `mix compile --warnings-as-errors`, and `mix format --check-formatted`; inspect diffs for CRLF-only churn and fix line endings without weakening formatter checks.

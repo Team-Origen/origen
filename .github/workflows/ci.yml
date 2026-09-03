@@ -90,9 +90,57 @@ jobs:
       - name: Compilar con advertencias como errores
         run: mix compile --warnings-as-errors
 
-      - name: Ejecutar Tests
+      - name: Provision least-privilege database roles
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATOR_ROLE: origen_migrator
+          ORIGEN_RUNTIME_ROLE: origen_runtime
+          ORIGEN_VERIFIER_ROLE: origen_verifier
+          ORIGEN_MIGRATOR_PASSWORD: postgres
+          ORIGEN_RUNTIME_PASSWORD: postgres
+          ORIGEN_VERIFIER_PASSWORD: postgres
+        run: psql -X -v ON_ERROR_STOP=1 -d origen_test -f priv/repo/security/provision_roles.sql
+
+      - name: Migrate with SET-only owner capability
+        env:
+          MIX_ENV: test
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATION_DATABASE_URL: ecto://origen_migrator:postgres@localhost:5432/origen_test
+        run: mix ecto.security.migrate
+
+      - name: Apply runtime and verifier grants
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATOR_ROLE: origen_migrator
+          ORIGEN_RUNTIME_ROLE: origen_runtime
+          ORIGEN_VERIFIER_ROLE: origen_verifier
+          ORIGEN_MIGRATOR_PASSWORD: postgres
+          ORIGEN_RUNTIME_PASSWORD: postgres
+          ORIGEN_VERIFIER_PASSWORD: postgres
+        run: psql -X -v ON_ERROR_STOP=1 -d origen_test -f priv/repo/security/provision_roles.sql
+
+      - name: Run application tests
         env:
           ORIGEN_TEST_DB_USERNAME: postgres
           ORIGEN_TEST_DB_PASSWORD: postgres
-          ORIGEN_TEST_DB_PORT: 5432 # Sobrescribe el 5433 de la configuración local
+          ORIGEN_TEST_DB_PORT: 5432
         run: mix test
+
+      - name: Prove runtime and verifier capabilities
+        env:
+          ORIGEN_DATABASE_URL: ecto://origen_runtime:postgres@localhost:5432/origen_test
+          ORIGEN_MIGRATION_DATABASE_URL: ecto://origen_migrator:postgres@localhost:5432/origen_test
+          ORIGEN_SECURITY_DATABASE_URL: ecto://origen_verifier:postgres@localhost:5432/origen_test
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATOR_ROLE: origen_migrator
+          ORIGEN_RUNTIME_ROLE: origen_runtime
+          ORIGEN_VERIFIER_ROLE: origen_verifier
+        run: mix test test/origen/audit/postgres_security_test.exs --include postgres_security
