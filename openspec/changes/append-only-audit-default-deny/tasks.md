@@ -34,10 +34,10 @@ Apply is blocked until the user selects `stacked-to-main`, `feature-branch-chain
 
 ## Phase 2: WU2 — Audit (RED → GREEN → REFACTOR)
 
-- [ ] 2.1 **RED:** Test exact columns, bigint identity, bounds, snake_case, allowlists, conditional references, four results, server `clock_timestamp()` bounds, rejected extra/caller-time/scope/JSON fields, correction append, external mutation/read denial.
-- [ ] 2.2 **RED:** Test atomic success, audit-failure rollback, business rollback plus fresh failure append, denial plus fresh append, and `:audit_unavailable` when required fresh audit fails.
-- [ ] 2.3 **GREEN:** Add owner-run migration with column grants, row UPDATE/DELETE and statement TRUNCATE triggers; implement opaque constructors and internal decision-gated `append/2`/`append_to_multi/3`; expose no CRUD/read/web path.
-- [ ] 2.4 **REFACTOR:** Centralize sanitization/allowlists; verify empty down/re-migrate while non-empty down refuses and production remains forward-only.
+- [x] 2.1 **RED:** Test exact columns, bigint identity, bounds, snake_case, allowlists, conditional references, four results, server `clock_timestamp()` bounds, rejected extra/caller-time/scope/JSON fields, correction append, external mutation/read denial.
+- [x] 2.2 **RED:** Test atomic success, audit-failure rollback, business rollback plus fresh failure append, denial plus fresh append, and `:audit_unavailable` when required fresh audit fails.
+- [x] 2.3 **GREEN:** Add owner-run migration with column grants, row UPDATE/DELETE and statement TRUNCATE triggers; implement opaque constructors and internal decision-gated `append/2`/`append_to_multi/3`; expose no CRUD/read/web path.
+- [x] 2.4 **REFACTOR:** Centralize sanitization/allowlists; verify empty down/re-migrate while non-empty down refuses and production remains forward-only.
 
 ## Phase 3: WU3 — PostgreSQL 17 Proof (RED → GREEN → REFACTOR)
 
