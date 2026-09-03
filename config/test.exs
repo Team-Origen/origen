@@ -13,7 +13,10 @@ runtime_database_options =
   else
     [
       username:
-        System.get_env("ORIGEN_TEST_DB_USERNAME", System.get_env("PGUSER", System.get_env("USER"))),
+        System.get_env(
+          "ORIGEN_TEST_DB_USERNAME",
+          System.get_env("PGUSER", System.get_env("USER"))
+        ),
       password: System.get_env("ORIGEN_TEST_DB_PASSWORD", System.get_env("PGPASSWORD")),
       hostname: "localhost",
       port:
@@ -22,12 +25,13 @@ runtime_database_options =
     ]
   end
 
-config :origen, Origen.Repo,
-  runtime_database_options ++
-    [
-      pool: Ecto.Adapters.SQL.Sandbox,
-      pool_size: System.schedulers_online() * 2
-    ]
+config :origen,
+       Origen.Repo,
+       runtime_database_options ++
+         [
+           pool: Ecto.Adapters.SQL.Sandbox,
+           pool_size: System.schedulers_online() * 2
+         ]
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.

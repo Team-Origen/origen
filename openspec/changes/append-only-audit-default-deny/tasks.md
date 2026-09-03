@@ -45,3 +45,10 @@ Apply is blocked until the user selects `stacked-to-main`, `feature-branch-chain
 - [x] 3.2 **GREEN:** Provision roles outside migrations; separate runtime/migration/security URLs; revoke PUBLIC CONNECT/schema CREATE/object access; migrate via unsupervised `Origen.MigrationRepo`; make CI run `mix test` as runtime.
 - [x] 3.3 **REFACTOR:** Redact secrets and document local `ORIGEN_TEST_DB_USERNAME`, `ORIGEN_TEST_DB_PASSWORD`, `ORIGEN_MIGRATION_DATABASE_URL`, and `ORIGEN_SECURITY_DATABASE_URL` prerequisites in harness output.
 - [x] 3.4 Verify `mix test`, `mix compile --warnings-as-errors`, and `mix format --check-formatted`; inspect diffs for CRLF-only churn and fix line endings without weakening formatter checks.
+
+## Phase 4: Bounded Verification Remediation (RED → GREEN → REFACTOR)
+
+- [x] 4.1 **RED:** Specify a protected production seam that records authoritative denial and post-rollback failure outcomes without invoking denied business or caller-controlled audit effects.
+- [x] 4.2 **GREEN:** Implement the protected operation boundary with atomic allowed success, required-audit rollback, and fresh denial/failure audit semantics.
+- [x] 4.3 **TRIANGULATE:** Prove every allowed non-role channel denies another operation and a request exceeding its declared scope; replace the process-dictionary sentinel with database-observable behavior.
+- [x] 4.4 **REFACTOR:** Restore formatter compliance in `config/test.exs`, run focused/full/PostgreSQL checks, and prove disposable object cleanup.

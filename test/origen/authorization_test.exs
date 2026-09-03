@@ -52,6 +52,41 @@ defmodule Origen.AuthorizationTest do
 
       assert Authorization.decide(request) == {:deny, :no_matching_rule}
     end
+
+    test "keeps every allowed non-role channel within its operation and declared scope" do
+      cases = [
+        {:bootstrap_first_administrator, {:channel, :deployment}, :not_applicable,
+         %{administrator_exists: false}, %{approved_command: true, assigned_operator: true},
+         :approved_command},
+        {:activate_internal_account, {:channel, :invitation}, {:known, :pending_activation},
+         %{role: :professional},
+         %{account_matches: true, password_defined: true, token_valid: true, totp_enrolled: true},
+         :token_valid},
+        {:append_audit_event, {:channel, :system}, :not_applicable,
+         %{event: :constructor_produced}, %{internal_path: true}, :internal_path},
+        {:verify_patient_phone, {:channel, :public_possession}, :not_applicable,
+         %{phone_verified: false},
+         %{account_and_phone_match: true, challenge_valid: true, rate_limit_satisfied: true},
+         :challenge_valid}
+      ]
+
+      for {operation, subject, state, target, scope, scoped_fact} <- cases do
+        other_operation =
+          request(:start_internal_session, subject, state, fact(target), fact(scope))
+
+        exceeded_scope =
+          request(
+            operation,
+            subject,
+            state,
+            fact(target),
+            fact(Map.put(scope, scoped_fact, false))
+          )
+
+        assert Authorization.decide(other_operation) == {:deny, :no_matching_rule}
+        assert Authorization.decide(exceeded_scope) == {:deny, :no_matching_rule}
+      end
+    end
   end
 
   describe "default denial" do
@@ -117,15 +152,6 @@ defmodule Origen.AuthorizationTest do
 
         assert Authorization.decide(request) == {:deny, :no_matching_rule}
       end
-    end
-
-    test "a direct backend denial has no side effects" do
-      Process.put(:authorization_effect, :untouched)
-
-      assert request(:create_secretary_account, {:role, :patient}) |> Authorization.decide() ==
-               {:deny, :no_matching_rule}
-
-      assert Process.get(:authorization_effect) == :untouched
     end
   end
 
