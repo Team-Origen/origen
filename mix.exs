@@ -87,7 +87,8 @@ defmodule Origen.MixProject do
       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
+      test: test_alias(),
+      "ecto.security.migrate": ["ecto.migrate -r Origen.MigrationRepo"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind origen", "esbuild origen"],
       "assets.deploy": [
@@ -97,5 +98,13 @@ defmodule Origen.MixProject do
       ],
       precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
     ]
+  end
+
+  defp test_alias do
+    if System.get_env("ORIGEN_DATABASE_URL") do
+      ["test"]
+    else
+      ["ecto.create --quiet", "ecto.migrate --quiet", "test"]
+    end
   end
 end

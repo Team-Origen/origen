@@ -11,6 +11,10 @@ config :origen,
   ecto_repos: [Origen.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :origen, Origen.MigrationRepo,
+  after_connect: {Origen.MigrationRepo, :set_owner_role, []},
+  priv: "priv/repo"
+
 # Configure the endpoint
 config :origen, OrigenWeb.Endpoint,
   url: [host: "localhost"],

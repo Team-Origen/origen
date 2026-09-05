@@ -23,6 +23,10 @@ end
 config :origen, OrigenWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+if migration_database_url = System.get_env("ORIGEN_MIGRATION_DATABASE_URL") do
+  config :origen, Origen.MigrationRepo, url: migration_database_url
+end
+
 if config_env() == :dev do
   # Reload browser tabs when matching files change.
   config :origen, OrigenWeb.Endpoint,

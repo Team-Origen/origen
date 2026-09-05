@@ -1,0 +1,84 @@
+schema: spec-driven
+strict_tdd: true
+
+context: |
+  Tech stack: Elixir 1.17+ (CI 1.20.3) with Phoenix 1.8.13, Phoenix LiveView 1.2.10, Ecto SQL 3.14.0, and PostgreSQL.
+  Architecture: OTP application with Origen domain modules, OrigenWeb delivery modules, and Origen.Repo as the Ecto boundary.
+  Current shape: Mostly Phoenix scaffold code; no domain contexts, schemas, or repository migrations are present yet.
+  Testing: ExUnit with Phoenix.ConnTest and Ecto SQL Sandbox; CI provisions PostgreSQL 17 and runs mix test.
+  Style: mix format with the Phoenix LiveView HTML formatter; CI compiles with warnings as errors.
+
+testing:
+  strict_tdd: true
+  detected: 2026-09-02
+  runner:
+    framework: ExUnit
+    command: mix test
+  prerequisites:
+    - PostgreSQL must be reachable using config/test.exs settings.
+    - Set ORIGEN_TEST_DB_USERNAME and ORIGEN_TEST_DB_PASSWORD when local PostgreSQL requires explicit credentials.
+  layers:
+    unit:
+      available: true
+      tool: ExUnit
+    integration:
+      available: true
+      tool: Phoenix.ConnTest and Ecto.Adapters.SQL.Sandbox
+    e2e:
+      available: false
+      tool: null
+  coverage:
+    available: true
+    command: mix test --cover
+  quality:
+    linter:
+      available: false
+      command: null
+    type_checker:
+      available: false
+      command: null
+    formatter:
+      available: true
+      command: mix format --check-formatted
+    compiler:
+      available: true
+      command: mix compile --warnings-as-errors
+  ci:
+    available: true
+    workflow: .github/workflows/ci.yml
+    database: PostgreSQL 17
+
+delivery:
+  strategy: ask-on-risk
+  review_budget_lines: 400
+
+rules:
+  proposal:
+    - State security impact, migration risk, and rollback strategy for risky changes.
+    - Keep issue #2 implementation out of initialization artifacts.
+  specs:
+    - Use RFC 2119 keywords for normative requirements.
+    - Express acceptance scenarios with Given, When, and Then.
+    - Specify authorization denial and audit immutability as observable behavior when applicable.
+  design:
+    - Preserve the Origen and OrigenWeb boundary.
+    - Document database privilege and migration-role assumptions for PostgreSQL security controls.
+    - Include rationale and rollback considerations for architecture decisions.
+  tasks:
+    - Group work into hierarchical, reviewable units no larger than the 400-line review budget when practical.
+    - Keep tests and implementation in the same work unit.
+  apply:
+    guidelines:
+      - Follow existing Phoenix, Ecto, and formatter conventions.
+      - Do not weaken backend default-deny or append-only guarantees without explicit approval.
+    tdd: true
+    test_command: mix test
+  verify:
+    test_command: mix test
+    build_command: mix compile --warnings-as-errors
+    format_command: mix format --check-formatted
+    coverage_command: mix test --cover
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive or security-weakening deltas.
+    - Treat archived changes as immutable audit history.
