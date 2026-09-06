@@ -23,6 +23,16 @@ defmodule Origen.Audit.Events do
   def succeeded(actor, entity), do: build(actor, "operation_succeeded", entity, "succeeded")
   def failed(actor, entity), do: build(actor, "operation_failed", entity, "failed")
 
+  def bootstrap_allowed(actor, ref), do: lifecycle(actor, "bootstrap_admin", ref, "allowed")
+  def bootstrap_denied(actor, ref), do: lifecycle(actor, "bootstrap_admin", ref, "denied")
+  def reissue_allowed(actor, ref), do: lifecycle(actor, "invitation_reissue", ref, "allowed")
+  def reissue_denied(actor, ref), do: lifecycle(actor, "invitation_reissue", ref, "denied")
+
+  def activation_succeeded(actor, ref),
+    do: lifecycle(actor, "account_activation", ref, "succeeded")
+
+  def activation_failed(actor, ref), do: lifecycle(actor, "account_activation", ref, "failed")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 
@@ -47,6 +57,8 @@ defmodule Origen.Audit.Events do
 
   defp build(_actor, _event, _entity, _result), do: {:error, :invalid_event}
 
+  defp lifecycle(actor, event, ref, result), do: build(actor, event, {:account, ref}, result)
+
   defp valid_actor_ref?(kind, nil), do: kind in [:system, :anonymous]
   defp valid_actor_ref?(_kind, reference), do: valid_reference?(reference)
 
@@ -63,7 +75,8 @@ defmodule Origen.Audit.Events do
   defp validate_entity(_entity), do: :error
 
   defp valid_reference?(reference) when is_binary(reference) do
-    byte_size(reference) <= 128 and String.trim(reference) != ""
+    byte_size(reference) <= 128 and String.trim(reference) != "" and
+      not Regex.match?(~r/(https?:\/\/|token|secret|password|otp|session|digest|key)/i, reference)
   end
 
   defp valid_reference?(_reference), do: false

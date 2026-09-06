@@ -6,6 +6,11 @@ defmodule Origen.Authorization.Rules do
   @roles [:administrator, :professional, :secretary, :patient]
   @channels [:deployment, :invitation, :system, :public_possession]
   @subjects Enum.map(@roles, &{:role, &1}) ++ Enum.map(@channels, &{:channel, &1})
+  @bootstrap_operations [
+    :bootstrap_first_administrator,
+    :reissue_internal_invitation,
+    :activate_internal_account
+  ]
 
   @rules [
            {:dep_01, :bootstrap_first_administrator, {:channel, :deployment}, :not_applicable,
@@ -57,6 +62,7 @@ defmodule Origen.Authorization.Rules do
 
   def operations, do: @operations
   def subjects, do: @subjects
+  def bootstrap_operations, do: @bootstrap_operations
 
   @spec decide(Request.t()) :: Origen.Authorization.Decision.t()
   def decide(%Request{} = request) do
