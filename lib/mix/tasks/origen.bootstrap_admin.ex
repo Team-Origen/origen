@@ -29,8 +29,7 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
   def build_invitation_email(%{
         recipient: recipient,
         account_id: account_id,
-        invitation_id: invitation_id,
-        token: _token
+        invitation_id: invitation_id
       }) do
     new()
     |> to(recipient)

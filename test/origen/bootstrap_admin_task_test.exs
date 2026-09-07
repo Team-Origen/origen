@@ -1,14 +1,18 @@
 defmodule Origen.BootstrapAdminTaskTest do
-  use ExUnit.Case, async: false
+  use Origen.DataCase, async: false
 
   import ExUnit.CaptureIO
   import Swoosh.TestAssertions
 
   alias Mix.Tasks.Origen.BootstrapAdmin
 
+  @verifier_key String.duplicate("k", 32)
+
   setup do
     previous = Application.get_env(:origen, :bootstrap_admin_enabled)
     Application.put_env(:origen, :bootstrap_admin_enabled, false)
+    Repo.query!("DELETE FROM internal_account_invitations")
+    Repo.query!("DELETE FROM internal_accounts")
 
     on_exit(fn ->
       Application.put_env(:origen, :bootstrap_admin_enabled, previous)
@@ -69,5 +73,29 @@ defmodule Origen.BootstrapAdminTaskTest do
     assert email.text_body =~ "Account reference: 88"
     assert email.text_body =~ "Invitation reference: 144"
     refute email.text_body =~ "another-opaque-token"
+  end
+
+  test "enabled task delivers a reference-only invitation through the task path" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Mix.Task.reenable("origen.bootstrap_admin")
+
+    output =
+      capture_io(fn ->
+        Mix.Task.run("origen.bootstrap_admin", [
+          "--email",
+          "enabled@example.test",
+          "--verifier-key",
+          @verifier_key
+        ])
+      end)
+
+    assert output =~ "Bootstrap admin invitation delivered"
+
+    assert_receive {:email, email}
+    assert email.to == [{"", "enabled@example.test"}]
+    assert email.text_body =~ "Account reference:"
+    assert email.text_body =~ "Invitation reference:"
+    refute email.text_body =~ "https://"
+    refute email.text_body =~ "token"
   end
 end
