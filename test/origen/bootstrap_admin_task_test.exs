@@ -8,14 +8,20 @@ defmodule Origen.BootstrapAdminTaskTest do
 
   @verifier_key String.duplicate("k", 32)
 
+  defmodule FailingMailer do
+    def deliver(_email), do: {:error, :transport_unavailable}
+  end
+
   setup do
     previous = Application.get_env(:origen, :bootstrap_admin_enabled)
+    previous_mailer = Application.get_env(:origen, :bootstrap_admin_mailer)
     Application.put_env(:origen, :bootstrap_admin_enabled, false)
     Repo.query!("DELETE FROM internal_account_invitations")
     Repo.query!("DELETE FROM internal_accounts")
 
     on_exit(fn ->
       Application.put_env(:origen, :bootstrap_admin_enabled, previous)
+      Application.put_env(:origen, :bootstrap_admin_mailer, previous_mailer)
     end)
 
     :ok
@@ -97,5 +103,83 @@ defmodule Origen.BootstrapAdminTaskTest do
     assert email.text_body =~ "Invitation reference:"
     refute email.text_body =~ "https://"
     refute email.text_body =~ "token"
+  end
+
+  test "rejects invalid switches and positional arguments without changing state" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Mix.Task.reenable("origen.bootstrap_admin")
+
+    output = capture_io(:stderr, fn -> Mix.Task.run("origen.bootstrap_admin", ["--unknown"]) end)
+
+    assert output =~ "invalid command-line arguments"
+    assert Repo.aggregate("internal_accounts", :count) == 0
+    assert Repo.aggregate("internal_account_invitations", :count) == 0
+
+    Mix.Task.reenable("origen.bootstrap_admin")
+    output = capture_io(:stderr, fn -> Mix.Task.run("origen.bootstrap_admin", ["unexpected"]) end)
+
+    assert output =~ "invalid command-line arguments"
+    assert Repo.aggregate("internal_accounts", :count) == 0
+  end
+
+  test "rejects a blank recipient before changing state" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Mix.Task.reenable("origen.bootstrap_admin")
+
+    output =
+      capture_io(:stderr, fn ->
+        Mix.Task.run("origen.bootstrap_admin", ["--email", "   ", "--verifier-key", @verifier_key])
+      end)
+
+    assert output =~ "requires a non-blank email and verifier key"
+    assert Repo.aggregate("internal_accounts", :count) == 0
+    assert Repo.aggregate("internal_account_invitations", :count) == 0
+  end
+
+  test "preserves failed delivery state and recovers by reissuing the account" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_mailer, FailingMailer)
+    Mix.Task.reenable("origen.bootstrap_admin")
+
+    failed_output =
+      capture_io(:stderr, fn ->
+        Mix.Task.run("origen.bootstrap_admin", [
+          "--email",
+          "failed@example.test",
+          "--verifier-key",
+          @verifier_key
+        ])
+      end)
+
+    assert failed_output =~ "delivery failed"
+    refute failed_output =~ "failed@example.test"
+    refute failed_output =~ "transport_unavailable"
+    assert Repo.aggregate("internal_accounts", :count) == 1
+    assert Repo.aggregate("internal_account_invitations", :count) == 1
+    [[account_id]] = Repo.query!("SELECT id FROM internal_accounts").rows
+    assert failed_output =~ "--account-id #{account_id}"
+
+    Application.put_env(:origen, :bootstrap_admin_mailer, Origen.Mailer)
+    Mix.Task.reenable("origen.bootstrap_admin")
+
+    recovery_output =
+      capture_io(fn ->
+        Mix.Task.run("origen.bootstrap_admin", [
+          "--account-id",
+          to_string(account_id),
+          "--email",
+          "recovered@example.test",
+          "--verifier-key",
+          @verifier_key
+        ])
+      end)
+
+    assert recovery_output =~ "invitation delivered"
+    assert Repo.aggregate("internal_accounts", :count) == 1
+    assert Repo.aggregate("internal_account_invitations", :count) == 2
+
+    assert Repo.query!(
+             "SELECT count(*) FROM internal_account_invitations WHERE revoked_at IS NULL"
+           ).rows == [[1]]
   end
 end

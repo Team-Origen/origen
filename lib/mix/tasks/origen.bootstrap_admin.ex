@@ -44,11 +44,20 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
   end
 
   defp execute(args) do
-    {options, [], []} = OptionParser.parse(args, strict: @switches)
+    {options, rest, invalid} = OptionParser.parse(args, strict: @switches)
+
+    if rest == [] and invalid == [] do
+      execute_options(options)
+    else
+      Mix.shell().error("Bootstrap admin received invalid command-line arguments")
+    end
+  end
+
+  defp execute_options(options) do
     recipient = options[:email] || System.get_env("ORIGEN_BOOTSTRAP_ADMIN_EMAIL")
     verifier_key = options[:verifier_key] || System.get_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY")
 
-    with email when is_binary(email) <- recipient,
+    with email when is_binary(email) <- non_blank(recipient),
          key when is_binary(key) <- verifier_key,
          {:ok, invitation} <-
            issue_invitation(options[:account_id], key, options[:issued_by_ref]),
@@ -58,9 +67,24 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
           "invitation reference: #{invitation.invitation_id}"
       )
     else
-      nil -> Mix.shell().error("Bootstrap admin requires an email and verifier key")
-      {:error, reason} -> Mix.shell().error("Bootstrap admin failed: #{inspect(reason)}")
+      nil -> Mix.shell().error("Bootstrap admin requires a non-blank email and verifier key")
+      {:error, {:delivery_error, invitation}} -> delivery_failed(invitation)
+      {:error, _reason} -> Mix.shell().error("Bootstrap admin request was rejected")
     end
+  end
+
+  defp non_blank(value) when is_binary(value) do
+    if String.trim(value) == "", do: nil, else: value
+  end
+
+  defp non_blank(_value), do: nil
+
+  defp delivery_failed(invitation) do
+    Mix.shell().error(
+      "Bootstrap admin delivery failed; account reference: #{invitation.account_id}; " <>
+        "invitation reference: #{invitation.invitation_id}. " <>
+        "Retry or reissue with --account-id #{invitation.account_id}"
+    )
   end
 
   defp issue_invitation(nil, key, issued_by_ref),
@@ -74,10 +98,17 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
       })
 
   defp deliver_invitation(invitation, recipient) do
-    invitation
-    |> Map.take([:account_id, :invitation_id])
-    |> Map.put(:recipient, recipient)
-    |> build_invitation_email()
-    |> Origen.Mailer.deliver()
+    email =
+      invitation
+      |> Map.take([:account_id, :invitation_id])
+      |> Map.put(:recipient, recipient)
+      |> build_invitation_email()
+
+    mailer = Application.get_env(:origen, :bootstrap_admin_mailer) || Origen.Mailer
+
+    case mailer.deliver(email) do
+      {:ok, _result} = result -> result
+      _failure -> {:error, {:delivery_error, invitation}}
+    end
   end
 end
