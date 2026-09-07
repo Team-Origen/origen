@@ -92,6 +92,17 @@ defmodule Origen.BootstrapAdminSchemaTest do
     assert query!(connection, "SELECT count(*) FROM internal_account_invitations").rows == [[1]]
   end
 
+  test "rollback guard locks bootstrap tables before inspecting history" do
+    migration = Module.concat([Origen, Repo, Migrations, CreateFirstAdminBootstrap])
+    sql = apply(migration, :rollback_guard_sql, [])
+
+    assert sql =~ "LOCK TABLE"
+    assert sql =~ "internal_accounts"
+    assert sql =~ "internal_account_invitations"
+    assert sql =~ "admin_bootstrap_controls"
+    assert sql =~ "ACCESS EXCLUSIVE"
+  end
+
   defp query!(connection, sql, params \\ []), do: Postgrex.query!(connection, sql, params)
 
   defp insert_pending_account(connection) do

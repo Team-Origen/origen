@@ -64,4 +64,11 @@ defmodule Origen.BootstrapAdmin.PrimitivesTest do
     assert {:error, :sensitive_field} = Redaction.sanitize(%{token: "bearer-token"})
     assert {:error, :sensitive_reference} = Redaction.sanitize(%{account_ref: "https://x/token"})
   end
+
+  test "redaction accepts allowlisted string keys while preserving the output contract" do
+    payload = %{"event" => "bootstrap", "result" => "denied", "account_ref" => "42"}
+
+    assert {:ok, ^payload} = Redaction.sanitize(payload)
+    assert {:error, :unapproved_field} = Redaction.sanitize(%{"unexpected" => "value"})
+  end
 end

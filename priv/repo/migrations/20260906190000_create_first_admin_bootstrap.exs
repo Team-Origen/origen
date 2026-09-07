@@ -61,6 +61,14 @@ defmodule Origen.Repo.Migrations.CreateFirstAdminBootstrap do
     WHERE consumed_at IS NULL AND revoked_at IS NULL
     """)
 
+    execute("""
+    CREATE VIEW public.internal_account_verifier_projection AS
+    SELECT id, role, state, activated_at
+    FROM public.internal_accounts
+    """)
+
+    execute("REVOKE ALL ON public.internal_account_verifier_projection FROM PUBLIC")
+
     for table <- ~w(internal_accounts admin_bootstrap_controls internal_account_invitations) do
       execute("REVOKE ALL ON TABLE public.#{table} FROM PUBLIC")
     end
@@ -80,7 +88,8 @@ defmodule Origen.Repo.Migrations.CreateFirstAdminBootstrap do
           public.internal_account_invitations_id_seq TO origen_runtime;
       END IF;
       IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'origen_verifier') THEN
-        GRANT SELECT ON public.internal_accounts,
+        REVOKE ALL ON public.internal_accounts FROM origen_verifier;
+        GRANT SELECT ON public.internal_account_verifier_projection,
           public.admin_bootstrap_controls,
           public.internal_account_invitations TO origen_verifier;
       END IF;
@@ -92,6 +101,7 @@ defmodule Origen.Repo.Migrations.CreateFirstAdminBootstrap do
   def down do
     execute(rollback_guard_sql())
 
+    execute("DROP VIEW IF EXISTS public.internal_account_verifier_projection")
     execute("DROP TABLE IF EXISTS public.internal_account_invitations")
     execute("DROP TABLE IF EXISTS public.admin_bootstrap_controls")
     execute("DROP TABLE IF EXISTS public.internal_accounts")
@@ -101,6 +111,11 @@ defmodule Origen.Repo.Migrations.CreateFirstAdminBootstrap do
     """
     DO $$
     BEGIN
+      LOCK TABLE public.internal_accounts,
+        public.internal_account_invitations,
+        public.admin_bootstrap_controls
+        IN ACCESS EXCLUSIVE MODE;
+
       IF EXISTS (SELECT FROM public.internal_account_invitations)
         OR EXISTS (SELECT FROM public.internal_accounts)
         OR EXISTS (SELECT FROM public.admin_bootstrap_controls)

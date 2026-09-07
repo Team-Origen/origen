@@ -217,6 +217,31 @@ defmodule Origen.Audit.PostgresSecurityTest do
            )
   end
 
+  test "verifier reads only the non-secret account projection", context do
+    %{verifier: verifier, roles: roles} = context
+
+    refute scalar!(verifier, "SELECT has_table_privilege($1, 'internal_accounts', 'SELECT')", [
+             roles.verifier
+           ])
+
+    assert scalar!(
+             verifier,
+             "SELECT has_table_privilege($1, 'internal_account_verifier_projection', 'SELECT')",
+             [roles.verifier]
+           )
+
+    assert query!(
+             verifier,
+             """
+             SELECT column_name
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'internal_account_verifier_projection'
+             ORDER BY ordinal_position
+             """
+           ).rows == [["id"], ["role"], ["state"], ["activated_at"]]
+  end
+
   test "independent trigger defenses reject every historical mutation", context do
     %{runtime: runtime, verifier: verifier} = context
 
