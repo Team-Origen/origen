@@ -33,6 +33,9 @@ defmodule Origen.Audit.Events do
 
   def activation_failed(actor, ref), do: lifecycle(actor, "account_activation", ref, "failed")
 
+  def invitation_consumed(actor, ref),
+    do: lifecycle(actor, "invitation_consumption", ref, "succeeded")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 
