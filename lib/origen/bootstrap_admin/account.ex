@@ -5,7 +5,8 @@ defmodule Origen.BootstrapAdmin.Account do
   alias Origen.Repo
 
   @spec issue_first(map()) :: {:ok, map()} | {:error, atom()}
-  def issue_first(%{verifier_key: key} = options) when is_binary(key) do
+  def issue_first(%{verifier_key: key} = options)
+      when is_binary(key) and byte_size(key) >= 32 do
     issued_by_ref = Map.get(options, :issued_by_ref)
 
     Repo.transaction(fn ->
@@ -22,7 +23,7 @@ defmodule Origen.BootstrapAdmin.Account do
 
   @spec reissue_first(integer(), map()) :: {:ok, map()} | {:error, atom()}
   def reissue_first(account_id, %{verifier_key: key} = options)
-      when is_integer(account_id) and is_binary(key) do
+      when is_integer(account_id) and is_binary(key) and byte_size(key) >= 32 do
     issued_by_ref = Map.get(options, :issued_by_ref)
 
     Repo.transaction(fn ->
@@ -50,6 +51,10 @@ defmodule Origen.BootstrapAdmin.Account do
     end)
     |> unwrap_transaction()
   end
+
+  def reissue_first(account_id, %{verifier_key: key})
+      when is_integer(account_id) and is_binary(key),
+      do: {:error, :invalid_verifier_key}
 
   def reissue_first(_account_id, _options), do: {:error, :invalid_request}
 

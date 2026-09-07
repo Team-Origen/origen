@@ -4,6 +4,7 @@ defmodule Origen.BootstrapAdmin.LifecycleTest do
   alias Origen.BootstrapAdmin
 
   @key String.duplicate("k", 32)
+  @short_key String.duplicate("k", 31)
 
   setup do
     Repo.query!("DELETE FROM internal_account_invitations")
@@ -40,6 +41,27 @@ defmodule Origen.BootstrapAdmin.LifecycleTest do
     assert {:error, :administrator_exists} = BootstrapAdmin.issue_first(%{verifier_key: @key})
     assert Repo.aggregate("internal_accounts", :count) == 1
     assert Repo.aggregate("internal_account_invitations", :count) == 1
+  end
+
+  test "rejects a short verifier key before issuing any rows" do
+    assert {:error, :invalid_verifier_key} =
+             BootstrapAdmin.issue_first(%{verifier_key: @short_key})
+
+    assert Repo.aggregate("internal_accounts", :count) == 0
+    assert Repo.aggregate("internal_account_invitations", :count) == 0
+  end
+
+  test "rejects a short reissue key before changing the invitation lifecycle" do
+    assert {:ok, first} = BootstrapAdmin.issue_first(%{verifier_key: @key})
+
+    assert {:error, :invalid_verifier_key} =
+             BootstrapAdmin.reissue_first(first.account_id, %{verifier_key: @short_key})
+
+    assert Repo.query!("SELECT count(*) FROM internal_accounts").rows == [[1]]
+
+    assert Repo.query!(
+             "SELECT count(*) FROM internal_account_invitations WHERE revoked_at IS NULL"
+           ).rows == [[1]]
   end
 
   test "serializes concurrent first-admin issues through the control row" do
@@ -131,5 +153,34 @@ defmodule Origen.BootstrapAdmin.LifecycleTest do
                password_hash: "other",
                totp_secret: <<4>>
              })
+  end
+
+  test "serializes reissue and activation without a PostgreSQL deadlock" do
+    assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @key})
+
+    operations =
+      for _ <- 1..8 do
+        [
+          Task.async(fn ->
+            BootstrapAdmin.reissue_first(invitation.account_id, %{verifier_key: @key})
+          end),
+          Task.async(fn ->
+            BootstrapAdmin.activate(invitation.invitation_id, invitation.token, @key, %{
+              password_hash: "argon2id-hash",
+              totp_secret: <<1, 2, 3>>
+            })
+          end)
+        ]
+      end
+      |> List.flatten()
+
+    results = Task.await_many(operations, 5_000)
+
+    refute Enum.any?(
+             results,
+             &match?({:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}}, &1)
+           )
+
+    refute Enum.any?(results, &match?({:error, %Postgrex.Error{postgres: %{code: "40P01"}}}, &1))
   end
 end

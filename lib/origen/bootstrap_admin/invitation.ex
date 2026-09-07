@@ -51,40 +51,54 @@ defmodule Origen.BootstrapAdmin.Invitation do
              is_binary(password_hash) and is_binary(totp_secret) do
     Repo.transaction(fn ->
       case Repo.query!(
-             """
-               SELECT account_id, verifier_version, verifier_digest, expires_at, consumed_at, revoked_at
-               FROM internal_account_invitations WHERE id = $1 FOR UPDATE
-             """,
+             "SELECT account_id FROM internal_account_invitations WHERE id = $1",
              [invitation_id]
            ).rows do
-        [[account_id, version, digest, expires_at, consumed_at, revoked_at]] ->
-          ensure_usable!(expires_at, consumed_at, revoked_at)
-          unless Verifier.verify(token, version, digest, key), do: Repo.rollback(:invalid_token)
-
-          Repo.query!(
-            "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
-            [invitation_id]
-          )
+        [[account_id]] ->
+          Repo.query!("SELECT id FROM internal_accounts WHERE id = $1 FOR UPDATE", [account_id])
 
           case Repo.query!(
                  """
-                   UPDATE internal_accounts
-                   SET state = 'active', password_hash = $2, totp_secret = $3,
-                       activated_at = clock_timestamp(), updated_at = clock_timestamp()
-                   WHERE id = $1 AND state = 'pending_activation' RETURNING id
+                   SELECT account_id, verifier_version, verifier_digest, expires_at, consumed_at, revoked_at
+                   FROM internal_account_invitations WHERE id = $1 FOR UPDATE
                  """,
-                 [account_id, password_hash, totp_secret]
+                 [invitation_id]
                ).rows do
-            [[^account_id]] ->
-              {:ok, event} = Events.activation_succeeded({:system, nil}, to_string(account_id))
+            [[^account_id, version, digest, expires_at, consumed_at, revoked_at]] ->
+              ensure_usable!(expires_at, consumed_at, revoked_at)
 
-              case Writer.append(event, {:allow, :sys_01}) do
-                {:ok, _audit} -> %{account_id: account_id, invitation_id: invitation_id}
-                {:error, reason} -> Repo.rollback(reason)
+              unless Verifier.verify(token, version, digest, key),
+                do: Repo.rollback(:invalid_token)
+
+              Repo.query!(
+                "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
+                [invitation_id]
+              )
+
+              case Repo.query!(
+                     """
+                       UPDATE internal_accounts
+                       SET state = 'active', password_hash = $2, totp_secret = $3,
+                           activated_at = clock_timestamp(), updated_at = clock_timestamp()
+                       WHERE id = $1 AND state = 'pending_activation' RETURNING id
+                     """,
+                     [account_id, password_hash, totp_secret]
+                   ).rows do
+                [[^account_id]] ->
+                  {:ok, event} =
+                    Events.activation_succeeded({:system, nil}, to_string(account_id))
+
+                  case Writer.append(event, {:allow, :sys_01}) do
+                    {:ok, _audit} -> %{account_id: account_id, invitation_id: invitation_id}
+                    {:error, reason} -> Repo.rollback(reason)
+                  end
+
+                [] ->
+                  Repo.rollback(:account_not_pending)
               end
 
             [] ->
-              Repo.rollback(:account_not_pending)
+              Repo.rollback(:invitation_not_found)
           end
 
         [] ->
