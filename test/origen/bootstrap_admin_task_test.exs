@@ -5,6 +5,7 @@ defmodule Origen.BootstrapAdminTaskTest do
   import Swoosh.TestAssertions
 
   alias Mix.Tasks.Origen.BootstrapAdmin
+  alias Origen.BootstrapAdmin, as: BootstrapService
 
   @verifier_key String.duplicate("k", 32)
 
@@ -15,13 +16,29 @@ defmodule Origen.BootstrapAdminTaskTest do
   setup do
     previous = Application.get_env(:origen, :bootstrap_admin_enabled)
     previous_mailer = Application.get_env(:origen, :bootstrap_admin_mailer)
+    previous_email = System.get_env("ORIGEN_BOOTSTRAP_ADMIN_EMAIL")
+    previous_verifier_key = System.get_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY")
     Application.put_env(:origen, :bootstrap_admin_enabled, false)
+    System.delete_env("ORIGEN_BOOTSTRAP_ADMIN_EMAIL")
+    System.put_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY", @verifier_key)
     Repo.query!("DELETE FROM internal_account_invitations")
     Repo.query!("DELETE FROM internal_accounts")
 
     on_exit(fn ->
       Application.put_env(:origen, :bootstrap_admin_enabled, previous)
       Application.put_env(:origen, :bootstrap_admin_mailer, previous_mailer)
+
+      if previous_email do
+        System.put_env("ORIGEN_BOOTSTRAP_ADMIN_EMAIL", previous_email)
+      else
+        System.delete_env("ORIGEN_BOOTSTRAP_ADMIN_EMAIL")
+      end
+
+      if previous_verifier_key do
+        System.put_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY", previous_verifier_key)
+      else
+        System.delete_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY")
+      end
     end)
 
     :ok
@@ -30,11 +47,9 @@ defmodule Origen.BootstrapAdminTaskTest do
   test "denies before parsing or touching bootstrap state when the shared gate is closed" do
     Mix.Task.reenable("origen.bootstrap_admin")
 
-    output = capture_io(:stderr, fn -> Mix.Task.run("origen.bootstrap_admin", []) end)
-
-    assert output =~ "Bootstrap admin is disabled"
-    refute output =~ "token"
-    refute output =~ "invitation_url"
+    assert_task_failure([], "Bootstrap admin is disabled")
+    assert Repo.aggregate("internal_accounts", :count) == 0
+    assert Repo.aggregate("internal_account_invitations", :count) == 0
   end
 
   test "builds and delivers references without the opaque activation token" do
@@ -89,9 +104,7 @@ defmodule Origen.BootstrapAdminTaskTest do
       capture_io(fn ->
         Mix.Task.run("origen.bootstrap_admin", [
           "--email",
-          "enabled@example.test",
-          "--verifier-key",
-          @verifier_key
+          "enabled@example.test"
         ])
       end)
 
@@ -105,35 +118,67 @@ defmodule Origen.BootstrapAdminTaskTest do
     refute email.text_body =~ "token"
   end
 
-  test "rejects invalid switches and positional arguments without changing state" do
+  test "rejects verifier-key, invalid switches, and positional arguments without changing state" do
     Application.put_env(:origen, :bootstrap_admin_enabled, true)
-    Mix.Task.reenable("origen.bootstrap_admin")
 
-    output = capture_io(:stderr, fn -> Mix.Task.run("origen.bootstrap_admin", ["--unknown"]) end)
-
-    assert output =~ "invalid command-line arguments"
-    assert Repo.aggregate("internal_accounts", :count) == 0
-    assert Repo.aggregate("internal_account_invitations", :count) == 0
-
-    Mix.Task.reenable("origen.bootstrap_admin")
-    output = capture_io(:stderr, fn -> Mix.Task.run("origen.bootstrap_admin", ["unexpected"]) end)
-
-    assert output =~ "invalid command-line arguments"
-    assert Repo.aggregate("internal_accounts", :count) == 0
+    for args <- [
+          ["--verifier-key", @verifier_key],
+          ["--unknown"],
+          ["unexpected"]
+        ] do
+      assert_task_failure(args, "Bootstrap admin received invalid command-line arguments")
+      assert Repo.aggregate("internal_accounts", :count) == 0
+      assert Repo.aggregate("internal_account_invitations", :count) == 0
+    end
   end
 
   test "rejects a blank recipient before changing state" do
     Application.put_env(:origen, :bootstrap_admin_enabled, true)
-    Mix.Task.reenable("origen.bootstrap_admin")
 
-    output =
-      capture_io(:stderr, fn ->
-        Mix.Task.run("origen.bootstrap_admin", ["--email", "   ", "--verifier-key", @verifier_key])
-      end)
-
-    assert output =~ "requires a non-blank email and verifier key"
+    assert_task_failure(["--email", "   "], "Bootstrap admin requires a non-blank email")
     assert Repo.aggregate("internal_accounts", :count) == 0
     assert Repo.aggregate("internal_account_invitations", :count) == 0
+  end
+
+  test "rejects a missing recipient before changing state" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+
+    assert_task_failure([], "Bootstrap admin requires a non-blank email")
+    assert Repo.aggregate("internal_accounts", :count) == 0
+    assert Repo.aggregate("internal_account_invitations", :count) == 0
+  end
+
+  test "rejects missing and short verifier keys before changing state" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+
+    for verifier_key <- [nil, String.duplicate("k", 31)] do
+      if verifier_key do
+        System.put_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY", verifier_key)
+      else
+        System.delete_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY")
+      end
+
+      assert_task_failure(
+        ["--email", "key-check@example.test"],
+        "Bootstrap admin requires a verifier key of at least 32 bytes"
+      )
+
+      assert Repo.aggregate("internal_accounts", :count) == 0
+      assert Repo.aggregate("internal_account_invitations", :count) == 0
+    end
+  end
+
+  test "raises a sanitized failure when the domain request is rejected" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    assert {:ok, _invitation} = BootstrapService.issue_first(%{verifier_key: @verifier_key})
+
+    assert_task_failure(
+      ["--email", "duplicate@example.test"],
+      "Bootstrap admin request was rejected"
+    )
+
+    assert Repo.aggregate("internal_accounts", :count) == 1
+    assert Repo.aggregate("internal_account_invitations", :count) == 1
   end
 
   test "preserves failed delivery state and recovers by reissuing the account" do
@@ -141,23 +186,15 @@ defmodule Origen.BootstrapAdminTaskTest do
     Application.put_env(:origen, :bootstrap_admin_mailer, FailingMailer)
     Mix.Task.reenable("origen.bootstrap_admin")
 
-    failed_output =
-      capture_io(:stderr, fn ->
-        Mix.Task.run("origen.bootstrap_admin", [
-          "--email",
-          "failed@example.test",
-          "--verifier-key",
-          @verifier_key
-        ])
-      end)
+    error = assert_task_failure(["--email", "failed@example.test"], nil)
 
-    assert failed_output =~ "delivery failed"
-    refute failed_output =~ "failed@example.test"
-    refute failed_output =~ "transport_unavailable"
+    assert error.message =~ "delivery failed"
+    refute error.message =~ "failed@example.test"
+    refute error.message =~ "transport_unavailable"
     assert Repo.aggregate("internal_accounts", :count) == 1
     assert Repo.aggregate("internal_account_invitations", :count) == 1
     [[account_id]] = Repo.query!("SELECT id FROM internal_accounts").rows
-    assert failed_output =~ "--account-id #{account_id}"
+    assert error.message =~ "--account-id #{account_id}"
 
     Application.put_env(:origen, :bootstrap_admin_mailer, Origen.Mailer)
     Mix.Task.reenable("origen.bootstrap_admin")
@@ -168,9 +205,7 @@ defmodule Origen.BootstrapAdminTaskTest do
           "--account-id",
           to_string(account_id),
           "--email",
-          "recovered@example.test",
-          "--verifier-key",
-          @verifier_key
+          "recovered@example.test"
         ])
       end)
 
@@ -181,5 +216,17 @@ defmodule Origen.BootstrapAdminTaskTest do
     assert Repo.query!(
              "SELECT count(*) FROM internal_account_invitations WHERE revoked_at IS NULL"
            ).rows == [[1]]
+  end
+
+  defp assert_task_failure(args, message) do
+    Mix.Task.reenable("origen.bootstrap_admin")
+
+    error =
+      assert_raise Mix.Error, fn ->
+        Mix.Task.run("origen.bootstrap_admin", args)
+      end
+
+    if message, do: assert(error.message == message)
+    error
   end
 end

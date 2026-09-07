@@ -14,13 +14,13 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
   alias Origen.BootstrapAdmin.Gate
 
   @shortdoc "Create the first administrator invitation"
-  @switches [account_id: :integer, email: :string, verifier_key: :string, issued_by_ref: :string]
+  @switches [account_id: :integer, email: :string, issued_by_ref: :string]
 
   @impl Mix.Task
   def run(args) do
     case Gate.check() do
       :ok -> execute(args)
-      {:error, :bootstrap_disabled} -> Mix.shell().error("Bootstrap admin is disabled")
+      {:error, :bootstrap_disabled} -> Mix.raise("Bootstrap admin is disabled")
     end
   end
 
@@ -49,16 +49,16 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
     if rest == [] and invalid == [] do
       execute_options(options)
     else
-      Mix.shell().error("Bootstrap admin received invalid command-line arguments")
+      Mix.raise("Bootstrap admin received invalid command-line arguments")
     end
   end
 
   defp execute_options(options) do
     recipient = options[:email] || System.get_env("ORIGEN_BOOTSTRAP_ADMIN_EMAIL")
-    verifier_key = options[:verifier_key] || System.get_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY")
+    verifier_key = System.get_env("ORIGEN_BOOTSTRAP_VERIFIER_KEY")
 
-    with email when is_binary(email) <- non_blank(recipient),
-         key when is_binary(key) <- verifier_key,
+    with {:ok, email} <- validate_recipient(recipient),
+         {:ok, key} <- validate_verifier_key(verifier_key),
          {:ok, invitation} <-
            issue_invitation(options[:account_id], key, options[:issued_by_ref]),
          {:ok, _delivered} <- deliver_invitation(invitation, email) do
@@ -67,20 +67,33 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
           "invitation reference: #{invitation.invitation_id}"
       )
     else
-      nil -> Mix.shell().error("Bootstrap admin requires a non-blank email and verifier key")
-      {:error, {:delivery_error, invitation}} -> delivery_failed(invitation)
-      {:error, _reason} -> Mix.shell().error("Bootstrap admin request was rejected")
+      {:error, :invalid_recipient} ->
+        Mix.raise("Bootstrap admin requires a non-blank email")
+
+      {:error, :invalid_verifier_key} ->
+        Mix.raise("Bootstrap admin requires a verifier key of at least 32 bytes")
+
+      {:error, {:delivery_error, invitation}} ->
+        delivery_failed(invitation)
+
+      {:error, _reason} ->
+        Mix.raise("Bootstrap admin request was rejected")
     end
   end
 
-  defp non_blank(value) when is_binary(value) do
-    if String.trim(value) == "", do: nil, else: value
+  defp validate_recipient(value) when is_binary(value) do
+    if String.trim(value) == "", do: {:error, :invalid_recipient}, else: {:ok, value}
   end
 
-  defp non_blank(_value), do: nil
+  defp validate_recipient(_value), do: {:error, :invalid_recipient}
+
+  defp validate_verifier_key(value) when is_binary(value) and byte_size(value) >= 32,
+    do: {:ok, value}
+
+  defp validate_verifier_key(_value), do: {:error, :invalid_verifier_key}
 
   defp delivery_failed(invitation) do
-    Mix.shell().error(
+    Mix.raise(
       "Bootstrap admin delivery failed; account reference: #{invitation.account_id}; " <>
         "invitation reference: #{invitation.invitation_id}. " <>
         "Retry or reissue with --account-id #{invitation.account_id}"
