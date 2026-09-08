@@ -35,6 +35,8 @@ defmodule Origen.BootstrapAdmin.Credentials do
     end
   end
 
+  def encrypt_seed(_seed, _keyring), do: {:error, :invalid_seed}
+
   def decrypt_seed(ciphertext, keyring) when is_binary(ciphertext) and is_binary(keyring),
     do: decrypt_seed(ciphertext, %{active: %{tag: "seed.v1", key: keyring}, retired: []})
 
