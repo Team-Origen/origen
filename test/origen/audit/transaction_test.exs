@@ -16,6 +16,7 @@ defmodule Origen.Audit.TransactionTest do
   end
 
   test "an allowed business write and required audit append commit atomically" do
+    baseline_count = audit_event_count()
     {:ok, event} = Events.succeeded({:system, nil}, {:account, "account-1"})
 
     multi =
@@ -28,7 +29,7 @@ defmodule Origen.Audit.TransactionTest do
 
     assert {:ok, %{audit_event: %{result: "succeeded"}}} = Repo.transaction(multi)
     assert scalar("SELECT count(*) FROM audit_business_probe") == 1
-    assert Repo.aggregate("audit_events", :count) == 1
+    assert audit_event_count() == baseline_count + 1
   end
 
   test "an unavailable required audit rolls back the business write" do
@@ -93,6 +94,8 @@ defmodule Origen.Audit.TransactionTest do
   end
 
   defp scalar(sql), do: Ecto.Adapters.SQL.query!(Repo, sql).rows |> hd() |> hd()
+
+  defp audit_event_count, do: Repo.aggregate("audit_events", :count)
 
   defp reject_audit_inserts do
     Ecto.Adapters.SQL.query!(Repo, """
