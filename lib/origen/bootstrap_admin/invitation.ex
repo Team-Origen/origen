@@ -2,8 +2,38 @@ defmodule Origen.BootstrapAdmin.Invitation do
   @moduledoc "Locked invitation consumption and account activation."
 
   alias Origen.Audit.{Events, Writer}
+  alias Origen.Authorization
+  alias Origen.Authorization.{Fact, Request}
   alias Origen.BootstrapAdmin.Verifier
   alias Origen.Repo
+
+  @spec exchange(integer(), binary(), binary()) :: {:ok, map()} | {:error, atom()}
+  def exchange(invitation_id, token, key)
+      when is_integer(invitation_id) and is_binary(token) and is_binary(key) do
+    case Repo.query!(
+           """
+             SELECT i.account_id, i.verifier_version, i.verifier_digest, i.expires_at,
+                    i.consumed_at, i.revoked_at, a.role, a.state
+             FROM internal_account_invitations AS i
+             JOIN internal_accounts AS a ON a.id = i.account_id
+             WHERE i.id = $1
+           """,
+           [invitation_id]
+         ).rows do
+      [[account_id, version, digest, expires_at, nil, nil, "administrator", "pending_activation"]] ->
+        if DateTime.compare(expires_at, DateTime.utc_now()) == :gt and
+             Verifier.verify(token, version, digest, key) do
+          {:ok, %{account_id: account_id, invitation_id: invitation_id}}
+        else
+          {:error, :invalid_invitation}
+        end
+
+      _invalid ->
+        {:error, :invalid_invitation}
+    end
+  end
+
+  def exchange(_invitation_id, _token, _key), do: {:error, :invalid_request}
 
   @spec consume(integer(), binary(), binary()) :: {:ok, map()} | {:error, atom()}
   def consume(invitation_id, token, key)
@@ -75,27 +105,8 @@ defmodule Origen.BootstrapAdmin.Invitation do
                 [invitation_id]
               )
 
-              case Repo.query!(
-                     """
-                       UPDATE internal_accounts
-                       SET state = 'active', password_hash = $2, totp_secret = $3,
-                           activated_at = clock_timestamp(), updated_at = clock_timestamp()
-                       WHERE id = $1 AND state = 'pending_activation' RETURNING id
-                     """,
-                     [account_id, password_hash, totp_secret]
-                   ).rows do
-                [[^account_id]] ->
-                  {:ok, event} =
-                    Events.activation_succeeded({:system, nil}, to_string(account_id))
-
-                  case Writer.append(event, {:allow, :sys_01}) do
-                    {:ok, _audit} -> %{account_id: account_id, invitation_id: invitation_id}
-                    {:error, reason} -> Repo.rollback(reason)
-                  end
-
-                [] ->
-                  Repo.rollback(:account_not_pending)
-              end
+              authorize_activation!()
+              persist_activation!(account_id, invitation_id, password_hash, totp_secret)
 
             [] ->
               Repo.rollback(:invitation_not_found)
@@ -109,6 +120,51 @@ defmodule Origen.BootstrapAdmin.Invitation do
   end
 
   def activate(_invitation_id, _token, _key, _credentials), do: {:error, :invalid_request}
+
+  @spec activate_bound(integer(), integer(), map()) :: {:ok, map()} | {:error, atom()}
+  def activate_bound(invitation_id, account_id, %{
+        password_hash: password_hash,
+        totp_secret: totp_secret
+      })
+      when is_integer(invitation_id) and is_integer(account_id) and is_binary(password_hash) and
+             is_binary(totp_secret) do
+    Repo.transaction(fn ->
+      account =
+        Repo.query!(
+          "SELECT role, state FROM internal_accounts WHERE id = $1 FOR UPDATE",
+          [account_id]
+        ).rows
+
+      invitation =
+        Repo.query!(
+          """
+            SELECT account_id, expires_at, consumed_at, revoked_at
+            FROM internal_account_invitations WHERE id = $1 FOR UPDATE
+          """,
+          [invitation_id]
+        ).rows
+
+      case {account, invitation} do
+        {[["administrator", "pending_activation"]],
+         [[^account_id, expires_at, consumed_at, revoked_at]]} ->
+          ensure_usable!(expires_at, consumed_at, revoked_at)
+          authorize_activation!()
+
+          Repo.query!(
+            "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
+            [invitation_id]
+          )
+
+          persist_activation!(account_id, invitation_id, password_hash, totp_secret)
+
+        _invalid ->
+          Repo.rollback(:invalid_session_binding)
+      end
+    end)
+    |> unwrap_transaction()
+  end
+
+  def activate_bound(_invitation_id, _account_id, _credentials), do: {:error, :invalid_request}
 
   defp consume_locked(_, _, _, _, _, consumed, _, _, _) when not is_nil(consumed),
     do: Repo.rollback(:already_consumed)
@@ -143,6 +199,51 @@ defmodule Origen.BootstrapAdmin.Invitation do
 
   defp ensure_usable!(expires_at, nil, nil) do
     if DateTime.compare(expires_at, DateTime.utc_now()) != :gt, do: Repo.rollback(:expired)
+  end
+
+  defp authorize_activation! do
+    request =
+      Request.new(
+        operation: Fact.known(:activate_internal_account),
+        subject: Fact.known({:channel, :invitation}),
+        account_state: Fact.known(:pending_activation),
+        target: Fact.known(%{role: :administrator}),
+        scope:
+          Fact.known(%{
+            account_matches: true,
+            password_defined: true,
+            token_valid: true,
+            totp_enrolled: true
+          })
+      )
+
+    case Authorization.decide(request) do
+      {:allow, :inv_01} -> :ok
+      _denied -> Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp persist_activation!(account_id, invitation_id, password_hash, totp_secret) do
+    case Repo.query!(
+           """
+             UPDATE internal_accounts
+             SET state = 'active', password_hash = $2, totp_secret = $3,
+                 activated_at = clock_timestamp(), updated_at = clock_timestamp()
+             WHERE id = $1 AND state = 'pending_activation' RETURNING id
+           """,
+           [account_id, password_hash, totp_secret]
+         ).rows do
+      [[^account_id]] ->
+        {:ok, event} = Events.activation_succeeded({:system, nil}, to_string(account_id))
+
+        case Writer.append(event, {:allow, :sys_01}) do
+          {:ok, _audit} -> %{account_id: account_id, invitation_id: invitation_id}
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+      [] ->
+        Repo.rollback(:account_not_pending)
+    end
   end
 
   defp unwrap_transaction({:ok, result}), do: {:ok, result}

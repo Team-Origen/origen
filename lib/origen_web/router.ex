@@ -18,6 +18,9 @@ defmodule OrigenWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/admin/activate", AdminActivationController, :new
+    post "/admin/activate/exchange", AdminActivationController, :exchange
+    post "/admin/activate", AdminActivationController, :create
   end
 
   # Other scopes may use custom stacks.

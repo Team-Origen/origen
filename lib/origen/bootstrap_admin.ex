@@ -5,6 +5,8 @@ defmodule Origen.BootstrapAdmin do
 
   defdelegate issue_first(options), to: Account
   defdelegate reissue_first(account_id, options), to: Account
+  defdelegate exchange(invitation_id, token, key), to: Invitation
   defdelegate consume(invitation_id, token, key), to: Invitation
   defdelegate activate(invitation_id, token, key, credentials), to: Invitation
+  defdelegate activate_bound(invitation_id, account_id, credentials), to: Invitation
 end
