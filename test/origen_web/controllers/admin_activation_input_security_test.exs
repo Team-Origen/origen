@@ -1,43 +1,48 @@
 defmodule OrigenWeb.AdminActivationInputSecurityTest do
-  use OrigenWeb.ConnCase, async: true
+  use OrigenWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest, only: [render_component: 2]
 
+  alias Origen.BootstrapAdmin
+  alias Origen.Repo
+  alias OrigenWeb.AdminActivationSessionStore
   alias OrigenWeb.Layouts
+
+  @verifier_key String.duplicate("v", 32)
+  @totp_key String.duplicate("t", 32)
+
+  setup do
+    Repo.query!("DELETE FROM internal_account_invitations")
+    Repo.query!("DELETE FROM internal_accounts")
+    AdminActivationSessionStore.clear()
+
+    previous_verifier_key = Application.get_env(:origen, :bootstrap_admin_verifier_key)
+    previous_keyring = Application.get_env(:origen, :bootstrap_admin_totp_keyring)
+    previous_ttl = Application.get_env(:origen, :bootstrap_admin_session_ttl_seconds)
+
+    Application.put_env(:origen, :bootstrap_admin_verifier_key, @verifier_key)
+
+    Application.put_env(:origen, :bootstrap_admin_totp_keyring, %{
+      active: %{tag: "seed.test.v1", key: @totp_key},
+      retired: []
+    })
+
+    Application.put_env(:origen, :bootstrap_admin_session_ttl_seconds, 600)
+
+    on_exit(fn ->
+      restore_env(:bootstrap_admin_verifier_key, previous_verifier_key)
+      restore_env(:bootstrap_admin_totp_keyring, previous_keyring)
+      restore_env(:bootstrap_admin_session_ttl_seconds, previous_ttl)
+      AdminActivationSessionStore.clear()
+    end)
+
+    :ok
+  end
 
   defmodule ActivationFormFixture do
     use Phoenix.Component
 
     import OrigenWeb.CoreComponents
-
-    def credential_fields(assigns) do
-      ~H"""
-      <.input
-        id="activation-password"
-        name="password"
-        type="password"
-        label="Password"
-        value=""
-        errors={@errors}
-      />
-      <.input
-        id="activation-confirmation"
-        name="password_confirmation"
-        type="password"
-        label="Confirm password"
-        value=""
-        errors={@errors}
-      />
-      <.input
-        id="activation-totp"
-        name="totp_code"
-        type="text"
-        label="Authenticator code"
-        value=""
-        errors={@errors}
-      />
-      """
-    end
 
     def consent_field(assigns) do
       ~H"""
@@ -94,19 +99,28 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     end
   end
 
-  test "activation fields render validation feedback without repopulating submitted secrets" do
-    html =
-      render_component(&ActivationFormFixture.credential_fields/1, %{
-        errors: ["Activation details are invalid"]
-      })
+  test "invalid activation submission does not repopulate submitted secrets", %{conn: conn} do
+    password = "sentinel-password-must-never-render"
+    totp_code = "sentinel-totp-must-never-render"
+    invitation = issue_invitation()
+    enrollment_conn = exchange(conn, invitation) |> recycle() |> get(https(~p"/admin/activate"))
 
-    assert html =~ ~s(id="activation-password")
-    assert html =~ ~s(type="password")
-    assert html =~ ~s(name="password_confirmation")
-    assert html =~ ~s(name="totp_code")
-    assert html =~ "Activation details are invalid"
-    refute html =~ "submitted-password"
-    refute html =~ "submitted-totp-code"
+    body =
+      enrollment_conn
+      |> recycle()
+      |> post(https(~p"/admin/activate"), %{
+        "password" => password,
+        "password_confirmation" => password,
+        "totp_code" => totp_code
+      })
+      |> html_response(422)
+
+    assert body =~ "Activation details are invalid"
+    assert body =~ ~s(name="password")
+    assert body =~ ~s(name="password_confirmation")
+    assert body =~ ~s(name="totp_code")
+    refute body =~ password
+    refute body =~ totp_code
   end
 
   test "activation consent sends a false fallback and marks explicit consent as checked" do
@@ -160,4 +174,22 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     assert layout =~ "We can&#39;t find the internet"
     assert layout =~ "Attempting to reconnect"
   end
+
+  defp issue_invitation do
+    assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @verifier_key})
+    invitation
+  end
+
+  defp exchange(conn, invitation) do
+    conn
+    |> post(https(~p"/admin/activate/exchange"), %{
+      "invitation_id" => to_string(invitation.invitation_id),
+      "token" => invitation.token
+    })
+  end
+
+  defp https(path), do: "https://www.example.com" <> path
+
+  defp restore_env(key, nil), do: Application.delete_env(:origen, key)
+  defp restore_env(key, value), do: Application.put_env(:origen, key, value)
 end
