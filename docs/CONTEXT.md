@@ -36,7 +36,10 @@ Operational ownership is split deliberately:
 - Deployment owns accurate environment classification, TLS, ingress/APM/error-reporting redaction, secret-provider wiring, and removal of the exposed surface after use.
 - Rollback disables the task and route while preserving account, invitation, and audit history. Destructive rollback requires explicit approval.
 - Approved invocation boundaries are the source-checkout Mix task and packaged `bin/origen_bootstrap_admin`; both use the shared fail-closed gate before bootstrap argument parsing or I/O, and production-compiled releases deny execution.
-- The current task output and email are reference-only. A separately reviewed secure token-delivery channel and runtime verifier/keyring provider are prerequisites before end-to-end activation is enabled.
+- Delivery approval is a separate authority: Samuel/requester cannot self-approve. A distinct authorized confirmer must approve the exact destination, non-production environment, and operation through protected approval input for every fresh issue/reissue; this authority never derives from an application role.
+- Issuance plus required audit and failure revocation plus required audit are bounded database transactions. Provider handoff occurs outside those transactions and returns reference-only evidence; failed delivery requires revocation, a fresh approval, and a fresh invitation rather than retry.
+- Staging acceptance is **prepared/not executed**. No Samuel→Santiago email, credentials, deployment, activation, or operational bootstrap is included; Issue #3 remains open pending a separately authorized real-staging journey.
+- Current callback replay storage is node-local/in-memory with no time-based pruning. Staging remains blocked pending ingress affinity or shared replay storage, a retention/pruning policy, provider controls and provider credentials, human approvals, and full-stack integration.
 
 See [the bootstrap deployment runbook](deployment/FIRST_ADMIN_BOOTSTRAP.md) and [activation data handling controls](security/ACTIVATION_DATA_HANDLING.md).
 

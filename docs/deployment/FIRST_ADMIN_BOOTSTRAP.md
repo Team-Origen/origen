@@ -1,81 +1,109 @@
 # Operate the first Administrator bootstrap safely
 
-Use this runbook only in an explicitly enabled, non-production environment with synthetic data. The bootstrap remains disabled by default and is always denied when compiled with `MIX_ENV=prod`.
+> Staging acceptance is **prepared/not executed**. This packet has not used provider credentials, deployed code, sent a Samuel→Santiago email, activated an account, or completed an operational bootstrap. Issue #3 must remain open until a separately authorized real-staging journey is recorded.
 
-## Preconditions
+This is a staging-only, disabled-by-default capability. A production-compiled release always denies it. The happy path below is a future human-controlled procedure, not evidence that it happened.
 
-Do not enable the surface until every item is true:
+## Happy path (future authorized staging window)
 
-- The deployment is classified as non-production.
-- `Origen.MigrationRepo` has applied the bootstrap migration with the owner role; the runtime role has only the grants defined by that migration.
-- TLS is enforced at the public edge and between the edge and application where the platform does not provide an equivalent protected channel.
-- The ingress, proxy, APM agent, exception reporter, mail adapter, and support tooling satisfy [Activation data handling](../security/ACTIVATION_DATA_HANDLING.md).
-- A secret manager provides a verifier key of at least 32 bytes and an encryption keyring that satisfies the assumptions below.
-- A reviewed, one-time token delivery integration exists. The current Mix task email and terminal output contain references only; they deliberately do not deliver the raw invitation token or an activation URL.
+### 1. Stop unless prerequisites are evidenced
 
-## Dependency and key assumptions
+The operator owns environment/destination checks and disablement. The distinct authorized confirmer owns approval. Security owns provider and canary evidence. Operations owns ingress, callback, rollback, and timestamps. An independent reviewer owns final sign-off.
 
-| Item | Required assumption |
-| --- | --- |
-| Password hashing | `argon2_elixir ~> 4.1.3` is resolved and its native build toolchain is available. Stored values are Argon2 PHC strings; no plaintext password is retained. |
-| TOTP | `nimble_totp ~> 1.0.0` is resolved. Enrollment uses server-generated seeds and validates a code before activation. Recovery-code policy is not part of this bootstrap. |
-| Seed encryption | `cloak ~> 1.1.4` and `cloak_ecto ~> 1.3.0` are resolved. Each AES-GCM key is exactly 32 bytes. |
-| Keyring | Exactly one unique tag is active for encryption. Retired tags are decrypt-only and remain available until all values are re-encrypted and verified readable with the active key. Missing, malformed, duplicate, or unknown tags fail closed. |
-| Invitation verification | `ORIGEN_BOOTSTRAP_VERIFIER_KEY` is at least 32 bytes, comes from a secret manager, and is identical at issuance and exchange. Do not log, print, persist, or reuse it as an encryption key. |
-| Runtime web configuration | The application-side `:bootstrap_admin_verifier_key` and encryption keyring must be supplied through reviewed runtime-provider wiring before activation is enabled. Environment-variable names alone do not establish that wiring. |
+Before enablement, record references—not copied evidence—to prove:
 
-Before changing a key, retain the previous decrypt-only tag, re-encrypt existing seeds, verify reads, and only then retire the old key. Key loss makes enrolled TOTP seeds unrecoverable; backup and restore procedures must include the external key provider without placing keys in database backups.
+- deployment authorization identifies the exact staging destination and environment;
+- Samuel requested issuance and a **distinct authorized confirmer** approved that exact destination and environment in the deployment approval system;
+- the approval is short-lived, single-purpose, bound to issue/reissue and account (when present), and has not been used;
+- the exact HTTPS origin and host are approved for staging; production is not selected;
+- TLS, secret-provider wiring, migration/runtime roles, activation ingress, and callback ingress are ready;
+- provider queue/retry storage is encrypted, TTL-bounded, least-privilege, access-audited, and has no retaining preview/body capture;
+- callback signing, timestamp window, event allowlist, and correlation validation are approved;
+- multi-node callback replay is prevented by ingress affinity or shared replay storage, with a retention/pruning policy.
 
-## Approved invocation boundaries
+**Stop condition:** any missing/mismatched evidence, self-approval, production value, unknown provider behavior, or unavailable rollback owner keeps bootstrap disabled.
 
-Use either the source-checkout Mix task or the packaged command `bin/origen_bootstrap_admin`. Both call the shared `Origen.BootstrapAdmin.Gate` before argument parsing, repository access, network access, or bootstrap-specific I/O. The packaged command is part of the release overlay; do not substitute `bin/origen eval`, a remote console, or direct context/database calls.
+### 2. Verify exact staging values without exposing them
 
-```bash
-# Source checkout
-MIX_ENV=dev \
-ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true \
-ORIGEN_BOOTSTRAP_ADMIN_EMAIL='operator-approved@example.test' \
-ORIGEN_BOOTSTRAP_VERIFIER_KEY="$(secret-tool-read bootstrap-verifier)" \
-mix origen.bootstrap_admin --issued-by-ref deployment-operator
+Two authorized people compare the destination and environment in the protected approval system. Do not copy addresses, assertion bodies, signatures, credentials, tokens, message bodies, or full URLs into terminals, worksheets, tickets, or chat. Record only the approval evidence reference and the result `matched` or `not matched`.
 
-# Packaged non-production release
-ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true \
-ORIGEN_BOOTSTRAP_ADMIN_EMAIL='operator-approved@example.test' \
-ORIGEN_BOOTSTRAP_VERIFIER_KEY="$(secret-tool-read bootstrap-verifier)" \
-bin/origen_bootstrap_admin --issued-by-ref deployment-operator
-```
+### 3. Supply approval through protected input
 
-The verifier key is accepted only through the environment/runtime secret provider. `--verifier-key` and other secret-bearing arguments are rejected. A production-compiled release denies the command even when `ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true`.
-
-The `secret-tool-read` token is a placeholder for the deployment's secret-manager command. Avoid shell tracing and shell history. Expected output contains only account and invitation references. It must not contain a token, URL, password, TOTP value, QR payload, digest, session value, or key.
-
-To reissue for the same pending account:
+The approved entry points are the source-checkout Mix task and packaged `bin/origen_bootstrap_admin`. Both check the shared gate before parsing or I/O. Use a one-shot file descriptor or an access-controlled secret-provider mount. The protected reader resolves the opaque reference at runtime.
 
 ```bash
-MIX_ENV=dev \
-ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true \
-ORIGEN_BOOTSTRAP_ADMIN_EMAIL='operator-approved@example.test' \
-ORIGEN_BOOTSTRAP_VERIFIER_KEY="$(secret-tool-read bootstrap-verifier)" \
-mix origen.bootstrap_admin --account-id ACCOUNT_REFERENCE --issued-by-ref deployment-operator
+# Illustrative staging shape: placeholders are references, never secret values.
+MIX_ENV=dev ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true \
+  mix origen.bootstrap_admin \
+  --approval-input-ref APPROVAL_INPUT_REFERENCE \
+  --issued-by-ref REQUESTER_REFERENCE
+
+# Reissue only a pending account, after a new distinct approval.
+MIX_ENV=dev ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true \
+  mix origen.bootstrap_admin \
+  --account-id ACCOUNT_REFERENCE \
+  --approval-input-ref FRESH_APPROVAL_INPUT_REFERENCE \
+  --issued-by-ref REQUESTER_REFERENCE
 ```
 
-Reissue revokes every prior unconsumed invitation. It must not create another Administrator.
+Do not put a destination, verifier key, approval assertion, token, URL, provider credential, or callback secret in argv or shell-expanded environment examples. Disable shell tracing/history around the authorized window.
 
-## Verify and disable
+**Reference-only result:** success or failure output may contain only approved account, invitation, approval, and provider-correlation references plus a safe outcome. Stop and treat any destination, assertion value, token, full URL, body, credential, or raw provider response as a release-blocking leak.
 
-1. Confirm the task emitted references only and appended sanitized audit evidence.
-2. Complete activation through the reviewed TLS/token-delivery path; confirm the account becomes active and replay is denied.
-3. Set `ORIGEN_BOOTSTRAP_ADMIN_ENABLED=false` or remove it, restart the deployment, and verify the command reports `Bootstrap admin is disabled` before repository access.
-4. Remove route exposure at ingress after activation if the environment no longer needs it. Keep history and keys required to read retained records.
+### 4. Prove provider handoff and activation
+
+Using evidence references only, verify one provider submission and one accepted handoff. In the recipient-controlled browser, verify the invitation reference/token occur only in the fragment, the fragment is removed before POST, the redirect is clean, activation consumes once, and replay is denied. Never paste the link or token into evidence.
+
+### 5. Disable immediately
+
+Set `ORIGEN_BOOTSTRAP_ADMIN_ENABLED=false` (or remove it), restart every staging instance, and verify both entry points deny before parsing/I/O. Disable provider submission and callback/activation ingress when no activation is in progress. Preserve append-only audit and provider access evidence.
+
+## Safe failure and fresh-approval recovery
+
+A handoff or terminal-delivery failure must revoke the invitation atomically with sanitized audit evidence. Confirm revocation and old-token activation denial by references only. **Do not retry or resubmit the failed invitation.** Keep all surfaces disabled if revocation cannot be proved.
+
+Recovery requires a **fresh approval** by a distinct authorized confirmer and a **fresh invitation** with a different token. Re-run exact destination/environment checks. A consumed/failure race, audit/database failure, or unknown provider state requires security incident review before any new attempt.
+
+## Callback and replay limitation
+
+Current callback replay storage is **node-local** and in-memory, with **no time-based pruning**. Real staging remains blocked until operations provides ingress affinity or shared replay enforcement plus a bounded retention/pruning policy. This limitation must be resolved together with full-stack ingress/APM/provider integration; restarting or scaling nodes must not reopen the replay window.
 
 ## Rollback
 
-Rollback means disabling access, not deleting history.
+1. Disable bootstrap on every instance and prove gate-first denial.
+2. Disable provider submission and authenticated callback ingress; preserve provider audit evidence and follow approved TTL/purge policy.
+3. Remove activation ingress only after confirming no activation is in progress.
+4. Transactionally revoke unresolved invitations whose delivery cannot be trusted; otherwise remain disabled through expiry and incident review.
+5. Revert the delivery slice only after retaining sanitized evidence. Preserve accounts, invitations, controls, audit records, and readable key history. No migration was added.
 
-1. Disable `ORIGEN_BOOTSTRAP_ADMIN_ENABLED` and restart all instances.
-2. Remove the activation route from ingress and stop any approved token-delivery integration.
-3. Preserve `internal_accounts`, `admin_bootstrap_controls`, `internal_account_invitations`, and `audit_events`.
-4. Preserve verifier/encryption keys needed to validate or decrypt retained records; restrict them through the secret manager.
-5. Revert application routing/task deployment only after confirming no activation is in progress.
+Never overwrite, delete, or rewrite archived OpenSpec history. Validation/sync/archive must use repository-supported tooling after independent verification; superseding decisions belong in a new change.
 
-The migration down path refuses populated bootstrap tables. Dropping populated tables, constraints, or audit history is destructive and requires explicit maintainer and security approval plus a separately reviewed retention/migration plan.
+## Sanitized real-staging acceptance worksheet
+
+Do not add addresses, tokens, full URLs, message bodies, credentials, assertion bodies/signatures, provider payloads, or screenshots. Use immutable non-secret references and pass/fail/blocked decisions only.
+
+| Field | Sanitized entry |
+| --- | --- |
+| Change / Issue | Change reference; Issue #3 remains open |
+| Started-at timestamp | Pending |
+| Completed-at timestamp | Pending |
+| Deployment authorization reference | Pending human action |
+| Approver evidence reference | Pending human action |
+| Distinct-principal and exact-match result | Pending human action |
+| Provider-control evidence reference | Pending security/provider action |
+| Synthetic-canary result reference | Pending full-stack execution |
+| Failure-drill result reference | Pending full-stack execution |
+| Happy-path result reference | Pending separately authorized real-staging journey |
+| Disablement result reference | Pending operations action |
+| Reviewer sign-off reference | Pending independent reviewer |
+| Rollback decision | Keep disabled / rollback / proceed (select one) |
+
+## Credential-gated PostgreSQL prerequisite
+
+Do not run the PostgreSQL security test without its isolated CI database and role credentials. The exact CI command is:
+
+```text
+mix test test/origen/audit/postgres_security_test.exs --include postgres_security
+```
+
+It requires PostgreSQL 17 plus provisioned owner, migrator, runtime, and verifier roles and the database URLs/environment shown in `.github/workflows/ci.yml`. CI or an authorized human owns this evidence; a skipped local command is not a pass.
