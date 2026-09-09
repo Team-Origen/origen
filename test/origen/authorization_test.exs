@@ -10,7 +10,7 @@ defmodule Origen.AuthorizationTest do
     test "allows only fact-complete exact rules" do
       cases = [
         {:bootstrap_first_administrator, {:channel, :deployment}, :not_applicable,
-         %{administrator_exists: false}, %{approved_command: true, assigned_operator: true},
+         %{administrator_exists: false}, %{approved_command: true, assigned_operator: true, approval_authorized: true},
          :dep_01},
         {:activate_internal_account, {:channel, :invitation}, {:known, :pending_activation},
          %{role: :professional},
@@ -56,7 +56,7 @@ defmodule Origen.AuthorizationTest do
     test "keeps every allowed non-role channel within its operation and declared scope" do
       cases = [
         {:bootstrap_first_administrator, {:channel, :deployment}, :not_applicable,
-         %{administrator_exists: false}, %{approved_command: true, assigned_operator: true},
+         %{administrator_exists: false}, %{approved_command: true, assigned_operator: true, approval_authorized: true},
          :approved_command},
         {:activate_internal_account, {:channel, :invitation}, {:known, :pending_activation},
          %{role: :professional},
