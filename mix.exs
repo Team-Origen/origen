@@ -11,7 +11,8 @@ defmodule Origen.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      releases: [origen: [applications: [mix: :permanent]]]
     ]
   end
 

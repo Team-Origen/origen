@@ -17,7 +17,7 @@ Sprint 0 establece el repositorio, la arquitectura mínima, CI, auditoría trans
 ## Ficha histórica
 
 | Campo | Registro |
-|---|---|
+| --- | --- |
 | Estado | En progreso |
 | Timebox | 2026-08-23 a 2026-09-05; el 5 de septiembre es el límite, no una obligación de completar días |
 | Capacidad | Techo de 64 h-equipo; 52 h planificadas y 12 h sin comprometer |
@@ -55,17 +55,31 @@ Sprint 0 establece el repositorio, la arquitectura mínima, CI, auditoría trans
 - La creación es única, la invitación es de un solo uso y vence a las 24 horas. No se permite inserción manual ni credenciales predeterminadas; emisión, reemisión, consumo, vencimiento, fallos y activación se auditan sin secretos.
 - La decisión de producción DA-03 no bloquea este bootstrap no productivo; sí bloquea cualquier uso real.
 
+#### Issue #3 operational handoff
+
+The implementation remains a non-production capability, not a production-readiness claim. Reviewers and operators must use these boundaries:
+
+| Topic | Current decision |
+| --- | --- |
+| Invocation | Approved entry points are `mix origen.bootstrap_admin` from a source checkout and packaged `bin/origen_bootstrap_admin`. Both call the same fail-closed gate before bootstrap argument parsing or I/O; production-compiled releases deny execution. Do not substitute `bin/origen eval`, a remote console, or direct database/context calls. |
+| Dependencies and keys | Argon2, TOTP, and Cloak dependencies resolve, but deployment must still provide the native build toolchain, a verifier key of at least 32 bytes, and a tagged encryption keyring with exactly one active key. Runtime secret-provider wiring and key rotation/read verification remain deployment prerequisites. |
+| Ingress and observability | Keep the activation route unexposed until TLS and ingress, access-log, APM, exception, mail/support, and database-telemetry redaction have passed canary checks. Application parameter filtering alone is insufficient. |
+| Rollback | Disable the gate, remove ingress exposure, and stop token delivery while preserving account, invitation, and append-only audit history. The migration refuses to drop populated bootstrap tables; destructive removal needs separate maintainer and security approval. |
+| Delivery limitation | Current task output and email contain references only. End-to-end activation requires a separately reviewed one-time token channel; no operator may reconstruct or disclose the raw token through logs, mail diagnostics, or support tooling. |
+
+Operational details and verification checklists are in [`FIRST_ADMIN_BOOTSTRAP.md`](../deployment/FIRST_ADMIN_BOOTSTRAP.md) and [`ACTIVATION_DATA_HANDLING.md`](../security/ACTIVATION_DATA_HANDLING.md).
+
 ## Decisiones humanas pendientes
 
 | ID | Decisión | Límite actual |
-|---|---|---|
+| --- | --- | --- |
 | **DA-03** | Definir el entorno definitivo de producción y el proveedor de correo productivo. | Fly.io solo puede considerarse para staging/piloto sin datos reales. No autoriza producción ni cambia el bootstrap no productivo aprobado. |
 | **DA-04** | Definir nombres físicos de columnas, tipos y constraints de PostgreSQL para la auditoría append-only. | La base ya aprobada es `audit_events`, con actor, evento, entidad, resultado y fecha/hora; faltan los detalles alineados con el scaffold. |
 
 ## Responsables y gates
 
 | Entregable | Responsable principal | Gates esenciales |
-|---|---|---|
+| --- | --- | --- |
 | #1 Scaffold y CI | Lucca (scaffold), Samuel (CI), Said (revisión) | Rename verificado, PostgreSQL 17 local verificado y PR con CI verde. |
 | #2 Auditoría y autorización | Santiago | #1 integrado, OTP 29, PostgreSQL 17 en `5433`, pruebas de permisos, denegación, inmutabilidad y minimización, más revisión independiente. |
 | #3 Bootstrap | Lucca (autor), Samuel (operador), Santiago (activador), Said (revisor) | #1 y #2 integrados; ejecución no productiva, revisión independiente y evidencia sanitizada. |

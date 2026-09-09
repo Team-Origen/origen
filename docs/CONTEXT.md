@@ -3,7 +3,7 @@
 ## Solicitudes y turnos
 
 | Término | Definición |
-|---|---|
+| --- | --- |
 | Solicitado | Estado inicial de un turno solicitado por el paciente cuando el perfil profesional usa aprobación manual. Espera aprobación profesional. |
 | Reservado | Estado de un turno aprobado o creado con reserva pendiente de confirmación cuando corresponde. Representa una reserva activa. |
 | Confirmado | Estado de un turno cuya asistencia ya quedó confirmada, ya sea por el paciente o porque el flujo aplicable lo estableció directamente. |
@@ -15,21 +15,35 @@
 ## Cuentas de pacientes
 
 | Término | Definición |
-|---|---|
+| --- | --- |
 | Pendiente de completar | Estado de una cuenta de Paciente creada por Google OAuth que todavía no completó y validó todos los datos obligatorios del registro. |
 | Activa | Estado de una cuenta de Paciente que ya completó y validó los datos obligatorios y puede operar normalmente dentro del sistema. |
 
 ## Cuentas internas
 
 | Término | Definición |
-|---|---|
+| --- | --- |
 | Pendiente de activación | Estado de una cuenta de Administrador, Profesional o Secretaría que todavía no completó la definición de contraseña y el enrolamiento TOTP mediante su invitación de un solo uso. |
 | Activa | Estado de una cuenta de Administrador, Profesional o Secretaría que ya completó la definición de contraseña y el enrolamiento TOTP y puede iniciar sesión. |
+
+### First Administrator bootstrap boundaries
+
+The first Administrator bootstrap is a deployment-only, non-production capability. It is disabled by default, denied in `MIX_ENV=prod`, and creates a `Pendiente de activación` account rather than credentials. Activation is invitation-bound, TLS-only, consume-once, and changes the account to `Activa` only after password and TOTP enrollment succeeds.
+
+Operational ownership is split deliberately:
+
+- The application enforces the gate, invitation lifetime and consumption, credential persistence, default-deny authorization, and typed sanitized audit events.
+- Deployment owns accurate environment classification, TLS, ingress/APM/error-reporting redaction, secret-provider wiring, and removal of the exposed surface after use.
+- Rollback disables the task and route while preserving account, invitation, and audit history. Destructive rollback requires explicit approval.
+- Approved invocation boundaries are the source-checkout Mix task and packaged `bin/origen_bootstrap_admin`; both use the shared fail-closed gate before bootstrap argument parsing or I/O, and production-compiled releases deny execution.
+- The current task output and email are reference-only. A separately reviewed secure token-delivery channel and runtime verifier/keyring provider are prerequisites before end-to-end activation is enabled.
+
+See [the bootstrap deployment runbook](deployment/FIRST_ADMIN_BOOTSTRAP.md) and [activation data handling controls](security/ACTIVATION_DATA_HANDLING.md).
 
 ## Cierre administrativo y pago
 
 | Término | Definición |
-|---|---|
+| --- | --- |
 | Abierto | Estado administrativo que indica que el turno mantiene alguna pendiente operativa o financiera. |
 | Cerrado | Estado administrativo que indica que el turno alcanzó un resultado operativo terminal y no mantiene pendientes. |
 | Pendiente | Estado financiero usado para indicar que el pago aún no fue registrado. |
