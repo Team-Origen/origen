@@ -213,8 +213,14 @@ defmodule OrigenWeb.AdminActivationControllerTest do
   end
 
   @tag :runtime_harness
-  test "activates with a valid TOTP and denies replay", %{conn: conn} do
-    invitation = issue_invitation()
+  test "synthetic failure, fresh activation, replay denial, and disablement", %{conn: conn} do
+    failed = issue_invitation()
+    assert {:ok, :revoked} = BootstrapAdmin.revoke_delivery_failure(failed.invitation_id, %{})
+    assert response(exchange(conn, failed), 404) == "Activation unavailable"
+
+    invitation =
+      elem(BootstrapAdmin.reissue_first(failed.account_id, %{verifier_key: @verifier_key}), 1)
+
     exchange_conn = exchange(conn, invitation)
     page_conn = exchange_conn |> recycle() |> get(https(~p"/admin/activate"))
     seed = page_conn |> html_response(200) |> totp_seed_from_page()
@@ -240,6 +246,9 @@ defmodule OrigenWeb.AdminActivationControllerTest do
 
     assert account_credentials(invitation.account_id) ==
              [["active", password_hash, encrypted_seed]]
+
+    Application.put_env(:origen, :bootstrap_admin_enabled, false)
+    assert {:error, :bootstrap_disabled} = Origen.BootstrapAdmin.Gate.check()
   end
 
   defp issue_invitation do

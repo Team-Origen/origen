@@ -121,6 +121,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     assert body =~ ~s(name="totp_code")
     refute body =~ password
     refute body =~ totp_code
+    refute body =~ invitation.token
   end
 
   test "activation consent sends a false fallback and marks explicit consent as checked" do
