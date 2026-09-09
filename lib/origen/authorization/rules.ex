@@ -4,20 +4,38 @@ defmodule Origen.Authorization.Rules do
   alias Origen.Authorization.Request
 
   @roles [:administrator, :professional, :secretary, :patient]
-  @channels [:deployment, :invitation, :system, :public_possession]
+  @channels [:deployment, :deployment_approval, :invitation, :system, :public_possession]
   @subjects Enum.map(@roles, &{:role, &1}) ++ Enum.map(@channels, &{:channel, &1})
   @bootstrap_operations [
+    :approve_bootstrap_invitation,
     :bootstrap_first_administrator,
     :reissue_internal_invitation,
     :activate_internal_account
   ]
 
   @rules [
+           {:apr_01, :approve_bootstrap_invitation, {:channel, :deployment_approval},
+            :not_applicable, %{distinct_principals: true},
+            %{
+              destination_matches: true,
+              environment_matches: true,
+              operation_matches: true,
+              account_matches: true,
+              non_production: true,
+              assertion_valid: true,
+              confirmer_authorized: true
+            }},
            {:dep_01, :bootstrap_first_administrator, {:channel, :deployment}, :not_applicable,
-            %{administrator_exists: false}, %{approved_command: true, assigned_operator: true}},
+            %{administrator_exists: false},
+            %{approved_command: true, assigned_operator: true, approval_authorized: true}},
            {:rei_01, :reissue_internal_invitation, {:channel, :deployment}, :not_applicable,
             %{role: :administrator, state: :pending_activation},
-            %{active_administrator_exists: false, approved_command: true, assigned_operator: true}},
+            %{
+              active_administrator_exists: false,
+              approved_command: true,
+              assigned_operator: true,
+              approval_authorized: true
+            }},
            {:sys_01, :append_audit_event, {:channel, :system}, :not_applicable,
             %{event: :constructor_produced}, %{internal_path: true}},
            {:tel_02, :verify_patient_phone, {:channel, :public_possession}, :not_applicable,

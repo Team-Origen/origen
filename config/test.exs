@@ -35,8 +35,10 @@ config :origen,
 
 config :origen,
   bootstrap_admin_enabled: false,
-  bootstrap_admin_activation_url: "https://example.test/admin/activate",
-  bootstrap_admin_mail_from: "no-reply@example.test"
+  bootstrap_admin_delivery: %{
+    enabled: false,
+    allowed_adapters: [Origen.TestSupport.BootstrapAdmin.NonRetainingAdapter]
+  }
 
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
