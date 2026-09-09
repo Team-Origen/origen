@@ -14,7 +14,12 @@ defmodule Origen.BootstrapAdmin.Account do
 
       if administrator_exists?(), do: Repo.rollback(:administrator_exists)
 
-      Delivery.create_invitation(nil, key, issued_by_ref, :bootstrap_admin)
+      invitation = Delivery.create_invitation(nil, key, issued_by_ref, :bootstrap_admin)
+
+      if approval = options[:approval],
+        do: Delivery.append_approval!(invitation.invitation_id, approval)
+
+      invitation
     end)
     |> unwrap_transaction()
   end
@@ -40,7 +45,13 @@ defmodule Origen.BootstrapAdmin.Account do
             [account_id]
           )
 
-          Delivery.create_invitation(account_id, key, issued_by_ref, :invitation_reissue)
+          invitation =
+            Delivery.create_invitation(account_id, key, issued_by_ref, :invitation_reissue)
+
+          if approval = options[:approval],
+            do: Delivery.append_approval!(invitation.invitation_id, approval)
+
+          invitation
 
         [["active"]] ->
           Repo.rollback(:administrator_active)

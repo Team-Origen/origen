@@ -81,4 +81,42 @@ defmodule Origen.BootstrapAdmin.AuthorizationAuditTest do
     assert {:ok, _} = Events.activation_succeeded({:system, nil}, "42")
     assert {:error, :invalid_event} = Events.reissue_denied({:system, nil}, "token-value")
   end
+
+  test "typed approval, handoff, failure, and revocation events contain allowlisted references only" do
+    constructors = [
+      {&Events.invitation_approval_confirmed/2, {:administrator, "operator-samuel"}, "41",
+       "invitation_approval_confirmation"},
+      {&Events.invitation_delivery_handoff/2, {:provider, "handoff_42"}, "42",
+       "invitation_delivery_handoff"},
+      {&Events.invitation_delivery_failed/2, {:system, nil}, "42", "invitation_delivery_failure"},
+      {&Events.invitation_delivery_revoked/2, {:system, nil}, "42",
+       "invitation_delivery_revocation"}
+    ]
+
+    for {constructor, actor, reference, type} <- constructors do
+      assert {:ok, event} = constructor.(actor, reference)
+      assert event.event == type
+      assert event.entity_kind == "invitation"
+      assert event.entity_ref == reference
+    end
+
+    for unsafe <- [
+          "token-value",
+          "https://approved-host/admin/activate#secret",
+          String.duplicate("x", 129)
+        ] do
+      assert {:error, :invalid_event} =
+               Events.invitation_delivery_handoff({:provider, unsafe}, "42")
+
+      assert {:error, :invalid_event} = Events.invitation_delivery_failed({:system, nil}, unsafe)
+    end
+  end
+
+  test "corrections are represented as a new typed event rather than mutating an event" do
+    assert {:ok, original} = Events.invitation_delivery_handoff({:provider, "handoff-1"}, "42")
+    assert {:ok, correction} = Events.invitation_delivery_failed({:system, nil}, "42")
+    assert original.event == "invitation_delivery_handoff"
+    assert correction.event == "invitation_delivery_failure"
+    assert original.entity_ref == correction.entity_ref
+  end
 end

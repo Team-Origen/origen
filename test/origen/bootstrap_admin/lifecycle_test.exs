@@ -134,6 +134,91 @@ defmodule Origen.BootstrapAdmin.LifecycleTest do
     assert Repo.aggregate("internal_account_invitations", :count) == 0
   end
 
+  test "delivery failure revocation is idempotent and denies exchange and activation" do
+    assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @key})
+
+    assert {:ok, :revoked} =
+             BootstrapAdmin.revoke_delivery_failure(invitation.invitation_id, %{
+               account_id: invitation.account_id
+             })
+
+    assert {:ok, :already_revoked} =
+             BootstrapAdmin.revoke_delivery_failure(invitation.invitation_id, %{})
+
+    assert Repo.query!(
+             "SELECT count(*) FROM audit_events WHERE event = 'invitation_delivery_revocation'"
+           ).rows == [[1]]
+
+    assert {:error, :invalid_invitation} =
+             BootstrapAdmin.exchange(invitation.invitation_id, invitation.token, @key)
+
+    assert {:error, :revoked} =
+             BootstrapAdmin.consume(invitation.invitation_id, invitation.token, @key)
+  end
+
+  test "revocation denies unknown and consumed invitations" do
+    assert {:error, :invitation_not_found} = BootstrapAdmin.revoke_delivery_failure(-1, %{})
+    assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @key})
+    assert {:ok, _} = BootstrapAdmin.consume(invitation.invitation_id, invitation.token, @key)
+
+    assert {:error, :invitation_consumed} =
+             BootstrapAdmin.revoke_delivery_failure(invitation.invitation_id, %{})
+  end
+
+  test "required revocation audit failure rolls back the row update" do
+    assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @key})
+
+    Repo.query!("""
+    CREATE OR REPLACE FUNCTION pg_temp.reject_revocation_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.event IN ('invitation_delivery_failure', 'invitation_delivery_revocation') THEN
+        RAISE EXCEPTION 'audit unavailable' USING ERRCODE = '55000';
+      END IF;
+      RETURN NEW;
+    END $$
+    """)
+
+    Repo.query!("""
+    CREATE TRIGGER reject_revocation_audit BEFORE INSERT ON audit_events
+    FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_revocation_audit()
+    """)
+
+    assert {:error, :audit_unavailable} =
+             BootstrapAdmin.revoke_delivery_failure(invitation.invitation_id, %{})
+
+    assert Repo.query!("SELECT revoked_at FROM internal_account_invitations WHERE id = $1", [
+             invitation.invitation_id
+           ]).rows == [[nil]]
+  end
+
+  test "consume versus delivery failure has one terminal winner under row lock" do
+    assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @key})
+
+    consume =
+      Task.async(fn ->
+        BootstrapAdmin.consume(invitation.invitation_id, invitation.token, @key)
+      end)
+
+    revoke =
+      Task.async(fn -> BootstrapAdmin.revoke_delivery_failure(invitation.invitation_id, %{}) end)
+
+    results = Task.await_many([consume, revoke])
+
+    assert Enum.sort(results) in [
+             Enum.sort([
+               {:ok,
+                %{account_id: invitation.account_id, invitation_id: invitation.invitation_id}},
+               {:error, :invitation_consumed}
+             ]),
+             Enum.sort([{:error, :revoked}, {:ok, :revoked}])
+           ]
+
+    assert Repo.query!(
+             "SELECT consumed_at IS NOT NULL, revoked_at IS NOT NULL FROM internal_account_invitations WHERE id = $1",
+             [invitation.invitation_id]
+           ).rows in [[[true, false]], [[false, true]]]
+  end
+
   test "activation consumes before credential persistence and rejects replay" do
     assert {:ok, invitation} = BootstrapAdmin.issue_first(%{verifier_key: @key})
 

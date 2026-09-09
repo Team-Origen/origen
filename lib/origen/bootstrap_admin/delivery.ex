@@ -32,6 +32,78 @@ defmodule Origen.BootstrapAdmin.Delivery do
     }
   end
 
+  def append_approval!(invitation_id, %{requester_ref: requester_ref}) do
+    append_audit!(
+      Events.invitation_approval_confirmed(
+        {:administrator, requester_ref},
+        to_string(invitation_id)
+      )
+    )
+  end
+
+  @spec revoke_delivery_failure(integer(), map()) ::
+          {:ok, :revoked | :already_revoked} | {:error, atom()}
+  def revoke_delivery_failure(invitation_id, context)
+      when is_integer(invitation_id) and is_map(context) do
+    result =
+      Repo.transaction(fn ->
+        case Repo.query!(
+               "SELECT consumed_at, revoked_at FROM internal_account_invitations WHERE id = $1 FOR UPDATE",
+               [invitation_id]
+             ).rows do
+          [[nil, nil]] ->
+            Repo.query!(
+              "UPDATE internal_account_invitations SET revoked_at = clock_timestamp() WHERE id = $1",
+              [invitation_id]
+            )
+
+            append_audit!(
+              Events.invitation_delivery_failed({:system, nil}, to_string(invitation_id))
+            )
+
+            append_audit!(
+              Events.invitation_delivery_revoked({:system, nil}, to_string(invitation_id))
+            )
+
+            :revoked
+
+          [[nil, revoked_at]] when not is_nil(revoked_at) ->
+            :already_revoked
+
+          [[consumed_at, _]] when not is_nil(consumed_at) ->
+            Repo.rollback(:invitation_consumed)
+
+          [] ->
+            Repo.rollback(:invitation_not_found)
+        end
+      end)
+
+    case result do
+      {:ok, outcome} ->
+        {:ok, outcome}
+
+      {:error, reason} ->
+        best_effort_revocation_failure(invitation_id)
+        {:error, reason}
+    end
+  rescue
+    _exception ->
+      best_effort_revocation_failure(invitation_id)
+      {:error, :revocation_failed}
+  end
+
+  def revoke_delivery_failure(_invitation_id, _context), do: {:error, :invalid_request}
+
+  defp best_effort_revocation_failure(invitation_id) do
+    with {:ok, event} <-
+           Events.delivery_revocation_failed({:system, nil}, to_string(invitation_id)),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}),
+         do: :ok,
+         else: (_ -> :error)
+  rescue
+    _ -> :error
+  end
+
   defp insert_account! do
     %{rows: [[id]]} =
       Repo.query!(
