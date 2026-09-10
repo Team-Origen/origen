@@ -1,15 +1,21 @@
 # Matriz de autorización de Origen
 
-> **Estado:** Aprobada — validada por el equipo el 2026-08-24  
-> **Versión del documento:** `0.4`  
+> **Estado:** Draft — pending independent review
+>
+> **Versión del documento:** `0.5-draft`
+>
+> **Base histórica aprobada:** versión `0.4`, validada por el equipo el 2026-08-24; esa aprobación no se extiende a los cambios de `0.5-draft`.
+>
 > **Alcance:** bootstrap del primer Administrador, operaciones necesarias para Sprint 1 y consulta de auditoría exigida por RNF-02.
+>
+> **Aceptación de staging:** **prepared/not executed**; no incluye correo Samuel→Santiago, credenciales, despliegue, activación ni bootstrap operativo.
 
 Este es el único artefacto canónico para declarar permisos de Origen. La matriz es incremental: esta versión no autoriza operaciones de sprints posteriores. Toda operación o combinación rol–operación que no aparezca declarada se **deniega por defecto**.
 
 ## Reglas de lectura
 
 | Valor | Semántica |
-|---|---|
+| --- | --- |
 | **Permitir** | El rol autenticado y con cuenta `Activa` puede ejecutar la operación. No implica permisos sobre otras operaciones ni jerarquía sobre otros roles. |
 | **Denegar** | El backend debe rechazar la operación para ese rol, aunque la interfaz muestre un control o el cliente construya la solicitud manualmente. |
 | **Condicional/alcance — `<ID>`** | La operación solo se permite cuando se cumplen **todas** las condiciones del identificador indicado. Fuera de ese alcance se deniega. |
@@ -23,7 +29,8 @@ Las cuentas internas usan `Pendiente de activación` y `Activa`. Las cuentas de 
 La columna «Canal o control no basado en rol» separa operaciones de despliegue, sistema, invitación o demostración de posesión que no nacen de una sesión autenticada. En `B-02`, las columnas de rol identifican el rol objetivo de la cuenta interna pendiente; no representan una sesión ya autenticada. En `S1-05`, todos los cruces de rol permanecen en **Denegar** porque la autorización no proviene de un rol: el canal público condicionado demuestra posesión del número para una única cuenta y operación, pero no concede permiso general al público ni a una sesión autenticada.
 
 | ID | Operación | Administrador | Profesional | Secretaría | Paciente | Canal o control no basado en rol | Fuente exacta |
-|---|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| B-00 | Aprobar una emisión/reemisión de invitación bootstrap | Denegar | Denegar | Denegar | Denegar | Condicional/alcance — `APP-01` | `secure-bootstrap-invitation-delivery`; aprobación de despliegue |
 | B-01 | Ejecutar el bootstrap del primer Administrador | Denegar | Denegar | Denegar | Denegar | Condicional/alcance — `DEP-01` | RF-01, RF-04, RF-23; T0.12; `SPRINT_00.md`, «Bootstrap del primer Administrador» |
 | B-02 | Completar la activación de la propia cuenta interna mediante invitación: consumir invitación, definir contraseña y enrolar TOTP | Condicional/alcance — `INV-01` | Condicional/alcance — `INV-01` | Condicional/alcance — `INV-01` | Denegar | Invitación de un solo uso vinculada a la cuenta objetivo; no requiere una sesión interna ya activa | RF-01, RF-04, RF-23; HU 7; T1.1 |
 | B-03 | Reemitir una invitación para una cuenta interna `Pendiente de activación` | Condicional/alcance — `REI-02` | Denegar | Denegar | Denegar | Condicional/alcance — `REI-01` para el bootstrap | `SPRINT_00.md`, «Registro de bloqueos y decisiones» y «Bootstrap del primer Administrador» |
@@ -39,8 +46,9 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 ### Condiciones y alcances
 
 | ID | Condición o alcance obligatorio |
-|---|---|
-| `DEP-01` | Operación administrativa de despliegue, fuera de las APIs de la aplicación y ejecutada únicamente por el operador asignado en `SPRINT_00.md` mediante el comando aprobado. Solo puede crear el primer registro cuando no existe ningún Administrador, sin credenciales predeterminadas; crea la cuenta en `Pendiente de activación`, emite la invitación y audita resultado y fallos sin secretos. |
+| --- | --- |
+| `APP-01` | Una autoridad de aprobación estable y explícitamente autorizada, distinta de Samuel/requester, confirma en el sistema de aprobación el destino exacto, el entorno no productivo y la operación. No deriva del rol Administrador. La aserción es breve, protegida, de propósito único y nueva para cada intento; se deniega self-approval, mismatch, producción, expiración y reutilización. |
+| `DEP-01` | Operación administrativa de despliegue, fuera de las APIs de la aplicación y ejecutada únicamente por el operador asignado en `SPRINT_00.md` mediante el comando aprobado. Requiere `APP-01`. Solo puede crear el primer registro cuando no existe ningún Administrador, sin credenciales predeterminadas; crea la cuenta en `Pendiente de activación`, emite la invitación y audita resultado y fallos sin secretos. La emisión/auditoría y la revocación/auditoría son límites transaccionales acotados; la llamada al proveedor ocurre fuera de la transacción. |
 | `INV-01` | Política aprobada: la invitación pertenece a la misma cuenta interna `Pendiente de activación`, vence a las 24 horas desde su emisión según el tiempo del servidor, no fue consumida ni invalidada y solo permite definir la contraseña y enrolar TOTP de esa cuenta. La transición a `Activa` ocurre únicamente después de completar ambos pasos. Una nueva emisión para la misma cuenta pendiente invalida inmediatamente todos los tokens anteriores, aunque todavía no hayan vencido, y no crea una cuenta duplicada. |
 | `REI-01` | Excepción de bootstrap: solo Samuel, como operador de despliegue asignado, puede reemitir mediante el comando administrativo aprobado para la misma cuenta del primer Administrador `Pendiente de activación`, y únicamente mientras no exista ningún Administrador `Activo`. No es una API ni un permiso de sesión. La reemisión no crea otra cuenta, invalida inmediatamente cualquier token anterior, inicia una nueva vigencia de 24 horas según el tiempo del servidor y audita actor, cuenta objetivo, resultado y fecha/hora sin registrar el token en claro. Si ya existe un Administrador `Activo`, Samuel y el canal de despliegue quedan denegados para esta operación. |
 | `REI-02` | Flujo normal: solo un Administrador autenticado con cuenta `Activa` puede reemitir desde el flujo administrativo para la misma cuenta de Profesional o Secretaría `Pendiente de activación`. No puede usar este alcance para una cuenta de Administrador. La reemisión no crea otra cuenta, invalida inmediatamente cualquier token anterior, inicia una nueva vigencia de 24 horas según el tiempo del servidor y audita actor, cuenta objetivo, resultado y fecha/hora sin registrar el token en claro. Profesional, Secretaría, Paciente y la propia cuenta pendiente no pueden auto-reemitir ni invocar un canal alternativo. |
@@ -57,7 +65,7 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 Estas pruebas son obligatorias en backend para las operaciones críticas. Deben probar el permiso y su frontera; una prueba de interfaz no las reemplaza.
 
 | Operación | Evidencia automatizada mínima esperada |
-|---|---|
+| --- | --- |
 | `B-01` Bootstrap | Crea una única cuenta `Pendiente de activación` cuando no existe Administrador; rechaza la ejecución si ya existe alguno y no produce efectos secundarios; no está expuesto por API ni por sesión de ningún rol; registra eventos diferenciados y verifica que no contienen token, enlace, contraseña, secreto/código TOTP ni credenciales. |
 | `B-02` Activación por invitación | Acepta una invitación válida solo para su cuenta objetivo antes de cumplirse 24 horas desde la emisión según el tiempo del servidor; acepta a las 23 h 59 min 59 s, rechaza al cumplirse exactamente 24 horas y después, e ignora el reloj informado por el cliente. Rechaza token inválido, consumido, invalidado o asociado a otra cuenta; tras una reemisión, rechaza inmediatamente todos los tokens anteriores y acepta el nuevo dentro de su propia vigencia sin crear otra cuenta. Impide pasar a `Activa` si falta contraseña o TOTP; audita consumo, configuración, enrolamiento, activación y fallos sin secretos. |
 | `B-03` Reemisión | **Bootstrap positivo:** Samuel puede reemitir mediante el comando administrativo aprobado para la misma cuenta del primer Administrador `Pendiente de activación` cuando no existe ningún Administrador `Activo`; se invalida inmediatamente todo token anterior, el nuevo vence a las 24 horas según el tiempo del servidor, no se crea otra cuenta y la auditoría no contiene el token en claro. **Bootstrap negativo:** se rechaza a cualquier otra persona o canal, a Samuel cuando ya existe un Administrador `Activo`, y cualquier intento sobre una cuenta distinta. **Flujo normal positivo:** un Administrador `Activo` puede reemitir desde el flujo administrativo para la misma cuenta de Profesional o Secretaría `Pendiente de activación`, con idénticas garantías de invalidación, nueva vigencia, no duplicación y auditoría sanitizada. **Flujo normal negativo:** se rechaza al Administrador `Pendiente de activación`, a Profesional, Secretaría, Paciente, a la propia cuenta pendiente y al Administrador `Activo` si el objetivo es una cuenta de Administrador o no está `Pendiente de activación`; una solicitud directa al backend o al canal de despliegue no elude estos límites. |
@@ -73,7 +81,7 @@ Estas pruebas son obligatorias en backend para las operaciones críticas. Deben 
 ## Trazabilidad de alcance
 
 | Bloque | Requisitos, historias y tareas |
-|---|---|
+| --- | --- |
 | Gobierno de la matriz | RNF-08; T0.11; `PLAN_DE_SPRINTS.md`, DoD y Sprint 0 |
 | Bootstrap y activación inicial | RF-01, RF-04, RF-23; HU 7; T0.12; T1.1; `SPRINT_00.md`, decisiones de bootstrap y auditoría |
 | Sesión interna | RF-01; HU 7; RNF-09; T1.1 |
@@ -85,7 +93,9 @@ Quedan fuera de esta versión las operaciones de agenda, turnos, Google OAuth/Ma
 
 ## Estado de decisiones
 
-No quedan gaps de autorización abiertos en esta versión. `S1-05` queda resuelta como un canal público condicionado por demostración de posesión del número, sin permiso derivado de rol y bajo default deny fuera de `TEL-02`. El equipo aprobó y validó integralmente la matriz el 2026-08-24. Esta aprobación es documental: no implica que los permisos estén implementados ni que las pruebas aquí definidas hayan sido ejecutadas.
+La versión histórica `0.4` cerró los gaps de autorización de su alcance: `S1-05` quedó resuelta como un canal público condicionado por demostración de posesión del número, sin permiso derivado de rol y bajo default deny fuera de `TEL-02`. El equipo aprobó y validó integralmente esa versión el 2026-08-24; esa aprobación documental no acredita implementación ni ejecución de pruebas.
+
+La versión actual `0.5-draft` y sus nuevas condiciones `APP-01` no están aprobadas: permanecen **pending independent review**. No deben interpretarse como autoridad vigente ni como evidencia de aprobación, CI completado, despliegue, correo o activación.
 
 ## Cambio, versionado y revisión
 
@@ -99,7 +109,8 @@ No quedan gaps de autorización abiertos en esta versión. `S1-05` queda resuelt
 ### Historial
 
 | Versión | Fecha | Estado | Cambio |
-|---|---|---|---|
+| --- | --- | --- | --- |
+| `0.5-draft` | 2026-09-02 | Draft — pending independent review | Agrega `APP-01` como autoridad de aprobación distinta, explicita el límite transaccional acotado y registra que la aceptación de staging está preparada/no ejecutada. No acredita correo, credenciales, despliegue ni bootstrap real. |
 | `0.4` | 2026-08-24 | Aprobada — validada por el equipo | Aprobación humana explícita e integral del contenido de `0.4-draft`, sin ampliar permisos ni modificar el default deny, las condiciones, los alcances o las pruebas mínimas. La aprobación documental no acredita implementación ni ejecución de pruebas. |
 | `0.4-draft` | 2026-08-24 | Draft — pending team validation | Se resolvió `S1-05` como canal público condicionado por desafío opaco y demostración de posesión del número, sin permiso basado en rol. Se delimitó el envío o reenvío autorizado de Secretaría, se prohibió establecer `verified` por fuera del flujo y se agregaron pruebas positivas, negativas, de límites y de auditoría sanitizada. No quedan gaps de autorización abiertos; continúa pendiente la aprobación integral humana. |
 | `0.3-draft` | 2026-08-23 | Draft — pending team validation | Se resolvió `DG-02`: `B-03` distingue la excepción de bootstrap, limitada a Samuel mediante el comando aprobado mientras no exista un Administrador `Activo`, del flujo normal, limitado a un Administrador `Activo` para cuentas pendientes de Profesional o Secretaría. Se agregaron pruebas positivas y negativas; permanecía pendiente definir el canal de validación telefónica inicial. |

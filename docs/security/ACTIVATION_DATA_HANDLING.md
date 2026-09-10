@@ -22,6 +22,25 @@ Allowed lifecycle evidence is limited to the typed event/result, actor kind and 
 
 Phoenix's `:filter_parameters` list covers known parameter names inside application logs, but it cannot sanitize copies already captured by an upstream proxy, APM agent, browser analytics SDK, or exception reporter. Verify each deployed component independently.
 
+## Provider storage and callback boundary
+
+A transactional provider is acceptable only after security records non-secret evidence references for encryption in transit and at rest, a finite approved queue/retry TTL, least-privilege identities, audited access, preview/body-capture restrictions, bounded retry semantics, and approved purge behavior. Credentials resolve only inside the adapter at handoff and must never appear in configuration dumps or evidence.
+
+Terminal callbacks are required unless provider acceptance is contractually terminal. Callback ingress must authenticate the raw body and timestamp, allowlist event types, validate signed invitation correlation, avoid body/header logging, and reject replay. Current replay tracking is **node-local** and in-memory with **no time-based pruning**. Staging is blocked until operations supplies **ingress affinity or shared replay** enforcement and an approved retention/pruning policy.
+
+## Synthetic canary search
+
+Use a deliberately non-secret marker, never a real token or address. Security and operations must record search-result references for every system:
+
+- ingress/proxy and application logs;
+- APM traces and span attributes;
+- exception reports, local-variable capture, and crash diagnostics;
+- SQL telemetry/binds and database diagnostics;
+- provider queue, diagnostics, previews, access audit, and support console;
+- analytics, support tickets/chat, screenshots, and exported artifacts.
+
+Any prohibited-sink hit blocks release. Restrict the affected store, keep bootstrap/provider/callback/activation surfaces disabled, follow incident/rotation procedures, and repeat the full search after remediation.
+
 ## Release gate
 
 The packaged `bin/origen_bootstrap_admin` command and source-checkout Mix task call the same fail-closed gate before bootstrap argument parsing or I/O. Production-compiled releases always deny the command. Verifier keys and other secrets must come from the runtime secret provider, never argv; command output is reference-only.
