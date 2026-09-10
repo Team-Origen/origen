@@ -188,7 +188,7 @@ PLN-08 + PLN-10 -> PLN-13 (alcance adicional)
 
 La persona responsable no trabaja aislada: los frentes describen foco de rol, mientras revisión y colaboración ya están incluidas en los rangos de cada tarea. La reserva de 32 h se protege para correcciones y bloqueos no previstos; no vuelve a contar revisiones ni el ensayo estimado en `PLN-14`.
 
-## 7. Tablero y preparación futura de GitHub
+## 7. Tablero y jerarquía publicada en GitHub
 
 Estados simples:
 
@@ -198,16 +198,26 @@ Estados simples:
 - **En revisión:** resultado completo esperando lectura y evidencia.
 - **Terminada:** aceptación cumplida, integrada y revisada; no significa producción.
 
-Cuando el usuario autorice trabajar con GitHub:
+La jerarquía fue publicada como 14 issues padre y 45 subissues ejecutables. Los grupos Lucca, Said, Santiago y Samuel indican responsabilidad; no son issues adicionales. `PLN-01.1`, `PLN-01.2` y `PLN-01.3` no se recrearon porque sus reglas quedaron resueltas mediante [#33](https://github.com/Team-Origen/origen/issues/33) y el PR [#34](https://github.com/Team-Origen/origen/pull/34).
 
-1. Leer primero las tareas abiertas, cerradas y pendientes actuales.
-2. Reutilizar o actualizar lo existente antes de crear duplicados.
-3. Crear una tarea agrupadora del objetivo y tareas pequeñas copiables desde `PLN-*`.
-4. Registrar enlaces explícitos de bloqueo entre tareas.
-5. Entregar una solicitud de revisión pequeña por tarea; dividirla si deja de ser revisable.
-6. No publicar, cerrar, reabrir ni cambiar estados automáticamente sin autorización.
+| ID local | Issue padre | Subissues publicadas |
+| --- | --- | --- |
+| `PLN-02` | [#35](https://github.com/Team-Origen/origen/issues/35) | [#49](https://github.com/Team-Origen/origen/issues/49), [#50](https://github.com/Team-Origen/origen/issues/50), [#51](https://github.com/Team-Origen/origen/issues/51) |
+| `PLN-03` | [#36](https://github.com/Team-Origen/origen/issues/36) | [#52](https://github.com/Team-Origen/origen/issues/52), [#53](https://github.com/Team-Origen/origen/issues/53), [#54](https://github.com/Team-Origen/origen/issues/54) |
+| `PLN-04` | [#37](https://github.com/Team-Origen/origen/issues/37) | [#55](https://github.com/Team-Origen/origen/issues/55), [#56](https://github.com/Team-Origen/origen/issues/56), [#57](https://github.com/Team-Origen/origen/issues/57) |
+| `PLN-05` | [#38](https://github.com/Team-Origen/origen/issues/38) | [#85](https://github.com/Team-Origen/origen/issues/85), [#86](https://github.com/Team-Origen/origen/issues/86), [#87](https://github.com/Team-Origen/origen/issues/87) |
+| `PLN-06` | [#39](https://github.com/Team-Origen/origen/issues/39) | [#73](https://github.com/Team-Origen/origen/issues/73), [#74](https://github.com/Team-Origen/origen/issues/74), [#75](https://github.com/Team-Origen/origen/issues/75) |
+| `PLN-07` | [#40](https://github.com/Team-Origen/origen/issues/40) | [#76](https://github.com/Team-Origen/origen/issues/76), [#77](https://github.com/Team-Origen/origen/issues/77), [#78](https://github.com/Team-Origen/origen/issues/78) |
+| `PLN-08` | [#41](https://github.com/Team-Origen/origen/issues/41) | [#61](https://github.com/Team-Origen/origen/issues/61), [#62](https://github.com/Team-Origen/origen/issues/62), [#63](https://github.com/Team-Origen/origen/issues/63), [#64](https://github.com/Team-Origen/origen/issues/64), [#65](https://github.com/Team-Origen/origen/issues/65), [#66](https://github.com/Team-Origen/origen/issues/66) |
+| `PLN-09` | [#42](https://github.com/Team-Origen/origen/issues/42) | [#91](https://github.com/Team-Origen/origen/issues/91), [#92](https://github.com/Team-Origen/origen/issues/92), [#93](https://github.com/Team-Origen/origen/issues/93) |
+| `PLN-10` | [#43](https://github.com/Team-Origen/origen/issues/43) | [#79](https://github.com/Team-Origen/origen/issues/79), [#80](https://github.com/Team-Origen/origen/issues/80), [#81](https://github.com/Team-Origen/origen/issues/81) |
+| `PLN-11` | [#44](https://github.com/Team-Origen/origen/issues/44) | [#58](https://github.com/Team-Origen/origen/issues/58), [#59](https://github.com/Team-Origen/origen/issues/59), [#60](https://github.com/Team-Origen/origen/issues/60) |
+| `PLN-12` | [#45](https://github.com/Team-Origen/origen/issues/45) | [#67](https://github.com/Team-Origen/origen/issues/67), [#68](https://github.com/Team-Origen/origen/issues/68), [#69](https://github.com/Team-Origen/origen/issues/69) |
+| `PLN-13` | [#46](https://github.com/Team-Origen/origen/issues/46) | [#82](https://github.com/Team-Origen/origen/issues/82), [#83](https://github.com/Team-Origen/origen/issues/83), [#84](https://github.com/Team-Origen/origen/issues/84) |
+| `PLN-14` | [#47](https://github.com/Team-Origen/origen/issues/47) | [#70](https://github.com/Team-Origen/origen/issues/70), [#71](https://github.com/Team-Origen/origen/issues/71), [#72](https://github.com/Team-Origen/origen/issues/72) |
+| `PLN-15` | [#48](https://github.com/Team-Origen/origen/issues/48) | [#88](https://github.com/Team-Origen/origen/issues/88), [#89](https://github.com/Team-Origen/origen/issues/89), [#90](https://github.com/Team-Origen/origen/issues/90) |
 
-Los identificadores `PLN-*` son locales y estables para esta revisión. No son números de GitHub ni prueban que una issue exista.
+Las relaciones `blocked-by` del diagrama también quedaron registradas en GitHub. Cada solicitud de revisión debe enlazar una subissue ejecutable y mantenerse pequeña; si deja de ser revisable, se divide. Publicar la jerarquía no declara las tareas listas ni aprobadas.
 
 ## 8. Decisiones pendientes antes de declarar una tarea lista
 
