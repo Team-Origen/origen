@@ -2,11 +2,11 @@
 
 > **Estado:** Draft — pending independent review
 >
-> **Versión del documento:** `0.5-draft`
+> **Versión del documento:** `0.6-draft`
 >
-> **Base histórica aprobada:** versión `0.4`, validada por el equipo el 2026-08-24; esa aprobación no se extiende a los cambios de `0.5-draft`.
+> **Base histórica aprobada:** versión `0.4`, validada por el equipo el 2026-08-24; esa aprobación no se extiende a los cambios de `0.5-draft` ni `0.6-draft`.
 >
-> **Alcance:** bootstrap del primer Administrador, operaciones necesarias para Sprint 1 y consulta de auditoría exigida por RNF-02.
+> **Alcance:** bootstrap del primer Administrador, operaciones necesarias para Sprint 1, primera reserva autónoma o asistida, configuración básica de agenda y consulta de auditoría exigida por RNF-02.
 >
 > **Aceptación de staging:** **prepared/not executed**; no incluye correo Samuel→Santiago, credenciales, despliegue, activación ni bootstrap operativo.
 
@@ -42,6 +42,15 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | S1-03 | Crear una cuenta de Secretaría y emitir su invitación inicial | Permitir | Denegar | Denegar | Denegar | La emisión es un efecto del backend; no concede permiso separado para reemitir | RF-01, RF-04, RF-23; T1.1; `PLAN_DE_SPRINTS.md`, Sprint 1 |
 | S1-04 | Registrar un Paciente con teléfono inicialmente no verificado y solicitar el envío o reenvío del código | Denegar | Denegar | Condicional/alcance — `TEL-01` | Denegar | El envío o reenvío es un efecto del backend de la operación autorizada; no verifica el teléfono | RF-02, RF-06, RF-23; HU 1.1; T1.2 |
 | S1-05 | Validar el teléfono inicial del Paciente mediante el código enviado | Denegar | Denegar | Denegar | Denegar | Condicional/alcance — `TEL-02`: canal público vinculado a un desafío opaco y basado en posesión del número, no en rol | RF-02, RF-23; HU 1.1; T1.2; `SPRINT_00.md`, «Registro de bloqueos y decisiones» |
+| S1-06 | Acceder sin contraseña y seleccionar el perfil propio de Paciente | Denegar | Denegar | Denegar | Condicional/alcance — `PAT-01` | Google OAuth o Magic Link autentican la cuenta; la posesión del enlace o proveedor no concede un rol | RF-01, RF-02 |
+| S1-07 | Iniciar el desafío de verificación del teléfono propio del Paciente | Denegar | Denegar | Condicional/alcance — `TEL-01` | Condicional/alcance — `TEL-03` | El envío o reenvío no verifica el teléfono ni concede permisos | RF-02 ter, RF-06 |
+| S1-08 | Completar la verificación del teléfono propio mediante el código enviado | Denegar | Denegar | Denegar | Condicional/alcance — `TEL-04` | El desafío seguro demuestra posesión para esta operación; no concede un rol | RF-02 ter |
+| S1-09 | Crear y modificar tipos de consulta propios | Denegar | Condicional/alcance — `OWN-01` | Denegar | Denegar | No aplica | RF-08 |
+| S1-10 | Crear y modificar disponibilidad regular propia | Denegar | Condicional/alcance — `OWN-02` | Denegar | Denegar | No aplica | RF-07 |
+| S1-11 | Reservar el primer turno para el perfil propio seleccionado | Denegar | Denegar | Denegar | Condicional/alcance — `BOOK-01` | No aplica | RF-02, RF-02 ter, RF-05, RF-08, RF-10, RF-12, RF-23 |
+| S1-12 | Crear de forma asistida un turno para un Paciente del centro | Denegar | Denegar | Condicional/alcance — `BOOK-02` | Denegar | No aplica | RF-02, RF-05, RF-06, RF-08, RF-10, RF-23 |
+| S1-13 | Crear un turno para un Paciente ya relacionado | Denegar | Condicional/alcance — `BOOK-03` | Denegar | Denegar | No aplica | RF-05, RF-08, RF-10, RF-23 |
+| S1-14 | Consultar la agenda propia | Denegar | Condicional/alcance — `AGENDA-01` | Denegar | Denegar | No aplica | RF-05, RF-10 |
 
 ### Condiciones y alcances
 
@@ -59,6 +68,15 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | `AUTH-01` | Cuenta interna `Activa`; contraseña válida en cada nueva sesión; TOTP válido o recordatorio vigente en dispositivo confiable por un máximo de 30 días. Se exige nuevamente TOTP ante vencimiento, dispositivo nuevo, cambios de correo, contraseña o 2FA, o actividad sospechosa. La sesión dura como máximo 12 horas y se bloquea tras 30 minutos de inactividad. |
 | `TEL-01` | Solo Secretaría autenticada con cuenta `Activa`, dentro de su operación autorizada sobre la cuenta de Paciente y su número asociados, puede iniciar el envío o reenvío del código. El backend debe aplicar los límites de frecuencia y reintentos configurados. Este alcance no permite conocer el código, marcar manualmente el teléfono como verificado, consumir el desafío en nombre del Paciente ni eludir `TEL-02`. |
 | `TEL-02` | Canal público condicionado: el Paciente presenta el código en una pantalla vinculada a un desafío opaco. Código y desafío deben ser válidos, vigentes, no consumidos, estar sujetos a límites de frecuencia y reintentos, y corresponder a la misma cuenta y al mismo número. Solo el backend puede consumir el desafío y establecer el teléfono como verificado tras comprobar todas las condiciones. Un fallo no modifica el estado. No existe operación alternativa para establecer `verified` directamente: ningún rol, canal interno ni solicitud directa al backend puede omitir el desafío o el código. Éxitos y fallos se auditan sin código, token del desafío, teléfono ni otros datos sensibles. |
+| `PAT-01` | La cuenta de Paciente se autenticó por Google OAuth o Magic Link válido y seleccionó un perfil propio vinculado. Una coincidencia documental no vincula cuentas ni perfiles automáticamente. El acceso queda limitado al perfil seleccionado y cada selección o cambio se audita. |
+| `TEL-03` | El Paciente autenticado actúa sobre el perfil propio seleccionado y el número propio asociado. El backend aplica límites de frecuencia y reintentos. Iniciar o reenviar no establece `verified`. Secretaría conserva como alternativa el alcance `TEL-01`. |
+| `TEL-04` | La cuenta de Paciente está autenticada y el desafío opaco y código son válidos, vigentes, no consumidos y corresponden a esa misma cuenta, perfil y número. Solo el backend consume el desafío y establece `verified`; un fallo no cambia el estado. Se aplican límites y auditoría sanitizada equivalentes a `TEL-02`. |
+| `OWN-01` | Profesional autenticado con cuenta `Activa`; solo puede crear o modificar tipos vinculados a su propio perfil. Nombre, duración y precio deben ser válidos. No puede leer ni mutar tipos ajenos mediante identificadores manipulados. |
+| `OWN-02` | Profesional autenticado con cuenta `Activa`; solo puede crear o modificar la disponibilidad regular de su propio perfil. Intervalos, superposiciones, zona horaria, ventana reservable y conflictos se validan según RF-07. No puede leer ni mutar disponibilidad ajena. |
+| `BOOK-01` | Paciente autenticado mediante `PAT-01`, sobre su perfil propio seleccionado, completo y con teléfono verificado del destinatario primario. Puede elegir un Profesional sin relación previa. El backend valida tipo, disponibilidad, ausencia de superposición, ventana y estados exactos de RF-10. Solo el almacenamiento exitoso y atómico de turno, relación Profesional–Paciente, snapshots y auditoría crea la relación; rechazo o fallo no crea nada. |
+| `BOOK-02` | Secretaría autenticada con cuenta `Activa` puede buscar Pacientes del centro, crear o reutilizar su Persona y perfil y reservar de forma asistida, incluso con perfil incompleto. Debe respetar identidad mínima, unicidad, disponibilidad y los estados por actor y fecha de RF-10. El primer turno exitoso crea atómicamente relación, turno, snapshots y auditoría; un fallo no crea relación. |
+| `BOOK-03` | Profesional autenticado con cuenta `Activa`; el Paciente ya pertenece a su lista permitida. No puede navegar el registro global ni usar un identificador para alcanzar a un Paciente ajeno. Valida disponibilidad y conserva sin simplificar los estados por actor y fecha de RF-10. |
+| `AGENDA-01` | Profesional autenticado con cuenta `Activa`; el backend deriva el perfil profesional de la sesión y devuelve únicamente sus propios turnos. No acepta un identificador manipulable como ampliación de alcance. |
 
 ## Pruebas mínimas de autorización
 
@@ -77,6 +95,14 @@ Estas pruebas son obligatorias en backend para las operaciones críticas. Deben 
 | `S1-03` Alta de Secretaría | Administrador puede crear la cuenta en `Pendiente de activación`; Profesional, Secretaría y Paciente reciben denegación; una solicitud directa al backend no elude el control; la invitación inicial y el alta quedan auditadas. |
 | `S1-04` Alta de Paciente y envío | Secretaría `Activa` puede registrar y solicitar el envío o reenvío para la cuenta y el número asociados; Administrador, Profesional y Paciente reciben denegación. El teléfono permanece no verificado después del registro, envío o reenvío; se rechazan solicitudes fuera de la cuenta/número autorizados y al superar los límites configurados. Ningún envío o reenvío permite a Secretaría obtener el código, consumir el desafío ni establecer `verified`; resultados y fallos quedan auditados sin datos sensibles. |
 | `S1-05` Verificación inicial de teléfono | **Positiva:** un desafío opaco y un código válidos, vigentes, no consumidos y vinculados a la misma cuenta y número permiten consumir el desafío y establecer el teléfono como verificado una sola vez. **Negativas:** se rechazan código o desafío inválidos, vencidos o consumidos; cualquier diferencia de cuenta o número; y cada intento o reenvío que exceda los límites configurados, verificando también la frontera y el reinicio permitido por la política. Administrador, Profesional, Secretaría, Paciente autenticado y cualquier canal interno continúan denegados para establecer `verified` directamente; una solicitud directa al backend, una mutación manual o la manipulación del cliente no pueden omitir código ni desafío. Todo rechazo conserva el teléfono no verificado. Éxitos y fallos generan auditoría sin código, token del desafío, teléfono ni otros datos sensibles. |
+| `S1-06` Acceso de Paciente | Permite acceso passwordless válido y selección del perfil propio vinculado; rechaza enlace/proveedor inválido, vencido o ajeno, perfil no vinculado, vinculación automática por documento y acceso a perfiles representados fuera de este alcance; audita selección y cambio. |
+| `S1-07`/`S1-08` Teléfono propio | Paciente autenticado puede iniciar y completar el desafío solo para su perfil y número propios; Secretaría puede iniciar mediante `TEL-01` pero no completar ni marcar `verified`. Rechaza cuenta, perfil, número, código o desafío ajenos, inválidos, vencidos, consumidos o fuera de límites; todo fallo conserva el estado y la auditoría omite secretos y número completo. |
+| `S1-09` Tipo propio | Profesional crea y modifica un tipo propio válido; rechaza valores inválidos y lectura o mutación de tipos ajenos para todos los roles, incluso con identificador manipulado. |
+| `S1-10` Disponibilidad propia | Profesional guarda intervalos propios válidos; rechaza intervalos inválidos, superpuestos, fuera de ventana o ajenos y conserva sin cambios los turnos conflictivos según RF-07. |
+| `S1-11` Primera reserva autónoma | Paciente con perfil propio listo y teléfono requerido verificado reserva sin relación previa cuando tipo, disponibilidad, superposición y RF-10 son válidos. Rechaza perfil incompleto, teléfono no verificado, perfil ajeno o representado, horario/tipo inválido, falta de disponibilidad, superposición y estado incorrecto. Prueba que éxito guarda atómicamente turno, relación, snapshots y auditoría, y que denegación, conflicto concurrente o fallo revierte todo sin crear relación. |
+| `S1-12` Reserva asistida | Secretaría crea o reutiliza identidad y perfil y reserva para un Paciente del centro, incluido uno incompleto, respetando identidad mínima y RF-10. Rechaza duplicación documental, alcance ajeno al centro, disponibilidad o estado inválidos; fallo revierte turno, relación, snapshots y auditoría. |
+| `S1-13` Reserva por Profesional | Profesional reserva para un Paciente ya relacionado y obtiene el estado exacto de RF-10; rechaza Paciente no relacionado, búsqueda global, identificador manipulado, disponibilidad o estado inválidos. Administrador, Secretaría y Paciente no adquieren esta operación por jerarquía o semejanza. |
+| `S1-14` Agenda propia | Profesional ve únicamente turnos de su agenda, incluida la primera reserva exitosa; rechaza agendas ajenas e identificadores manipulados. Los demás roles quedan denegados para esta operación exacta. |
 
 ## Trazabilidad de alcance
 
@@ -87,15 +113,20 @@ Estas pruebas son obligatorias en backend para las operaciones críticas. Deben 
 | Sesión interna | RF-01; HU 7; RNF-09; T1.1 |
 | Alta de Profesional y Secretaría | RF-01, RF-02, RF-04, RF-23; HU 4.2; T1.1; T1.3 |
 | Alta de Paciente y teléfono inicial | RF-02, RF-06, RF-23; HU 1.1; T1.2 |
+| Acceso y perfil propio del Paciente | RF-01, RF-02 |
+| Verificación del teléfono propio | RF-02 ter, RF-06 |
+| Tipo y disponibilidad propios del Profesional | RF-07, RF-08 |
+| Primera reserva autónoma o asistida y relación | RF-02, RF-02 ter, RF-05, RF-06, RF-08, RF-10, RF-12, RF-23 |
+| Reserva por Profesional relacionado y agenda propia | RF-05, RF-08, RF-10, RF-23 |
 | Consulta e inmutabilidad de auditoría | RNF-02; RF-23; `SPRINT_00.md`, decisiones de auditoría append-only |
 
-Quedan fuera de esta versión las operaciones de agenda, turnos, Google OAuth/Magic Link, WhatsApp, lista de espera, pagos, comprobantes, reportes y gestión posterior de datos o credenciales. Su ausencia no concede acceso: permanecen denegadas por defecto hasta incorporarse con fuente, alcance y pruebas antes del sprint que las implemente.
+Quedan fuera de esta versión la representación de Pacientes, ausencias y feriados, cambios de disponibilidad que afecten turnos, aprobación manual y gestión posterior del turno, WhatsApp, lista de espera, pagos, comprobantes, reportes y gestión posterior de datos o credenciales. También quedan fuera los perfiles representados en la reserva autónoma. Su ausencia no concede acceso: toda combinación rol–operación no declarada, incluida cualquier inferencia de jerarquía para Administrador, permanece denegada por defecto hasta incorporarse con fuente, alcance y pruebas.
 
 ## Estado de decisiones
 
 La versión histórica `0.4` cerró los gaps de autorización de su alcance: `S1-05` quedó resuelta como un canal público condicionado por demostración de posesión del número, sin permiso derivado de rol y bajo default deny fuera de `TEL-02`. El equipo aprobó y validó integralmente esa versión el 2026-08-24; esa aprobación documental no acredita implementación ni ejecución de pruebas.
 
-La versión actual `0.5-draft` y sus nuevas condiciones `APP-01` no están aprobadas: permanecen **pending independent review**. No deben interpretarse como autoridad vigente ni como evidencia de aprobación, CI completado, despliegue, correo o activación.
+La versión actual `0.6-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda y reservas, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
 
 ## Cambio, versionado y revisión
 
@@ -110,6 +141,7 @@ La versión actual `0.5-draft` y sus nuevas condiciones `APP-01` no están aprob
 
 | Versión | Fecha | Estado | Cambio |
 | --- | --- | --- | --- |
+| `0.6-draft` | 2026-09-02 | Draft — pending independent review | Amplía el alcance de demo con acceso y perfil propio de Paciente, verificación telefónica propia, tipo y disponibilidad propios del Profesional, primera reserva autónoma o asistida, reserva relacionada del Profesional y agenda propia. Define que solo la persistencia atómica exitosa crea la relación y agrega pruebas mínimas positivas y negativas. No acredita implementación ni pruebas ejecutadas. |
 | `0.5-draft` | 2026-09-02 | Draft — pending independent review | Agrega `APP-01` como autoridad de aprobación distinta, explicita el límite transaccional acotado y registra que la aceptación de staging está preparada/no ejecutada. No acredita correo, credenciales, despliegue ni bootstrap real. |
 | `0.4` | 2026-08-24 | Aprobada — validada por el equipo | Aprobación humana explícita e integral del contenido de `0.4-draft`, sin ampliar permisos ni modificar el default deny, las condiciones, los alcances o las pruebas mínimas. La aprobación documental no acredita implementación ni ejecución de pruebas. |
 | `0.4-draft` | 2026-08-24 | Draft — pending team validation | Se resolvió `S1-05` como canal público condicionado por desafío opaco y demostración de posesión del número, sin permiso basado en rol. Se delimitó el envío o reenvío autorizado de Secretaría, se prohibió establecer `verified` por fuera del flujo y se agregaron pruebas positivas, negativas, de límites y de auditoría sanitizada. No quedan gaps de autorización abiertos; continúa pendiente la aprobación integral humana. |
