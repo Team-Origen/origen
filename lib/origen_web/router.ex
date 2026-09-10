@@ -18,12 +18,16 @@ defmodule OrigenWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/admin/activate", AdminActivationController, :new
+    post "/admin/activate/exchange", AdminActivationController, :exchange
+    post "/admin/activate", AdminActivationController, :create
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", OrigenWeb do
-  #   pipe_through :api
-  # end
+  scope "/api/bootstrap", OrigenWeb do
+    pipe_through :api
+
+    post "/provider-events", ProviderEventController, :create
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:origen, :dev_routes) do

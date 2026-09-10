@@ -9,7 +9,8 @@ import Config
 
 config :origen,
   ecto_repos: [Origen.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  bootstrap_admin_enabled: false
 
 config :origen, Origen.MigrationRepo,
   after_connect: {Origen.MigrationRepo, :set_owner_role, []},
@@ -68,7 +69,23 @@ config :logger, :default_formatter,
   metadata: [:request_id]
 
 # Use Jason for JSON parsing in Phoenix
-config :phoenix, :json_library, Jason
+config :phoenix,
+  json_library: Jason,
+  filter_parameters: [
+    "password",
+    "password_confirmation",
+    "token",
+    "totp_seed",
+    "totp_code",
+    "otp",
+    "qr_payload",
+    "recovery_code",
+    "session",
+    "cookie",
+    "digest",
+    "key",
+    "activation_url"
+  ]
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

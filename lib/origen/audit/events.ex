@@ -1,8 +1,16 @@
 defmodule Origen.Audit.Events do
   @moduledoc false
 
-  @actor_kinds [:system, :anonymous, :administrator, :professional, :secretary, :patient]
-  @entity_kinds [:account, :patient, :audit_event]
+  @actor_kinds [
+    :system,
+    :provider,
+    :anonymous,
+    :administrator,
+    :professional,
+    :secretary,
+    :patient
+  ]
+  @entity_kinds [:account, :invitation, :patient, :audit_event]
   @marker {__MODULE__, :constructed}
 
   @opaque t :: %__MODULE__{
@@ -22,6 +30,34 @@ defmodule Origen.Audit.Events do
   def denied(actor, entity), do: build(actor, "operation_denied", entity, "denied")
   def succeeded(actor, entity), do: build(actor, "operation_succeeded", entity, "succeeded")
   def failed(actor, entity), do: build(actor, "operation_failed", entity, "failed")
+
+  def bootstrap_allowed(actor, ref), do: lifecycle(actor, "bootstrap_admin", ref, "allowed")
+  def bootstrap_denied(actor, ref), do: lifecycle(actor, "bootstrap_admin", ref, "denied")
+  def reissue_allowed(actor, ref), do: lifecycle(actor, "invitation_reissue", ref, "allowed")
+  def reissue_denied(actor, ref), do: lifecycle(actor, "invitation_reissue", ref, "denied")
+
+  def activation_succeeded(actor, ref),
+    do: lifecycle(actor, "account_activation", ref, "succeeded")
+
+  def activation_failed(actor, ref), do: lifecycle(actor, "account_activation", ref, "failed")
+
+  def invitation_consumed(actor, ref),
+    do: lifecycle(actor, "invitation_consumption", ref, "succeeded")
+
+  def invitation_approval_confirmed(actor, ref),
+    do: invitation(actor, "invitation_approval_confirmation", ref, "allowed")
+
+  def invitation_delivery_handoff(actor, ref),
+    do: invitation(actor, "invitation_delivery_handoff", ref, "succeeded")
+
+  def invitation_delivery_failed(actor, ref),
+    do: invitation(actor, "invitation_delivery_failure", ref, "failed")
+
+  def invitation_delivery_revoked(actor, ref),
+    do: invitation(actor, "invitation_delivery_revocation", ref, "succeeded")
+
+  def delivery_revocation_failed(actor, ref),
+    do: invitation(actor, "delivery_revocation_failed", ref, "failed")
 
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
@@ -47,6 +83,9 @@ defmodule Origen.Audit.Events do
 
   defp build(_actor, _event, _entity, _result), do: {:error, :invalid_event}
 
+  defp lifecycle(actor, event, ref, result), do: build(actor, event, {:account, ref}, result)
+  defp invitation(actor, event, ref, result), do: build(actor, event, {:invitation, ref}, result)
+
   defp valid_actor_ref?(kind, nil), do: kind in [:system, :anonymous]
   defp valid_actor_ref?(_kind, reference), do: valid_reference?(reference)
 
@@ -63,7 +102,8 @@ defmodule Origen.Audit.Events do
   defp validate_entity(_entity), do: :error
 
   defp valid_reference?(reference) when is_binary(reference) do
-    byte_size(reference) <= 128 and String.trim(reference) != ""
+    byte_size(reference) <= 128 and String.trim(reference) != "" and
+      not Regex.match?(~r/(https?:\/\/|token|secret|password|otp|session|digest|key)/i, reference)
   end
 
   defp valid_reference?(_reference), do: false

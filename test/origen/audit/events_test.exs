@@ -51,6 +51,7 @@ defmodule Origen.Audit.EventsTest do
   end
 
   test "all four outcomes use a server time and corrections preserve history" do
+    baseline_count = audit_event_count()
     before_insert = database_time()
 
     events = [
@@ -71,10 +72,11 @@ defmodule Origen.Audit.EventsTest do
     assert Enum.all?(rows, &(DateTime.compare(&1.recorded_at, before_insert) != :lt))
     assert Enum.all?(rows, &(DateTime.compare(&1.recorded_at, after_insert) != :gt))
     assert Enum.map(rows, & &1.id) |> Enum.uniq() |> length() == 4
-    assert Repo.aggregate("audit_events", :count) == 4
+    assert audit_event_count() == baseline_count + 4
   end
 
   test "row mutation and statement truncation triggers reject with 55000" do
+    baseline_count = audit_event_count()
     {:ok, event} = Events.allowed({:system, nil}, nil)
     assert {:ok, original} = Writer.append(event, {:allow, :sys_01})
 
@@ -93,7 +95,7 @@ defmodule Origen.Audit.EventsTest do
                end)
     end
 
-    assert Repo.aggregate("audit_events", :count) == 1
+    assert audit_event_count() == baseline_count + 1
   end
 
   defp insert(values) do
@@ -106,4 +108,6 @@ defmodule Origen.Audit.EventsTest do
 
   defp database_time,
     do: Ecto.Adapters.SQL.query!(Repo, "SELECT clock_timestamp()").rows |> hd() |> hd()
+
+  defp audit_event_count, do: Repo.aggregate("audit_events", :count)
 end

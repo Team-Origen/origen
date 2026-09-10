@@ -23,6 +23,14 @@ end
 config :origen, OrigenWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+config :origen,
+       :bootstrap_admin_enabled,
+       config_env() != :prod and System.get_env("ORIGEN_BOOTSTRAP_ADMIN_ENABLED") == "true"
+
+# Delivery requires an explicitly validated staging capability map. Runtime
+# configuration remains disabled until a later provider integration supplies it.
+config :origen, :bootstrap_admin_delivery, %{enabled: false}
+
 if migration_database_url = System.get_env("ORIGEN_MIGRATION_DATABASE_URL") do
   config :origen, Origen.MigrationRepo, url: migration_database_url
 end
@@ -45,6 +53,10 @@ if config_env() == :dev do
 end
 
 if config_env() == :prod do
+  config :origen,
+    bootstrap_admin_enabled: false,
+    bootstrap_admin_delivery: %{enabled: false}
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """

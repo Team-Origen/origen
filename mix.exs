@@ -11,7 +11,8 @@ defmodule Origen.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      releases: [origen: [applications: [mix: :permanent]]]
     ]
   end
 
@@ -49,6 +50,10 @@ defmodule Origen.MixProject do
       {:phoenix_live_view, "~> 1.2.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:argon2_elixir, "~> 4.1.3"},
+      {:nimble_totp, "~> 1.0.0"},
+      {:cloak, "~> 1.1.4"},
+      {:cloak_ecto, "~> 1.3.0"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
       {:heroicons,

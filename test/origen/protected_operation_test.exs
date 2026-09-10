@@ -15,6 +15,8 @@ defmodule Origen.ProtectedOperationTest do
   end
 
   test "a direct backend denial cannot produce a protected business effect" do
+    baseline_count = audit_event_count()
+
     request =
       Request.new(
         operation: Fact.known(:create_secretary_account),
@@ -40,10 +42,12 @@ defmodule Origen.ProtectedOperationTest do
              )
 
     assert scalar("SELECT count(*) FROM protected_business_probe") == 0
-    assert [["denied"]] = sql("SELECT result FROM audit_events")
+    assert [["denied"]] = audit_results_since(baseline_count)
   end
 
   test "a business rollback is followed by a fresh sanitized failure audit" do
+    baseline_count = audit_event_count()
+
     business_write = fn repo, _changes ->
       Ecto.Adapters.SQL.query!(repo, "INSERT INTO protected_business_probe VALUES ('partial')")
       {:error, :business_failed}
@@ -58,10 +62,12 @@ defmodule Origen.ProtectedOperationTest do
              )
 
     assert scalar("SELECT count(*) FROM protected_business_probe") == 0
-    assert [["failed"]] = sql("SELECT result FROM audit_events")
+    assert [["failed"]] = audit_results_since(baseline_count)
   end
 
   test "an allowed business effect and success audit commit atomically" do
+    baseline_count = audit_event_count()
+
     business_write = fn repo, _changes ->
       Ecto.Adapters.SQL.query!(repo, "INSERT INTO protected_business_probe VALUES ('created')")
       {:ok, :created}
@@ -76,7 +82,7 @@ defmodule Origen.ProtectedOperationTest do
              )
 
     assert scalar("SELECT count(*) FROM protected_business_probe") == 1
-    assert [["succeeded"]] = sql("SELECT result FROM audit_events")
+    assert [["succeeded"]] = audit_results_since(baseline_count)
   end
 
   test "an unavailable required success audit rolls back the business effect" do
@@ -129,6 +135,15 @@ defmodule Origen.ProtectedOperationTest do
 
   defp scalar(statement), do: sql(statement) |> hd() |> hd()
   defp sql(statement), do: Ecto.Adapters.SQL.query!(Repo, statement).rows
+  defp audit_event_count, do: Repo.aggregate("audit_events", :count)
+
+  defp audit_results_since(baseline_count) do
+    Ecto.Adapters.SQL.query!(
+      Repo,
+      "SELECT result FROM audit_events ORDER BY id OFFSET $1",
+      [baseline_count]
+    ).rows
+  end
 
   defp system_request do
     Request.new(

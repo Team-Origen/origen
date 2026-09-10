@@ -172,6 +172,76 @@ defmodule Origen.Audit.PostgresSecurityTest do
     assert query!(verifier, "SELECT * FROM audit_events ORDER BY id").rows == after_insert
   end
 
+  test "runtime can use bootstrap data without ownership or destructive privileges", context do
+    %{runtime: runtime, verifier: verifier, roles: roles} = context
+
+    for table <- ~w(internal_accounts admin_bootstrap_controls internal_account_invitations) do
+      assert scalar!(verifier, "SELECT has_table_privilege($1, $2, 'SELECT')", [
+               roles.runtime,
+               table
+             ])
+
+      refute scalar!(verifier, "SELECT has_table_privilege($1, $2, 'TRIGGER')", [
+               roles.runtime,
+               table
+             ])
+
+      refute scalar!(verifier, "SELECT has_table_privilege($1, $2, 'REFERENCES')", [
+               roles.runtime,
+               table
+             ])
+
+      assert_sqlstate(
+        runtime,
+        "ALTER TABLE #{table} ADD COLUMN forbidden text",
+        :insufficient_privilege
+      )
+    end
+
+    assert scalar!(
+             verifier,
+             "SELECT has_table_privilege($1, 'internal_account_invitations', 'INSERT')",
+             [roles.runtime]
+           )
+
+    refute scalar!(
+             verifier,
+             "SELECT has_table_privilege($1, 'internal_account_invitations', 'TRUNCATE')",
+             [roles.runtime]
+           )
+
+    refute scalar!(
+             verifier,
+             "SELECT has_table_privilege($1, 'internal_account_invitations', 'DELETE')",
+             [roles.runtime]
+           )
+  end
+
+  test "verifier reads only the non-secret account projection", context do
+    %{verifier: verifier, roles: roles} = context
+
+    refute scalar!(verifier, "SELECT has_table_privilege($1, 'internal_accounts', 'SELECT')", [
+             roles.verifier
+           ])
+
+    assert scalar!(
+             verifier,
+             "SELECT has_table_privilege($1, 'internal_account_verifier_projection', 'SELECT')",
+             [roles.verifier]
+           )
+
+    assert query!(
+             verifier,
+             """
+             SELECT column_name
+             FROM information_schema.columns
+             WHERE table_schema = 'public'
+               AND table_name = 'internal_account_verifier_projection'
+             ORDER BY ordinal_position
+             """
+           ).rows == [["id"], ["role"], ["state"], ["activated_at"]]
+  end
+
   test "independent trigger defenses reject every historical mutation", context do
     %{runtime: runtime, verifier: verifier} = context
 

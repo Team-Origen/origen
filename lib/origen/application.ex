@@ -10,6 +10,8 @@ defmodule Origen.Application do
     children = [
       OrigenWeb.Telemetry,
       Origen.Repo,
+      OrigenWeb.AdminActivationSessionStore,
+      OrigenWeb.ProviderEventReplay,
       {DNSCluster, query: Application.get_env(:origen, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Origen.PubSub},
       # Start a worker by calling: Origen.Worker.start_link(arg)
