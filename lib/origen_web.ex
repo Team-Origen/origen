@@ -84,8 +84,8 @@ defmodule OrigenWeb do
 
       # HTML escaping functionality
       import Phoenix.HTML
-      # Core UI components
-      import OrigenWeb.CoreComponents
+      # Petal UI components
+      use PetalComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

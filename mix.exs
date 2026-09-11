@@ -56,6 +56,7 @@ defmodule Origen.MixProject do
       {:cloak_ecto, "~> 1.3.0"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
+      {:petal_components, ">= 2.7.4"},
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",

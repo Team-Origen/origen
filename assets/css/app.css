@@ -8,7 +8,11 @@
 @source "../../lib/origen_web";
 /* Required for Tailwind to automatically pick up changes in colocated CSS files in dev */
 @source "../../_build/dev/phoenix-colocated/origen/*/";
+@source "../../deps/petal_components/**/*.*ex";
 
+@import "../../deps/petal_components/assets/default.css";
+
+@plugin "@tailwindcss/forms";
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
 @plugin "../vendor/heroicons";
@@ -16,6 +20,20 @@
 /* daisyUI Tailwind Plugin. */
 @plugin "daisyui/packages/bundle/daisyui" {
   themes: false;
+}
+
+@theme inline {
+  --color-primary-50: var(--color-blue-50);
+  --color-primary-100: var(--color-blue-100);
+  --color-primary-200: var(--color-blue-200);
+  --color-primary-300: var(--color-blue-300);
+  --color-primary-400: var(--color-blue-400);
+  --color-primary-500: var(--color-blue-500);
+  --color-primary-600: var(--color-blue-600);
+  --color-primary-700: var(--color-blue-700);
+  --color-primary-800: var(--color-blue-800);
+  --color-primary-900: var(--color-blue-900);
+  --color-primary-950: var(--color-blue-950);
 }
 
 /* daisyUI theme plugin.
