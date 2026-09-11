@@ -214,11 +214,8 @@ Cargas recalculadas con las estimaciones vigentes de la sección 3.1. `PLN-12` y
 
 La persona responsable no trabaja aislada: los frentes describen foco de rol, mientras revisión y colaboración ya están incluidas en los rangos de cada tarea.
 
-<<<<<<< Updated upstream
 **La reserva de 32 h ya no está libre.** Al comprometer `PLN-12` y `PLN-13` dentro de Sprint 1, el total comprometido (150–230 h) supera el presupuesto objetivo de 128 h y consume la reserva incluso en su extremo inferior. Cualquier bloqueo o corrección no prevista se absorbe entonces reduciendo presentación o moviendo esos dos alcances, según la sección 3.2.
 
-=======
->>>>>>> Stashed changes
 ## 7. Tablero y jerarquía publicada en GitHub
 
 Estados simples:
