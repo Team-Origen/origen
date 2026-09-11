@@ -84,7 +84,7 @@ defmodule Origen.BootstrapAdmin.OperatorDocumentationTest do
     current_status = String.trim(current_status)
 
     assert current_status == "Draft — pending independent review"
-    assert matrix =~ "`0.5-draft` y sus nuevas condiciones `APP-01` no están aprobadas"
+    assert matrix =~ "`0.5-draft` ni `0.6-draft`"
     assert matrix =~ "| `0.4` | 2026-08-24 | Aprobada — validada por el equipo |"
     refute current_status =~ ~r/aprobada|approved/i
   end
