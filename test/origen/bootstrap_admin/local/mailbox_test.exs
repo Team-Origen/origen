@@ -52,6 +52,25 @@ defmodule Origen.BootstrapAdmin.Local.MailboxTest do
     refute ref =~ "secret"
   end
 
+  test "successful delivery replaces stale previews with the new invitation" do
+    stale_email =
+      Swoosh.Email.new()
+      |> Swoosh.Email.to("stale@example.test")
+      |> Swoosh.Email.from("stale@example.test")
+      |> Swoosh.Email.subject("stale")
+      |> Swoosh.Email.text_body("stale-token")
+
+    Swoosh.Adapters.Local.Storage.Memory.push(stale_email)
+    Swoosh.Adapters.Local.Storage.Memory.push(stale_email)
+
+    assert {:ok, _} =
+             Mailbox.deliver(%{reference: "inv-new", token: "new-token-canary"}, ttl_seconds: 60)
+
+    assert [email] = Swoosh.Adapters.Local.Storage.Memory.all()
+    assert email.text_body =~ "new-token-canary"
+    refute email.text_body =~ "stale-token"
+  end
+
   test "preview storage follows rejection, clear, and expiry retention boundaries" do
     clock = fn -> 1_000 end
 

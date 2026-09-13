@@ -46,8 +46,14 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
            :ok <- reserve_mailbox(store, correlation_ref, [ttl_seconds: ttl] ++ store_opts) do
         case deliver_to_mailer(mailer, email) do
           :ok ->
-            ensure_preview(email)
-            {:ok, %{correlation_ref: correlation_ref}}
+            case replace_preview(email) do
+              :ok ->
+                {:ok, %{correlation_ref: correlation_ref}}
+
+              {:error, :preview_failed} = error ->
+                store.clear()
+                error
+            end
 
           {:error, :mailer_failed} = error ->
             store.clear()
@@ -76,15 +82,18 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
     end
   end
 
-  defp ensure_preview(email) do
-    case Swoosh.Adapters.Local.Storage.Memory.all() do
-      [] -> Swoosh.Adapters.Local.Storage.Memory.push(email)
-      [_email] -> :ok
-      _unexpected -> Swoosh.Adapters.Local.Storage.Memory.delete_all()
+  defp replace_preview(email) do
+    storage = Swoosh.Adapters.Local.Storage.Memory
+    storage.delete_all()
+    storage.push(email)
+
+    case storage.all() do
+      [_delivered_email] -> :ok
+      _ -> {:error, :preview_failed}
     end
   rescue
-    _ -> :ok
+    _ -> {:error, :preview_failed}
   catch
-    _, _ -> :ok
+    _, _ -> {:error, :preview_failed}
   end
 end
