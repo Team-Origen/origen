@@ -53,19 +53,19 @@ Chain strategy: pending
 
 ### 2.1 RED — Readiness, destination, and origin contracts
 
-- [ ] Create `test/origen/bootstrap_admin/local/{readiness,destination,origin}_test.exs` for aggregate sorted/deduplicated finding codes, metadata-only key probes, redacted inspection, exact lowercase ASCII `example.test` address, and literal `https://127.0.0.1:<port>/admin/activate` validation.
-- [ ] Cover case/Unicode, multiple addresses/`@`, suffix/real domain, controls/header syntax, unsafe endpoint binds, HTTP/second listener, alternate port/path/query/fragment/userinfo, invalid certificate metadata, retention outside 1..900, and incorrect adapter/preview identities.
-- [ ] Record RED evidence that invalid readiness performs no Repo, secret-content fetch, application start, mailbox access, message construction, token generation, or output.
+- [x] Create `test/origen/bootstrap_admin/local/{readiness,destination,origin}_test.exs` for aggregate sorted/deduplicated finding codes, metadata-only key probes, redacted inspection, exact lowercase ASCII `example.test` address, and literal `https://127.0.0.1:<port>/admin/activate` validation.
+- [x] Cover case/Unicode, multiple addresses/`@`, suffix/real domain, controls/header syntax, unsafe endpoint binds, HTTP/second listener, alternate port/path/query/fragment/userinfo, invalid certificate metadata, retention outside 1..900, and incorrect adapter/preview identities.
+- [x] Record RED evidence that invalid readiness performs no Repo, secret-content fetch, application start, mailbox access, message construction, token generation, or output.
 
 ### 2.2 GREEN — Isolated pure validators
 
-- [ ] Add `lib/origen/bootstrap_admin/local/{readiness,destination,origin}.ex` and typed/redacted structs; add only metadata probing for certificate/key sources and fixed sanitized finding atoms.
-- [ ] Validate one scalar configured destination, exact endpoint/origin tuple, reviewed local mailbox stack, TTL/max-message contract, isolated database declaration/name syntax, and protected-source availability without reading contents.
+- [x] Add `lib/origen/bootstrap_admin/local/{readiness,destination,origin}.ex` and typed/redacted structs; add only metadata probing for certificate/key sources and fixed sanitized finding atoms.
+- [x] Validate one scalar configured destination, exact endpoint/origin tuple, reviewed local mailbox stack, TTL/max-message contract, isolated database declaration/name syntax, and protected-source availability without reading contents.
 
 ### 2.3 TRIANGULATE / REFACTOR — Preserve the staging trust boundary
 
-- [ ] Inject probe dependencies below runtime eligibility and test exception normalization plus TOCTOU-ready metadata changes; verify no configured value appears in errors or `Inspect`.
-- [ ] Run local validator tests and existing `delivery_config_test.exs`, `provider_test.exs`, `approval_verifier_test.exs`, and `origin_test.exs` unchanged. Security evidence: staging still rejects Local/Test/mailbox adapters and loopback origins.
+- [x] Inject probe dependencies below runtime eligibility and test exception normalization plus TOCTOU-ready metadata changes; verify no configured value appears in errors or `Inspect`.
+- [x] Run local validator tests and existing `delivery_config_test.exs`, `provider_test.exs`, `approval_verifier_test.exs`, and `origin_test.exs` unchanged. Security evidence: staging still rejects Local/Test/mailbox adapters and loopback origins.
 
 ## 3. PR 3 — Exact local authorization, target facts, and deferred secret access
 
