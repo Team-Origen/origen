@@ -1,6 +1,5 @@
 defmodule Origen.BootstrapAdmin.Local.EndpointTest do
   use ExUnit.Case, async: false
-
   alias Origen.BootstrapAdmin.Local.Endpoint
 
   setup do
@@ -28,9 +27,7 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
     assert {:ok, "verifier"} = Endpoint.fetch_secret(:verifier_key)
     assert {:ok, :keyring} = Endpoint.fetch_secret(:totp_keyring)
     refute inspect(:sys.get_state(Endpoint)) =~ "verifier"
-
     Endpoint.cleanup()
-
     invalid = put_in(local_config(), [:endpoint, :ip], {0, 0, 0, 0})
     assert {:error, :local_endpoint_invalid} = Endpoint.start_session(invalid)
   end
@@ -43,12 +40,20 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
     assert Task.await(waiter) == :activated
     assert {:error, :secrets_unavailable} = Endpoint.fetch_secret(:verifier_key)
     refute Process.alive?(server)
-
     expiring = put_in(local_config(), [:retention_ttl_seconds], 1)
 
     assert :ok = start_session(fn -> spawn(fn -> Process.sleep(:infinity) end) end, expiring)
     assert Endpoint.await() == :expired
     assert {:error, :secrets_unavailable} = Endpoint.fetch_secret(:totp_keyring)
+  end
+
+  test "stale expiry from a cleaned-up session does not expire the current session" do
+    assert :ok = start_session(fn -> spawn(fn -> Process.sleep(:infinity) end) end)
+    %{session_ref: stale_ref} = :sys.get_state(Endpoint)
+    Endpoint.cleanup()
+    assert :ok = start_session(fn -> spawn(fn -> Process.sleep(:infinity) end) end)
+    send(Endpoint, {:expire, stale_ref})
+    assert {:ok, "secret"} = Endpoint.fetch_secret(:verifier_key)
   end
 
   test "listener crash cleans protected state and notifies waiters" do
@@ -90,7 +95,6 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
 
   defp local_config do
     %{
-      enabled: true,
       activation_origin: "https://127.0.0.1:4443/admin/activate",
       endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false},
       certificate_file: "/synthetic/cert.pem",

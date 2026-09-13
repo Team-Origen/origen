@@ -1,31 +1,24 @@
 defmodule Origen.BootstrapAdmin.Local.Endpoint do
-  @moduledoc false
-
   use GenServer
-
   alias Origen.BootstrapAdmin.Local.{MailboxStore, Origin, Secrets}
   alias OrigenWeb.AdminActivationSessionStore
 
-  @name __MODULE__
-  @maximum_ttl_seconds 900
-
   defmodule Cache do
-    @moduledoc false
     @derive {Inspect, only: []}
     defstruct [:verifier_key, :totp_keyring]
   end
 
-  def start_link(_opts), do: GenServer.start_link(__MODULE__, :inactive, name: @name)
+  def start_link(_opts), do: GenServer.start_link(__MODULE__, :inactive, name: __MODULE__)
 
   def start_session(config, opts \\ []),
-    do: GenServer.call(@name, {:start_session, config, opts})
+    do: GenServer.call(__MODULE__, {:start_session, config, opts})
 
   def fetch_secret(name) when name in [:verifier_key, :totp_keyring],
-    do: GenServer.call(@name, {:fetch_secret, name})
+    do: GenServer.call(__MODULE__, {:fetch_secret, name})
 
-  def await, do: GenServer.call(@name, :await, :infinity)
-  def activation_complete, do: GenServer.cast(@name, {:finish, :activated})
-  def cleanup, do: GenServer.call(@name, :cleanup)
+  def await, do: GenServer.call(__MODULE__, :await, :infinity)
+  def activation_complete, do: GenServer.cast(__MODULE__, {:finish, :activated})
+  def cleanup, do: GenServer.call(__MODULE__, :cleanup)
 
   @impl true
   def init(state) do
@@ -39,8 +32,11 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
     with {:ok, server_options, ttl} <- listener_options(config),
          {:ok, secrets} <- load_secrets(opts),
          {:ok, server} <- start_server(server_options, opts) do
-      timer = Process.send_after(self(), :expire, ttl * 1_000)
-      {:reply, :ok, %{server: server, secrets: secrets, timer: timer, waiters: []}}
+      session_ref = make_ref()
+      timer = Process.send_after(self(), {:expire, session_ref}, ttl * 1_000)
+
+      {:reply, :ok,
+       %{server: server, secrets: secrets, timer: timer, waiters: [], session_ref: session_ref}}
     else
       _ -> {:reply, {:error, :local_endpoint_invalid}, :inactive}
     end
@@ -65,22 +61,18 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
   def handle_call(:await, _from, {:finished, reason} = state), do: {:reply, reason, state}
   def handle_call(:await, _from, :inactive), do: {:reply, :inactive, :inactive}
 
-  def handle_call(:cleanup, _from, state) do
-    cleanup_state(state, :terminated)
-    {:reply, :ok, :inactive}
-  end
+  def handle_call(:cleanup, _from, state),
+    do: cleanup_transition(state, :terminated, {:reply, :ok, :inactive})
 
   @impl true
-  def handle_cast({:finish, reason}, state) do
-    cleanup_state(state, reason)
-    {:noreply, {:finished, reason}}
-  end
+  def handle_cast({:finish, reason}, state),
+    do: cleanup_transition(state, reason, {:noreply, {:finished, reason}})
 
   @impl true
-  def handle_info(:expire, state) do
-    cleanup_state(state, :expired)
-    {:noreply, {:finished, :expired}}
-  end
+  def handle_info({:expire, session_ref}, %{session_ref: session_ref} = state),
+    do: cleanup_transition(state, :expired, {:noreply, {:finished, :expired}})
+
+  def handle_info({:expire, _stale_ref}, state), do: {:noreply, state}
 
   def handle_info({:EXIT, server, _reason}, %{server: server} = state) do
     cleanup_state(state, :listener_failed)
@@ -95,7 +87,7 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
          retention_ttl_seconds: ttl
        })
        when is_integer(port) and port in 1..65_535 and is_integer(ttl) and
-              ttl in 1..@maximum_ttl_seconds and is_binary(certfile) and is_binary(keyfile) do
+              ttl in 1..900 and is_binary(certfile) and is_binary(keyfile) do
     with {:ok, _exact_origin} <- Origin.validate(origin, endpoint) do
       {:ok,
        [
@@ -106,8 +98,6 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
          certfile: certfile,
          keyfile: keyfile
        ], ttl}
-    else
-      _ -> {:error, :invalid_origin}
     end
   end
 
@@ -145,6 +135,11 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
     _ -> {:error, :listener_unavailable}
   catch
     _, _ -> {:error, :listener_unavailable}
+  end
+
+  defp cleanup_transition(state, reason, transition) do
+    cleanup_state(state, reason)
+    transition
   end
 
   defp cleanup_state(:inactive, _reason), do: :ok
