@@ -33,19 +33,19 @@ Chain strategy: pending
 
 ### 1.1 RED — Entry-point and configuration denial contracts
 
-- [ ] Add focused tests at `test/origen/bootstrap_admin_task_test.exs`, `test/origen/bootstrap_admin_release_test.exs`, and a new `test/origen/bootstrap_admin/local/eligibility_test.exs` for shared-gate-first ordering; local gate/profile malformed or false; compiled `:dev`/`:test`/`:prod`; unknown profile; local-looking release configuration; forbidden/duplicate local argv; and no parser, Repo, endpoint, mailbox, secret, token, or output seam after denial.
-- [ ] Capture behavioral RED failures with the focused `mix test` command; use spies/canaries that prove secret-bearing arguments never reach a sink.
+- [x] Add focused tests at `test/origen/bootstrap_admin_task_test.exs`, `test/origen/bootstrap_admin_release_test.exs`, and a new `test/origen/bootstrap_admin/local/eligibility_test.exs` for shared-gate-first ordering; local gate/profile malformed or false; compiled `:dev`/`:test`/`:prod`; unknown profile; local-looking release configuration; forbidden/duplicate local argv; and no parser, Repo, endpoint, mailbox, secret, token, or output seam after denial.
+- [x] Capture behavioral RED failures with the focused `mix test` command; use spies/canaries that prove secret-bearing arguments never reach a sink.
 
 ### 1.2 GREEN — Add trusted local dispatch and defaults
 
-- [ ] Update `config/config.exs`, `config/dev.exs`, `config/runtime.exs`, and `config/dev.local.example.exs` with a default staging selector, `false` local gate/map, ignored placeholder-only development contract, and production hard-disablement; include no secret values or guide edits.
-- [ ] Update `lib/origen/bootstrap_admin/command.ex`, `lib/mix/tasks/origen.bootstrap_admin.ex`, and `lib/origen/release.ex`; add `lib/origen/bootstrap_admin/local/eligibility.ex` so the shared gate precedes selector read, local eligibility precedes argv parsing, source checkout is internal-only, and release dispatch always denies local.
-- [ ] Keep staging branch behavior unchanged and do not add `--profile`, destination, origin, adapter, key, token, or URL arguments.
+- [x] Update `config/config.exs`, `config/dev.exs`, `config/runtime.exs`, and `config/dev.local.example.exs` with a default staging selector, `false` local gate/map, ignored placeholder-only development contract, and production hard-disablement; include no secret values or guide edits.
+- [x] Update `lib/origen/bootstrap_admin/command.ex`, `lib/mix/tasks/origen.bootstrap_admin.ex`, and `lib/origen/release.ex`; add `lib/origen/bootstrap_admin/local/eligibility.ex` so the shared gate precedes selector read, local eligibility precedes argv parsing, source checkout is internal-only, and release dispatch always denies local.
+- [x] Keep staging branch behavior unchanged and do not add `--profile`, destination, origin, adapter, key, token, or URL arguments.
 
 ### 1.3 TRIANGULATE / REFACTOR — Prove no fallback or release exposure
 
-- [ ] Add table cases for exact booleans, copied local config in release/test, conflicting selectors, and extra/secret argv; assert selected-path denial never tries staging and safe results contain references/fixed atoms only.
-- [ ] Run the focused tests plus existing staging task/release regressions; format/compile. Security evidence: local policy remains unreachable in packaged releases and before protected access.
+- [x] Add table cases for exact booleans, copied local config in release/test, conflicting selectors, and extra/secret argv; assert selected-path denial never tries staging and safe results contain references/fixed atoms only.
+- [x] Run the focused tests plus existing staging task/release regressions; format/compile. Security evidence: local policy remains unreachable in packaged releases and before protected access.
 
 ## 2. PR 2 — Aggregate readiness and typed local inputs
 

@@ -16,14 +16,14 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
   @impl Mix.Task
   def run(args) do
     case Gate.check() do
-      :ok -> execute(args)
+      :ok -> execute(args, :source_checkout)
       {:error, :bootstrap_disabled} -> Mix.raise("Bootstrap admin is disabled")
     end
   end
 
   @doc false
-  def execute(args) do
-    case Command.run(args, command_options()) do
+  def execute(args, channel \\ :source_checkout, options \\ command_options()) do
+    case Command.run(args, channel, options) do
       {:ok, references} ->
         Mix.shell().info(
           "Bootstrap admin invitation delivered; account reference: #{references.account_id}; " <>

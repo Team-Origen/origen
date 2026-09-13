@@ -55,6 +55,9 @@ end
 if config_env() == :prod do
   config :origen,
     bootstrap_admin_enabled: false,
+    bootstrap_admin_profile: :staging,
+    bootstrap_admin_local_enabled: false,
+    bootstrap_admin_local: %{enabled: false},
     bootstrap_admin_delivery: %{enabled: false}
 
   database_url =

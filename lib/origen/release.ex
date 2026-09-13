@@ -8,7 +8,7 @@ defmodule Origen.Release do
     case Gate.check() do
       :ok ->
         {:ok, _applications} = Application.ensure_all_started(:mix)
-        Mix.Tasks.Origen.BootstrapAdmin.execute(args)
+        Mix.Tasks.Origen.BootstrapAdmin.execute(args, :packaged_release, [])
 
       {:error, :bootstrap_disabled} ->
         raise "Bootstrap admin is disabled"
