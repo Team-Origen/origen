@@ -73,20 +73,20 @@ Chain strategy: pending
 
 ### 3.1 RED — Initial/recovery default-deny contracts
 
-- [ ] Add `test/origen/bootstrap_admin/local/{authorization,target,secrets}_test.exs` and extend `test/origen/bootstrap_admin/authorization_audit_test.exs` for `:bootstrap_local_first_administrator` and `:reissue_local_first_administrator` exact-map matching.
-- [ ] Exercise each missing, additional, staging-shaped, deployment-approved, wrong channel/environment/gate/profile/readiness/destination/database fact; shared database; active/multiple/wrong pending account; non-positive/mismatched account id; retained mailbox; and handoff state other than `:revoked_or_uncertain`.
-- [ ] Capture RED evidence that denial causes no target mutation, account/invitation write, audit-business effect, or secret file-content read.
+- [x] Add `test/origen/bootstrap_admin/local/{authorization,target,secrets}_test.exs` and extend `test/origen/bootstrap_admin/authorization_audit_test.exs` for `:bootstrap_local_first_administrator` and `:reissue_local_first_administrator` exact-map matching.
+- [x] Exercise each missing, additional, staging-shaped, deployment-approved, wrong channel/environment/gate/profile/readiness/destination/database fact; shared database; active/multiple/wrong pending account; non-positive/mismatched account id; retained mailbox; and handoff state other than `:revoked_or_uncertain`.
+- [x] Capture RED evidence that denial causes no target mutation, account/invitation write, audit-business effect, or secret file-content read.
 
 ### 3.2 GREEN — Local facts, read-only target inspection, and cache
 
-- [ ] Update `lib/origen/authorization/rules.ex` only to add narrow local operations and exact-map matching for those operations; add `lib/origen/bootstrap_admin/local/{authorization,target,secrets}.ex` and the smallest shared `BootstrapSecrets` accessor only if activation needs it.
-- [ ] Establish database isolation from exact configuration plus read-only `current_database()`/local-connection and account-state facts; allow initial absent target or the sole qualifying recovery target only.
-- [ ] Implement post-authorization, bounded, no-symlink recheck/read/decode/cache of verifier/TOTP files, generic safe failures, and cache disposal hooks; never return/inspect/log key contents.
+- [x] Update `lib/origen/authorization/rules.ex` only to add narrow local operations and exact-map matching for those operations; add `lib/origen/bootstrap_admin/local/{authorization,target,secrets}.ex` and the smallest shared `BootstrapSecrets` accessor only if activation needs it.
+- [x] Establish database isolation from exact configuration plus read-only `current_database()`/local-connection and account-state facts; allow initial absent target or the sole qualifying recovery target only.
+- [x] Implement post-authorization, bounded, no-symlink recheck/read/decode/cache of verifier/TOTP files, generic safe failures, and cache disposal hooks; never return/inspect/log key contents.
 
 ### 3.3 TRIANGULATE / REFACTOR — Challenge authority and secret timing
 
-- [ ] Test TOCTOU replacement, malformed key material, cache cleanup, and authorization fact permutations; prove the recovery rule invokes no account creation authority and staging authorization remains unchanged.
-- [ ] Run local authorization/secret tests plus existing authorization, account, and staging approval regressions; format/compile. Security evidence: no staged approval is fabricated and protected values remain unavailable before allow.
+- [x] Test TOCTOU replacement, malformed key material, cache cleanup, and authorization fact permutations; prove the recovery rule invokes no account creation authority and staging authorization remains unchanged.
+- [x] Run local authorization/secret tests plus existing authorization, account, and staging approval regressions; format/compile. Security evidence: no staged approval is fabricated and protected values remain unavailable before allow.
 
 ## 4. PR 4 — Same-VM bounded mailbox, local lifecycle, and compensation
 
