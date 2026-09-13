@@ -20,8 +20,17 @@ if System.get_env("PHX_SERVER") do
   config :origen, OrigenWeb.Endpoint, server: true
 end
 
-config :origen, OrigenWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+local_bootstrap? =
+  config_env() == :dev and Application.get_env(:origen, :bootstrap_admin_profile) == :local and
+    Application.get_env(:origen, :bootstrap_admin_local_enabled) == true and
+    match?(%{enabled: true}, Application.get_env(:origen, :bootstrap_admin_local))
+
+if local_bootstrap? do
+  config :origen, OrigenWeb.Endpoint, http: false, server: false
+else
+  config :origen, OrigenWeb.Endpoint,
+    http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+end
 
 config :origen,
        :bootstrap_admin_enabled,
