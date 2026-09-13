@@ -119,4 +119,100 @@ defmodule Origen.BootstrapAdmin.AuthorizationAuditTest do
     assert correction.event == "invitation_delivery_failure"
     assert original.entity_ref == correction.entity_ref
   end
+
+  test "local profile primitives expose explicit default-deny authorization facts" do
+    request =
+      Request.new(
+        operation: Fact.known(:bootstrap_local_first_administrator),
+        subject: Fact.known({:channel, :local_profile}),
+        account_state: :not_applicable,
+        target: Fact.known(%{administrator_exists: false}),
+        scope:
+          Fact.known(%{
+            profile: :dev,
+            readiness: :ready,
+            destination: :example_test,
+            database: :isolated,
+            account: :none
+          })
+      )
+
+    assert Authorization.decide(request) == {:allow, :loc_01}
+  end
+
+  test "local recovery primitive exposes explicit facts" do
+    request =
+      Request.new(
+        operation: Fact.known(:reissue_local_first_administrator),
+        subject: Fact.known({:channel, :local_profile}),
+        account_state: :not_applicable,
+        target: Fact.known(%{role: :administrator, state: :pending_activation}),
+        scope:
+          Fact.known(%{
+            profile: :dev,
+            readiness: :ready,
+            destination: :example_test,
+            database: :isolated,
+            active_administrator_exists: false,
+            account: :sole_pending
+          })
+      )
+
+    assert Authorization.decide(request) == {:allow, :loc_02}
+  end
+
+  test "loc_01 and loc_02 reject extra/over-broad facts due to exact-map matching" do
+    base_loc_01 =
+      Request.new(
+        operation: Fact.known(:bootstrap_local_first_administrator),
+        subject: Fact.known({:channel, :local_profile}),
+        account_state: :not_applicable,
+        target: Fact.known(%{administrator_exists: false}),
+        scope:
+          Fact.known(%{
+            profile: :dev,
+            readiness: :ready,
+            destination: :example_test,
+            database: :isolated,
+            account: :none
+          })
+      )
+
+    extra_scope_loc_01 =
+      Request.new(
+        operation: Fact.known(:bootstrap_local_first_administrator),
+        subject: Fact.known({:channel, :local_profile}),
+        account_state: :not_applicable,
+        target: Fact.known(%{administrator_exists: false}),
+        scope:
+          Fact.known(%{
+            profile: :dev,
+            readiness: :ready,
+            destination: :example_test,
+            database: :isolated,
+            account: :none,
+            extra_fact: true
+          })
+      )
+
+    extra_target_loc_01 =
+      Request.new(
+        operation: Fact.known(:bootstrap_local_first_administrator),
+        subject: Fact.known({:channel, :local_profile}),
+        account_state: :not_applicable,
+        target: Fact.known(%{administrator_exists: false, extra_fact: true}),
+        scope:
+          Fact.known(%{
+            profile: :dev,
+            readiness: :ready,
+            destination: :example_test,
+            database: :isolated,
+            account: :none
+          })
+      )
+
+    assert Authorization.decide(base_loc_01) == {:allow, :loc_01}
+    assert Authorization.decide(extra_scope_loc_01) == {:deny, :no_matching_rule}
+    assert Authorization.decide(extra_target_loc_01) == {:deny, :no_matching_rule}
+  end
 end
