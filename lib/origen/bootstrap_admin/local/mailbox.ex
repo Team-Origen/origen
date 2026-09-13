@@ -11,8 +11,9 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
     ttl = Keyword.get(opts, :ttl_seconds, 900)
     store = Keyword.get(opts, :store, MailboxStore)
     mailer = Keyword.get(opts, :mailer, Origen.Mailer)
+    store_opts = Keyword.take(opts, [:clock])
 
-    if store.count() > 0 do
+    if store.count(store_opts) > 0 do
       {:error, :mailbox_retained}
     else
       config =
@@ -38,21 +39,27 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
             _ -> %Origin{uri: URI.parse("https://127.0.0.1:4443/admin/activate")}
           end
 
-      with {:ok, email} <- InvitationEmail.build(transient, destination, origin, config),
-           {:ok, delivery_result} <- deliver_to_mailer(mailer, email),
-           :ok <- store_in_mailbox(store, email, delivery_result, ttl, opts) do
-        correlation_ref =
-          "local-" <> (:crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower))
+      correlation_ref =
+        "local-" <> (:crypto.strong_rand_bytes(8) |> Base.encode16(case: :lower))
 
-        {:ok, %{correlation_ref: correlation_ref}}
+      with {:ok, email} <- InvitationEmail.build(transient, destination, origin, config),
+           :ok <- reserve_mailbox(store, correlation_ref, [ttl_seconds: ttl] ++ store_opts) do
+        case deliver_to_mailer(mailer, email) do
+          :ok ->
+            ensure_preview(email)
+            {:ok, %{correlation_ref: correlation_ref}}
+
+          {:error, :mailer_failed} = error ->
+            store.clear()
+            error
+        end
       end
     end
   end
 
   defp deliver_to_mailer(mailer, email) do
     case mailer.deliver(email) do
-      {:ok, result} -> {:ok, result}
-      {:error, reason} -> {:error, reason}
+      {:ok, _result} -> :ok
       _ -> {:error, :mailer_failed}
     end
   rescue
@@ -61,32 +68,23 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
     _, _ -> {:error, :mailer_failed}
   end
 
-  defp store_in_mailbox(store, email, delivery_result, ttl, opts) do
-    msg_id =
-      case delivery_result do
-        %{id: id} -> id
-        _ -> Map.get(email.headers, "Message-ID")
-      end
-
-    push_opts = [ttl_seconds: ttl] ++ Keyword.take(opts, [:clock])
-
-    # Also forward to Swoosh.Adapters.Local.Storage.Memory if it is running and different from store
-    # so that /dev/mailbox preview can see it
-    if store != Swoosh.Adapters.Local.Storage.Memory do
-      try do
-        Swoosh.Adapters.Local.Storage.Memory.push(email)
-      rescue
-        _ -> :ok
-      catch
-        _, _ -> :ok
-      end
-    end
-
-    case store.push(%{id: msg_id, email: email}, push_opts) do
+  defp reserve_mailbox(store, correlation_ref, push_opts) do
+    case store.push(%{id: correlation_ref}, push_opts) do
       :ok -> :ok
       {:error, :mailbox_full} -> {:error, :mailbox_retained}
-      {:error, reason} -> {:error, reason}
       _ -> {:error, :store_failed}
     end
+  end
+
+  defp ensure_preview(email) do
+    case Swoosh.Adapters.Local.Storage.Memory.all() do
+      [] -> Swoosh.Adapters.Local.Storage.Memory.push(email)
+      [_email] -> :ok
+      _unexpected -> Swoosh.Adapters.Local.Storage.Memory.delete_all()
+    end
+  rescue
+    _ -> :ok
+  catch
+    _, _ -> :ok
   end
 end

@@ -84,6 +84,7 @@ defmodule Origen.BootstrapAdmin.Local.MailboxStore do
   @impl true
   def init(_opts) do
     # State is nil or %{id: id, message: msg, expires_at: pos_integer}
+    clear_preview()
     {:ok, nil}
   end
 
@@ -145,16 +146,26 @@ defmodule Origen.BootstrapAdmin.Local.MailboxStore do
 
   @impl true
   def handle_call(:clear, _from, _state) do
+    clear_preview()
     {:reply, :ok, nil}
   end
 
   defp purge_if_expired(nil, _now), do: nil
 
   defp purge_if_expired(%{expires_at: expires_at}, now) when now >= expires_at do
+    clear_preview()
     nil
   end
 
   defp purge_if_expired(state, _now), do: state
+
+  defp clear_preview do
+    Swoosh.Adapters.Local.Storage.Memory.delete_all()
+  rescue
+    _ -> :ok
+  catch
+    _, _ -> :ok
+  end
 
   defp now_seconds do
     System.system_time(:second)

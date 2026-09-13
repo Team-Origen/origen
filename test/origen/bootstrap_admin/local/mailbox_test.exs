@@ -6,6 +6,7 @@ defmodule Origen.BootstrapAdmin.Local.MailboxTest do
 
   setup do
     MailboxStore.clear()
+    Swoosh.Adapters.Local.Storage.Memory.delete_all()
     :ok
   end
 
@@ -51,12 +52,36 @@ defmodule Origen.BootstrapAdmin.Local.MailboxTest do
     refute ref =~ "secret"
   end
 
-  test "deliver fails if mailbox already has active message" do
-    transient1 = %{reference: "inv-1", token: "tok-1"}
-    transient2 = %{reference: "inv-2", token: "tok-2"}
+  test "preview storage follows rejection, clear, and expiry retention boundaries" do
+    clock = fn -> 1_000 end
 
-    assert {:ok, _} = Mailbox.deliver(transient1, ttl_seconds: 60)
-    assert {:error, :mailbox_retained} = Mailbox.deliver(transient2, ttl_seconds: 60)
+    assert {:ok, _} =
+             Mailbox.deliver(%{reference: "inv-1", token: "tok-1"},
+               ttl_seconds: 10,
+               clock: clock
+             )
+
+    assert [_email] = Swoosh.Adapters.Local.Storage.Memory.all()
+
+    assert {:error, :mailbox_retained} =
+             Mailbox.deliver(%{reference: "inv-2", token: "tok-2"},
+               ttl_seconds: 10,
+               clock: clock
+             )
+
+    assert [_email] = Swoosh.Adapters.Local.Storage.Memory.all()
+
+    assert :ok = MailboxStore.clear()
+    assert [] = Swoosh.Adapters.Local.Storage.Memory.all()
+
+    assert {:ok, _} =
+             Mailbox.deliver(%{reference: "inv-3", token: "tok-3"},
+               ttl_seconds: 10,
+               clock: clock
+             )
+
+    assert MailboxStore.count(clock: fn -> 1_011 end) == 0
+    assert [] = Swoosh.Adapters.Local.Storage.Memory.all()
   end
 
   test "security boundary: token and body never leak in mailbox status or error payloads" do
