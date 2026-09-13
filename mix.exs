@@ -50,6 +50,7 @@ defmodule Origen.MixProject do
       {:phoenix_live_view, "~> 1.2.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:tidewave, "~> 0.9.0", only: :dev},
       {:argon2_elixir, "~> 4.1.3"},
       {:nimble_totp, "~> 1.0.0"},
       {:cloak, "~> 1.1.4"},
