@@ -94,20 +94,20 @@ Chain strategy: pending
 
 ### 4.1 RED — Retention and compensation behavior
 
-- [ ] Create `test/origen/bootstrap_admin/local/{mailbox,command,lifecycle}_test.exs` with fake clock/store for one submission, one message, TTL ≤900 seconds, initialization/restart/shutdown clear, expiry removal before revocation, crash between store/ack, handoff/audit/builder exceptions, and no retry.
-- [ ] Cover initial issue serialization, handoff failure/uncertainty revocation, revoked-token activation denial, and recovery that repeats eligibility/readiness/authorization and uses `Account.reissue_first/2` for the same account/new token.
-- [ ] Capture RED evidence that email/message/token/body/destination are never returned, logged, audited, or asserted in output; only safe correlation/account/invitation references may cross the boundary.
+- [x] Create `test/origen/bootstrap_admin/local/{mailbox,command,lifecycle}_test.exs` with fake clock/store for one submission, one message, TTL ≤900 seconds, initialization/restart/shutdown clear, expiry removal before revocation, crash between store/ack, handoff/audit/builder exceptions, and no retry.
+- [x] Cover initial issue serialization, handoff failure/uncertainty revocation, revoked-token activation denial, and recovery that repeats eligibility/readiness/authorization and uses `Account.reissue_first/2` for the same account/new token.
+- [x] Capture RED evidence that email/message/token/body/destination are never returned, logged, audited, or asserted in output; only safe correlation/account/invitation references may cross the boundary.
 
 ### 4.2 GREEN — Local coordinator and orchestration
 
-- [ ] Add `lib/origen/bootstrap_admin/local/{mailbox,mailbox_store,invitation_email,command}.ex` and, only as necessary, local supervision in `lib/origen/application.ex` for a dedicated in-memory coordinator and secret cache.
-- [ ] Verify locked Swoosh Local APIs behind `MailboxStore`; if they cannot identify/clear bounded messages atomically, implement the reviewed bounded in-memory store instead of accepting unbounded storage. Keep it local-only and same-VM.
-- [ ] Reuse `Account.issue_first/1`, `Account.reissue_first/2`, and `Delivery.revoke_delivery_failure/2`; append only existing safe handoff/failure evidence and fail closed if revocation/audit cannot be proved. Do not alter staging provider/configuration modules.
+- [x] Add `lib/origen/bootstrap_admin/local/{mailbox,mailbox_store,invitation_email,command}.ex` and, only as necessary, local supervision in `lib/origen/application.ex` for a dedicated in-memory coordinator and secret cache.
+- [x] Verify locked Swoosh Local APIs behind `MailboxStore`; if they cannot identify/clear bounded messages atomically, implement the reviewed bounded in-memory store instead of accepting unbounded storage. Keep it local-only and same-VM.
+- [x] Reuse `Account.issue_first/1`, `Account.reissue_first/2`, and `Delivery.revoke_delivery_failure/2`; append only existing safe handoff/failure evidence and fail closed if revocation/audit cannot be proved. Do not alter staging provider/configuration modules.
 
 ### 4.3 TRIANGULATE / REFACTOR — Race and retention proof
 
-- [ ] Test consume-versus-expiry/revocation races, retained-message recovery denial, coordinator restart, audit failure, and safe cleanup after activation/operator termination; prove at most one token-bearing message and no fresh same-session issue after uncertain revocation.
-- [ ] Run local lifecycle tests plus existing `issue_and_deliver_test.exs`, `delivery_recovery_test.exs`, `lifecycle_test.exs`, and staging provider regressions; format/compile. Security evidence: token is fragment-only in the approved mailbox and old tokens never revive.
+- [x] Test consume-versus-expiry/revocation races, retained-message recovery denial, coordinator restart, audit failure, and safe cleanup after activation/operator termination; prove at most one token-bearing message and no fresh same-session issue after uncertain revocation.
+- [x] Run local lifecycle tests plus existing `issue_and_deliver_test.exs`, `delivery_recovery_test.exs`, `lifecycle_test.exs`, and staging provider regressions; format/compile. Security evidence: token is fragment-only in the approved mailbox and old tokens never revive.
 
 ## 5. PR 5 — HTTPS local endpoint/activation secret accessor and source command lifetime
 
