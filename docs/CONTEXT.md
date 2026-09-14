@@ -12,6 +12,14 @@
 | No asistió | Estado de un turno que no fue atendido por ausencia del paciente. |
 | Sobreturno | Tipo o modalidad de turno, no un estado del ciclo de vida. Puede atravesar estados compatibles con el flujo del turno. |
 
+## Catálogo y agenda
+
+| Término | Definición |
+| --- | --- |
+| Tipo de consulta | Prestación perteneciente a un único Profesional, con identidad propia y una duración vigente derivada de su cantidad de Intervalos de agenda. |
+| Intervalo de agenda | Granularidad temporal propia de la agenda de un Profesional, expresada en minutos. No es la duración histórica de un turno ni el Período de reserva. |
+| Período | Ventana de anticipación futura durante la cual pueden reservarse turnos. No representa la granularidad de la agenda. |
+
 ## Cuentas de pacientes
 
 | Término | Definición |
