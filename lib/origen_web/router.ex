@@ -21,6 +21,8 @@ defmodule OrigenWeb.Router do
     get "/admin/activate", AdminActivationController, :new
     post "/admin/activate/exchange", AdminActivationController, :exchange
     post "/admin/activate", AdminActivationController, :create
+
+    live "/admin/internal", AdminInternalLive, :index
   end
 
   scope "/api/bootstrap", OrigenWeb do
