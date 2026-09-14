@@ -53,7 +53,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "professional", email: "invalid"})
         |> render_change()
 
-      assert html =~ "must be a valid email address"
+      assert html =~ "must be a valid email address without spaces"
     end
 
     test "shows validation error for missing role", %{conn: conn} do
@@ -66,7 +66,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "", email: "test@example.com"})
         |> render_change()
 
-      assert html =~ "can't be blank"
+      assert html =~ "can&#39;t be blank"
     end
 
     test "shows validation error for missing email", %{conn: conn} do
@@ -79,7 +79,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "professional", email: ""})
         |> render_change()
 
-      assert html =~ "can't be blank"
+      assert html =~ "can&#39;t be blank"
     end
 
     test "clears validation errors when input is corrected", %{conn: conn} do
@@ -92,14 +92,14 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "professional", email: "invalid"})
         |> render_change()
 
-      assert html =~ "must be a valid email address"
+      assert html =~ "must be a valid email address without spaces"
 
       html =
         view
         |> form("#admin-internal-form", form: %{role: "professional", email: "valid@example.com"})
         |> render_change()
 
-      refute html =~ "must be a valid email address"
+      refute html =~ "must be a valid email address without spaces"
     end
   end
 
@@ -129,7 +129,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "", email: ""})
         |> render_submit()
 
-      assert html =~ "can't be blank"
+      assert html =~ "can&#39;t be blank"
     end
 
     test "shows validation error for invalid email on submission", %{conn: conn} do
@@ -142,7 +142,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "professional", email: "invalid"})
         |> render_submit()
 
-      assert html =~ "must be a valid email address"
+      assert html =~ "must be a valid email address without spaces"
     end
   end
 
@@ -188,7 +188,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     session_user = Map.new(user, fn {k, v} -> {to_string(k), v} end)
 
     conn
-    |> Plug.Conn.fetch_session()
+    |> Plug.Test.init_test_session(%{})
     |> Plug.Conn.put_session(:current_user, session_user)
   end
 end
