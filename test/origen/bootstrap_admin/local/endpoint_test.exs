@@ -86,6 +86,48 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
     assert_receive :listener_stopped
   end
 
+  test "bounded slow startup can complete beyond the GenServer default call timeout" do
+    assert :ok =
+             Endpoint.start_session(local_config(),
+               startup_timeout: 6_000,
+               server_start: fn _options ->
+                 Process.sleep(5_100)
+                 {:ok, spawn(fn -> Process.sleep(:infinity) end)}
+               end,
+               secret_loader: fn ->
+                 {:ok, %{verifier_key: "secret", totp_keyring: :keyring}}
+               end
+             )
+
+    assert {:ok, "secret"} = Endpoint.fetch_secret(:verifier_key)
+  end
+
+  test "startup timeout owns and terminates a listener before returning" do
+    parent = self()
+
+    assert {:error, :local_endpoint_invalid} =
+             Endpoint.start_session(local_config(),
+               startup_timeout: 25,
+               server_start: fn _options ->
+                 listener = spawn_link(fn -> Process.sleep(:infinity) end)
+                 send(parent, {:listener_started, listener})
+                 Process.sleep(100)
+                 {:ok, listener}
+               end,
+               secret_loader: fn ->
+                 {:ok, %{verifier_key: "secret", totp_keyring: :keyring}}
+               end
+             )
+
+    assert_receive {:listener_started, listener}
+    refute Process.alive?(listener)
+    assert :inactive = :sys.get_state(Endpoint)
+    assert {:error, :secrets_unavailable} = Endpoint.fetch_secret(:verifier_key)
+    Process.sleep(100)
+    refute Process.alive?(listener)
+    assert :inactive = :sys.get_state(Endpoint)
+  end
+
   defp start_session(server, config \\ local_config()) do
     Endpoint.start_session(config,
       server_start: fn _ -> {:ok, server.()} end,
