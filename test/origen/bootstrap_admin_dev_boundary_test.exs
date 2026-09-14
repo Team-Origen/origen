@@ -1,5 +1,5 @@
 # Run under real dev compilation without loading the SQL Sandbox test helper.
-# MIX_ENV=dev mix run --no-start -e 'ExUnit.start(autorun: false); Code.require_file("test/origen/bootstrap_admin_dev_boundary_test.exs"); %{failures: failures} = ExUnit.run(); System.halt(if(failures == 0, do: 0, else: 1))'
+# ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true MIX_ENV=dev mix run --no-start -e 'ExUnit.start(autorun: false); Code.require_file("test/origen/bootstrap_admin_dev_boundary_test.exs"); %{failures: failures} = ExUnit.run(); System.halt(if(failures == 0, do: 0, else: 1))'
 if Mix.env() == :dev do
   defmodule Origen.BootstrapAdminDevBoundaryTest do
     use ExUnit.Case, async: false
@@ -101,6 +101,21 @@ if Mix.env() == :dev do
       {:ok, complete_config: complete_config}
     end
 
+    test "public task starts the application before calling the supervised local endpoint" do
+      Application.stop(:origen)
+      assert Process.whereis(Origen.BootstrapAdmin.Local.Endpoint) == nil
+
+      task =
+        spawn(fn ->
+          Mix.Task.reenable("origen.bootstrap_admin")
+          Mix.Task.run("origen.bootstrap_admin", [])
+        end)
+
+      on_exit(fn -> if Process.alive?(task), do: Process.exit(task, :kill) end)
+
+      assert eventually(fn -> Process.whereis(Origen.BootstrapAdmin.Local.Endpoint) != nil end)
+    end
+
     test "forbidden local argv is rejected before startup and downstream boundaries" do
       secret = "forbidden-local-argv-canary"
 
@@ -146,6 +161,18 @@ if Mix.env() == :dev do
       refute_receive :unexpected_startup
       refute_receive :unexpected_await
       refute output =~ "public-boundary-canary"
+    end
+
+    defp eventually(predicate, attempts \\ 50)
+    defp eventually(predicate, 0), do: predicate.()
+
+    defp eventually(predicate, attempts) do
+      if predicate.() do
+        true
+      else
+        Process.sleep(10)
+        eventually(predicate, attempts - 1)
+      end
     end
 
     defp capture_rejection(
