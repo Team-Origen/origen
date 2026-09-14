@@ -51,23 +51,48 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
     endpoint = Keyword.get(options, :local_endpoint, Origen.BootstrapAdmin.Local.Endpoint)
     endpoint_options = Keyword.get(options, :local_endpoint_options, [])
 
-    try do
-      case endpoint.start_session(ready, endpoint_options) do
-        :ok ->
-          local_options =
-            options
-            |> Keyword.put(:ready, ready)
-            |> Keyword.put_new(:command_runner, &execute_ready_local_command/3)
-
-          execute_command(args, channel, local_options)
-          endpoint.await()
-
-        {:error, _safe_reason} ->
-          Mix.raise("Bootstrap admin local endpoint was rejected")
-      end
-    after
-      endpoint.cleanup()
+    case Application.ensure_all_started(:origen) do
+      {:ok, _applications} -> :ok
+      {:error, _reason} -> Mix.raise("Bootstrap admin request was rejected")
     end
+
+    outcome =
+      try do
+        result =
+          case endpoint.start_session(ready, endpoint_options) do
+            :ok ->
+              local_options =
+                options
+                |> Keyword.put(:ready, ready)
+                |> Keyword.put_new(:command_runner, &execute_ready_local_command/3)
+
+              execute_command(args, channel, local_options)
+              endpoint.await()
+
+            {:error, _safe_reason} ->
+              Mix.raise("Bootstrap admin local endpoint was rejected")
+          end
+
+        {:ok, result}
+      catch
+        kind, reason -> {:error, kind, reason, __STACKTRACE__}
+      end
+
+    case outcome do
+      {:ok, result} ->
+        endpoint.cleanup()
+        result
+
+      {:error, kind, reason, stacktrace} ->
+        safe_cleanup(endpoint)
+        :erlang.raise(kind, reason, stacktrace)
+    end
+  end
+
+  defp safe_cleanup(endpoint) do
+    endpoint.cleanup()
+  catch
+    :exit, _reason -> :ok
   end
 
   defp execute_ready_local_command(args, channel, options) do
