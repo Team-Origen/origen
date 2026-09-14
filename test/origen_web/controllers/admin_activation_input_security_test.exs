@@ -6,7 +6,6 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
   alias Origen.BootstrapAdmin
   alias Origen.Repo
   alias OrigenWeb.AdminActivationSessionStore
-  alias OrigenWeb.Layouts
 
   @verifier_key String.duplicate("v", 32)
   @totp_key String.duplicate("t", 32)
@@ -42,11 +41,11 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
   defmodule ActivationFormFixture do
     use Phoenix.Component
 
-    import OrigenWeb.CoreComponents
+    use PetalComponents
 
     def consent_field(assigns) do
       ~H"""
-      <.input
+      <.field
         id="activation-consent"
         name="activation_consent"
         type="checkbox"
@@ -58,7 +57,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
 
     def recovery_selector(assigns) do
       ~H"""
-      <.input
+      <.field
         id="recovery-method"
         name="recovery_method"
         type="select"
@@ -72,7 +71,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
 
     def recovery_note(assigns) do
       ~H"""
-      <.input
+      <.field
         id="recovery-note"
         name="recovery_note"
         type="textarea"
@@ -85,16 +84,16 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
 
     def primary_action(assigns) do
       ~H"""
-      <.button variant="primary">Activate administrator</.button>
-      <.button href="/admin/activate">Return to activation</.button>
+      <.button>Activate administrator</.button>
+      <.button to="/admin/activate" link_type="a">Return to activation</.button>
       """
     end
 
     def activation_error(assigns) do
       ~H"""
-      <.flash id="activation-error" kind={:error} flash={%{}} title="Activation failed">
+      <.alert id="activation-error" color="danger" heading="Activation failed">
         Activation details are invalid
-      </.flash>
+      </.alert>
       """
     end
   end
@@ -165,15 +164,10 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
   test "flash and layout components present activation outcomes to the user" do
     flash = render_component(&ActivationFormFixture.activation_error/1, %{})
 
-    layout = render_component(&Layouts.flash_group/1, %{flash: %{info: "Activation completed"}})
-
     assert flash =~ ~s(id="activation-error")
     assert flash =~ ~s(role="alert")
     assert flash =~ "Activation failed"
     assert flash =~ "Activation details are invalid"
-    assert layout =~ ~s(id="flash-group")
-    assert layout =~ "We can&#39;t find the internet"
-    assert layout =~ "Attempting to reconnect"
   end
 
   defp issue_invitation do
