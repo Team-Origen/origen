@@ -2,9 +2,7 @@ name: CI Pipeline
 
 on:
   pull_request:
-    branches:
-      - main
-      - develop
+    types: [opened, synchronize, reopened, edited]
 
 jobs:
   validations:
@@ -16,8 +14,8 @@ jobs:
           BRANCH: ${{ github.head_ref }}
         run: |
           # La rama debe empezar con un tipo válido o ser un hotfix
-          if [[ ! "$BRANCH" =~ ^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)/.*$ ]] && [[ ! "$BRANCH" =~ ^hotfix/.*$ ]]; then
-            echo "Error: La rama debe cumplir con el estándar (ej. feat/1-scaffold-ci o hotfix/bug-urgente)."
+          if [[ ! "$BRANCH" =~ ^(feat|feature|fix|chore|docs|style|refactor|perf|test|build|ci|revert)/.*$ ]] && [[ ! "$BRANCH" =~ ^hotfix/.*$ ]]; then
+            echo "Error: La rama debe cumplir con el estándar (ej. feat/1-scaffold-ci, feature/mi-cambio o hotfix/bug-urgente)."
             exit 1
           fi
 
