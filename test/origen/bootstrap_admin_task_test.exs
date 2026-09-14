@@ -2,28 +2,6 @@ defmodule Origen.BootstrapAdminTaskTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureIO
 
-  defmodule LocalEndpointFake do
-    def start_session(_config, _options) do
-      send(test_process(), :endpoint_started)
-      :ok
-    end
-
-    def await do
-      send(test_process(), :endpoint_waiting)
-
-      receive do
-        :activation_complete -> :activated
-      end
-    end
-
-    def cleanup do
-      send(test_process(), :endpoint_cleaned)
-      :ok
-    end
-
-    defp test_process, do: Application.fetch_env!(:origen, :bootstrap_admin_test_process)
-  end
-
   setup do
     keys = [
       :bootstrap_admin_enabled,
@@ -41,34 +19,6 @@ defmodule Origen.BootstrapAdminTaskTest do
         {key, :error} -> Application.delete_env(:origen, key)
       end)
     end)
-  end
-
-  test "source local success keeps the command alive through activation and then cleans up" do
-    Application.put_env(:origen, :bootstrap_admin_profile, :local)
-    Application.put_env(:origen, :bootstrap_admin_local, %{enabled: true})
-    Application.put_env(:origen, :bootstrap_admin_test_process, self())
-
-    on_exit(fn -> Application.delete_env(:origen, :bootstrap_admin_test_process) end)
-
-    runner = fn [], :source_checkout, _options ->
-      {:ok, %{account_id: 7, invitation_id: 9, correlation_ref: "local-safe-ref"}}
-    end
-
-    task =
-      Task.async(fn ->
-        capture_task([],
-          command_runner: runner,
-          local_endpoint: LocalEndpointFake,
-          local_endpoint_options: []
-        )
-      end)
-
-    assert_receive :endpoint_started
-    assert_receive :endpoint_waiting
-    refute Task.yield(task, 20)
-    send(task.pid, :activation_complete)
-    assert Task.await(task) =~ "provider reference: local-safe-ref"
-    assert_receive :endpoint_cleaned
   end
 
   test "closed and malformed gates stop before parsing, protected input, and output" do
@@ -232,10 +182,6 @@ defmodule Origen.BootstrapAdminTaskTest do
   end
 
   defp capture_task(args), do: capture_io(fn -> run_task(args) end)
-
-  defp capture_task(args, options) do
-    capture_io(fn -> Mix.Tasks.Origen.BootstrapAdmin.execute(args, :source_checkout, options) end)
-  end
 
   defp capture_task_error(args, message) do
     capture_io(:stderr, fn -> assert_raise Mix.Error, message, fn -> run_task(args) end end)

@@ -105,12 +105,12 @@ defmodule Origen.BootstrapAdmin.Command do
 
     defp local_command(options),
       do: Keyword.get(options, :local_command, &local_unavailable/1)
+
+    defp local_unavailable(_parsed), do: {:error, :local_bootstrap_not_ready}
   else
     defp local_parser(_options), do: &parse_local_args/1
-    defp local_command(_options), do: &local_unavailable/1
+    defp local_command(_options), do: &Origen.BootstrapAdmin.Local.Command.run/1
   end
-
-  defp local_unavailable(_parsed), do: {:error, :local_bootstrap_not_ready}
 
   defp option_names(args) do
     args
