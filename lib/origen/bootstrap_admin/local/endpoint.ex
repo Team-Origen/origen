@@ -59,7 +59,14 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
                {:ok, server} <- start_server(server_options, opts),
                do: {:ok, server, secrets, ttl}
 
-        send(endpoint, {:startup_result, startup_ref, result})
+        case result do
+          {:ok, server, secrets, ttl} ->
+            Process.unlink(server)
+            send(endpoint, {:startup_result, startup_ref, {:ok, server, secrets, ttl}})
+
+          failure ->
+            send(endpoint, {:startup_result, startup_ref, failure})
+        end
       end)
 
     timer = Process.send_after(self(), {:startup_timeout, startup_ref}, timeout)
@@ -163,8 +170,12 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
     {:noreply, {:finished, :listener_failed}}
   end
 
-  defp listener_options(%{origin: %Origin{} = origin} = config),
-    do: listener_options(Map.put(config, :activation_origin, Origin.to_uri(origin)))
+  defp listener_options(%{origin: %Origin{} = origin} = config) do
+    config
+    |> Map.delete(:origin)
+    |> Map.put(:activation_origin, Origin.to_uri(origin))
+    |> listener_options()
+  end
 
   defp listener_options(%{
          activation_origin: origin,

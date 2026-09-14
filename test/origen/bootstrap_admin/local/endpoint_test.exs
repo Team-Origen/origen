@@ -128,6 +128,31 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
     assert :inactive = :sys.get_state(Endpoint)
   end
 
+  test "accepts configuration with structured Origin without infinite recursion" do
+    alias Origen.BootstrapAdmin.Local.Origin
+
+    {:ok, origin} =
+      Origin.validate("https://127.0.0.1:4443/admin/activate", %{
+        scheme: :https,
+        ip: {127, 0, 0, 1},
+        port: 4443,
+        http: false
+      })
+
+    config =
+      local_config()
+      |> Map.delete(:activation_origin)
+      |> Map.put(:origin, origin)
+
+    assert :ok =
+             Endpoint.start_session(config,
+               server_start: fn _ -> {:ok, spawn(fn -> Process.sleep(:infinity) end)} end,
+               secret_loader: fn -> {:ok, %{verifier_key: "secret", totp_keyring: :keyring}} end
+             )
+
+    assert {:ok, "secret"} = Endpoint.fetch_secret(:verifier_key)
+  end
+
   defp start_session(server, config \\ local_config()) do
     Endpoint.start_session(config,
       server_start: fn _ -> {:ok, server.()} end,
