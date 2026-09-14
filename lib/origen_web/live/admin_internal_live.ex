@@ -86,7 +86,9 @@ defmodule OrigenWeb.AdminInternalLive do
         <%!-- Result display --%>
         <div :if={@result} class="mb-6 p-4 rounded-lg border" role="status">
           <p :if={match?({:ok, _}, @result)} class="text-sm text-green-700 font-inter">
-            Cuenta creada exitosamente para {elem(@result, 1).email} como {role_label_text(elem(@result, 1).role)}.
+            Cuenta creada exitosamente para {elem(@result, 1).email} como {role_label_text(
+              elem(@result, 1).role
+            )}.
           </p>
           <p :if={match?({:error, _}, @result)} class="text-sm text-red-600 font-inter" role="alert">
             {error_message(elem(@result, 1))}
@@ -102,7 +104,10 @@ defmodule OrigenWeb.AdminInternalLive do
           class="space-y-6"
         >
           <div>
-            <label for="form_role" class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1">
+            <label
+              for="form_role"
+              class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
+            >
               Rol
             </label>
             <.input
@@ -116,7 +121,10 @@ defmodule OrigenWeb.AdminInternalLive do
           </div>
 
           <div>
-            <label for="form_email" class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1">
+            <label
+              for="form_email"
+              class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
+            >
               Correo electrónico
             </label>
             <.input
@@ -145,6 +153,9 @@ defmodule OrigenWeb.AdminInternalLive do
 
   defp error_message(:unauthorized), do: "No tiene permiso para realizar esta acción"
   defp error_message(:email_taken), do: "Ya existe una cuenta con este correo electrónico"
-  defp error_message(:invalid_request), do: "Solicitud inválida. Por favor verifique los datos del formulario."
+
+  defp error_message(:invalid_request),
+    do: "Solicitud inválida. Por favor verifique los datos del formulario."
+
   defp error_message(_reason), do: "Ocurrió un error al procesar la solicitud"
 end
