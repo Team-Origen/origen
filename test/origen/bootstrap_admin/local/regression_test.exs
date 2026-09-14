@@ -18,6 +18,10 @@ defmodule Origen.BootstrapAdmin.Local.RegressionTest do
     end
   end
 
+  defmodule SecretCache do
+    def fetch_secret(:verifier_key), do: {:ok, String.duplicate("k", 32)}
+  end
+
   setup do
     Repo.query!("DELETE FROM internal_account_invitations")
     Repo.query!("DELETE FROM internal_accounts")
@@ -36,7 +40,14 @@ defmodule Origen.BootstrapAdmin.Local.RegressionTest do
       MailboxStore.clear()
     end)
 
-    {:ok, opts: [config: config(), probes: probes(), mailbox: RecordingMailbox, test_pid: self()]}
+    {:ok,
+     opts: [
+       config: config(),
+       probes: probes(),
+       mailbox: RecordingMailbox,
+       secret_cache: SecretCache,
+       test_pid: self()
+     ]}
   end
 
   test "uncertain handoff revokes, recovery keeps the account, and stale tokens stay denied", %{
@@ -142,12 +153,12 @@ defmodule Origen.BootstrapAdmin.Local.RegressionTest do
       retention_owner: Origen.BootstrapAdmin.Local.Mailbox,
       retention_ttl_seconds: 60,
       max_messages: 1,
-      certificate_path: "cert",
-      certificate_key_path: "cert-key",
-      verifier_key_path: "verifier-key",
-      totp_key_path: "totp-key",
+      certificate_file: "cert",
+      certificate_key_file: "cert-key",
+      verifier_key_file: "verifier-key",
+      totp_key_file: "totp-key",
       totp_key_tag: "local-test",
-      database_name: "origen_test",
+      database_name: Repo.config()[:database],
       database_scope: :isolated_workstation
     }
   end

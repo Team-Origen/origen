@@ -8,7 +8,7 @@ defmodule Origen.BootstrapAdmin.Local.Command do
   alias Origen.Audit.{Events, Writer}
   alias Origen.BootstrapAdmin.Account
   alias Origen.BootstrapAdmin.Delivery
-  alias Origen.BootstrapAdmin.Local.{Authorization, Mailbox, MailboxStore, Secrets}
+  alias Origen.BootstrapAdmin.Local.{Authorization, Endpoint, Mailbox, MailboxStore}
 
   @spec run(map(), keyword()) :: {:ok, map()} | {:error, atom()} | {:error, atom(), map()}
   def run(parsed, opts \\ []) do
@@ -21,13 +21,17 @@ defmodule Origen.BootstrapAdmin.Local.Command do
     else
       with {:ok, destination, target} <- Authorization.authorize(opts),
            :ok <- validate_target_match(target, account_id),
-           {:ok, verifier_key} <- Secrets.get_verifier_key(),
+           {:ok, verifier_key} <- fetch_session_verifier(opts),
            {:ok, invitation} <- issue_or_reissue(target, verifier_key) do
         deliver_and_audit(invitation, destination, opts)
       else
         {:error, reason} -> {:error, reason}
       end
     end
+  end
+
+  defp fetch_session_verifier(opts) do
+    Keyword.get(opts, :secret_cache, Endpoint).fetch_secret(:verifier_key)
   end
 
   defp validate_target_match(nil, nil), do: :ok

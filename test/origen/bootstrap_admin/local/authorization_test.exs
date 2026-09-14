@@ -5,6 +5,8 @@ defmodule Origen.BootstrapAdmin.Local.AuthorizationTest do
   alias Origen.BootstrapAdmin.Local.Target
   alias Origen.Repo
 
+  # Authorization consumes the canonical readiness identity.
+
   setup do
     Repo.query!("DELETE FROM internal_account_invitations")
     Repo.query!("DELETE FROM internal_accounts")
@@ -52,6 +54,7 @@ defmodule Origen.BootstrapAdmin.Local.AuthorizationTest do
   test "denies authorization when shared database is detected" do
     # Simulating shared DB by changing the config name
     original = Repo.config()[:database]
+    config = valid_config()
 
     Application.put_env(
       :origen,
@@ -61,7 +64,7 @@ defmodule Origen.BootstrapAdmin.Local.AuthorizationTest do
 
     # Needs to restart or re-evaluate. Actually Repo.config/0 reads env.
     assert {:error, :shared_database} =
-             Authorization.authorize(config: valid_config(), probes: valid_probes())
+             Authorization.authorize(config: config, probes: valid_probes())
 
     Application.put_env(:origen, Origen.Repo, Keyword.put(Repo.config(), :database, original))
   end
@@ -108,12 +111,12 @@ defmodule Origen.BootstrapAdmin.Local.AuthorizationTest do
       retention_owner: Origen.BootstrapAdmin.Local.Mailbox,
       retention_ttl_seconds: 60,
       max_messages: 1,
-      certificate_path: "certificate-canary",
-      certificate_key_path: "certificate-key-canary",
-      verifier_key_path: "verifier-canary",
-      totp_key_path: "totp-canary",
+      certificate_file: "certificate-canary",
+      certificate_key_file: "certificate-key-canary",
+      verifier_key_file: "verifier-canary",
+      totp_key_file: "totp-canary",
       totp_key_tag: "local-totp",
-      database_name: "origen_dev",
+      database_name: Repo.config()[:database],
       database_scope: :isolated_workstation
     }
   end

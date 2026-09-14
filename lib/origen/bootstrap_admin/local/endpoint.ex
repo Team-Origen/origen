@@ -29,8 +29,11 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
   @impl true
   def handle_call({:start_session, config, opts}, _from, state)
       when state == :inactive or elem(state, 0) == :finished do
+    MailboxStore.clear()
+    AdminActivationSessionStore.clear()
+
     with {:ok, server_options, ttl} <- listener_options(config),
-         {:ok, secrets} <- load_secrets(opts),
+         {:ok, secrets} <- load_secrets(config, opts),
          {:ok, server} <- start_server(server_options, opts) do
       session_ref = make_ref()
       timer = Process.send_after(self(), {:expire, session_ref}, ttl * 1_000)
@@ -79,6 +82,9 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
     {:noreply, {:finished, :listener_failed}}
   end
 
+  defp listener_options(%{origin: %Origin{} = origin} = config),
+    do: listener_options(Map.put(config, :activation_origin, Origin.to_uri(origin)))
+
   defp listener_options(%{
          activation_origin: origin,
          endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: port, http: false} = endpoint,
@@ -86,8 +92,8 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
          certificate_key_file: keyfile,
          retention_ttl_seconds: ttl
        })
-       when is_integer(port) and port in 1..65_535 and is_integer(ttl) and
-              ttl in 1..900 and is_binary(certfile) and is_binary(keyfile) do
+       when is_integer(port) and port in 1..65_535 and is_integer(ttl) and ttl in 1..900 and
+              is_binary(certfile) and is_binary(keyfile) do
     with {:ok, _exact_origin} <- Origin.validate(origin, endpoint) do
       {:ok,
        [
@@ -103,11 +109,11 @@ defmodule Origen.BootstrapAdmin.Local.Endpoint do
 
   defp listener_options(_config), do: {:error, :invalid_listener}
 
-  defp load_secrets(opts) do
+  defp load_secrets(ready, opts) do
     loader =
       Keyword.get(opts, :secret_loader, fn ->
-        with {:ok, verifier_key} <- Secrets.get_verifier_key(),
-             {:ok, totp_keyring} <- Secrets.get_totp_keyring(),
+        with {:ok, verifier_key} <- Secrets.get_verifier_key(ready),
+             {:ok, totp_keyring} <- Secrets.get_totp_keyring(ready),
              do: {:ok, %{verifier_key: verifier_key, totp_keyring: totp_keyring}}
       end)
 

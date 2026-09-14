@@ -1,4 +1,4 @@
-# Run under real dev compilation without loading the SQL Sandbox test helper:
+# Run under real dev compilation without loading the SQL Sandbox test helper.
 # MIX_ENV=dev mix run --no-start -e 'ExUnit.start(autorun: false); Code.require_file("test/origen/bootstrap_admin_dev_boundary_test.exs"); %{failures: failures} = ExUnit.run(); System.halt(if(failures == 0, do: 0, else: 1))'
 if Mix.env() == :dev do
   defmodule Origen.BootstrapAdminDevBoundaryTest do
@@ -78,10 +78,10 @@ if Mix.env() == :dev do
         retention_owner: Origen.BootstrapAdmin.Local.Mailbox,
         retention_ttl_seconds: 60,
         max_messages: 1,
-        certificate_path: certificate,
-        certificate_key_path: certificate_key,
-        verifier_key_path: verifier_key,
-        totp_key_path: totp_key,
+        certificate_file: certificate,
+        certificate_key_file: certificate_key,
+        verifier_key_file: verifier_key,
+        totp_key_file: totp_key,
         totp_key_tag: "local-totp",
         database_name: "origen_dev",
         database_scope: :isolated_workstation
@@ -134,7 +134,7 @@ if Mix.env() == :dev do
     test "incomplete readiness denies before startup and command execution", %{
       complete_config: config
     } do
-      Application.put_env(:origen, :bootstrap_admin_local, Map.delete(config, :verifier_key_path))
+      Application.put_env(:origen, :bootstrap_admin_local, Map.delete(config, :verifier_key_file))
 
       output =
         capture_rejection(

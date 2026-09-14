@@ -36,8 +36,8 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
 
     with :ok <- apply(Eligibility, :check, [channel]),
          {:ok, _parsed} <- Command.parse_local_args(args),
-         {:ok, _ready} <- Readiness.inspect(config) do
-      start_local_session(args, channel, config, options)
+         {:ok, ready} <- Readiness.inspect(config) do
+      start_local_session(args, channel, ready, options)
     else
       {:error, :invalid_arguments} ->
         Mix.raise("Bootstrap admin received invalid command-line arguments")
@@ -47,14 +47,19 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
     end
   end
 
-  defp start_local_session(args, channel, config, options) do
+  defp start_local_session(args, channel, ready, options) do
     endpoint = Keyword.get(options, :local_endpoint, Origen.BootstrapAdmin.Local.Endpoint)
     endpoint_options = Keyword.get(options, :local_endpoint_options, [])
 
     try do
-      case endpoint.start_session(config, endpoint_options) do
+      case endpoint.start_session(ready, endpoint_options) do
         :ok ->
-          execute_command(args, channel, options)
+          local_options =
+            options
+            |> Keyword.put(:ready, ready)
+            |> Keyword.put_new(:command_runner, &execute_ready_local_command/3)
+
+          execute_command(args, channel, local_options)
           endpoint.await()
 
         {:error, _safe_reason} ->
@@ -62,6 +67,13 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
       end
     after
       endpoint.cleanup()
+    end
+  end
+
+  defp execute_ready_local_command(args, channel, options) do
+    with :ok <- apply(Eligibility, :check, [channel]),
+         {:ok, parsed} <- Command.parse_local_args(args) do
+      Origen.BootstrapAdmin.Local.Command.run(parsed, options)
     end
   end
 
