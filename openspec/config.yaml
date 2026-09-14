@@ -67,6 +67,8 @@ rules:
   tasks:
     - Group work into hierarchical, reviewable units no larger than the 400-line review budget when practical.
     - Keep tests and implementation in the same work unit.
+    - Require every implementation GitHub subissue for an OpenSpec change to declare the change name, repository-relative change path, and specific implementation slice or scope.
+    - Require each change's proposal.md to maintain reverse GitHub subissue references under a Tracking section; one change may map to multiple subissues.
   apply:
     guidelines:
       - Follow existing Phoenix, Ecto, and formatter conventions.
