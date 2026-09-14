@@ -17,8 +17,8 @@ defmodule OrigenWeb.AdminInternalLive do
   }
 
   @impl true
-  def mount(_params, _session, socket) do
-    current_user = socket.assigns[:current_user]
+  def mount(_params, session, socket) do
+    current_user = session["current_user"]
 
     {:ok,
      socket
@@ -61,8 +61,10 @@ defmodule OrigenWeb.AdminInternalLive do
   end
 
   defp allowed_roles_for(%{role: :administrator}), do: [:professional, :secretary]
-  defp allowed_roles_for(nil), do: [:professional, :secretary]
-  defp allowed_roles_for(_), do: [:secretary]
+  defp allowed_roles_for(%{"role" => "administrator"}), do: [:professional, :secretary]
+  defp allowed_roles_for(%{role: :secretary}), do: [:secretary]
+  defp allowed_roles_for(%{"role" => "secretary"}), do: [:secretary]
+  defp allowed_roles_for(_), do: []
 
   defp role_label(:professional), do: "Profesional"
   defp role_label(:secretary), do: "Secretaría"

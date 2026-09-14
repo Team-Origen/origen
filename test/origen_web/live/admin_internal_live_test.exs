@@ -13,7 +13,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   describe "mount/3" do
     test "renders the form with role and email fields", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
@@ -24,7 +24,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows both professional and secretary options for administrator", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
@@ -33,7 +33,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows only secretary option for non-administrator", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 2, role: :secretary})
+      conn = put_user_in_session(conn, %{id: 2, role: :secretary})
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
@@ -44,7 +44,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   describe "validate event" do
     test "shows validation error for invalid email", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -57,7 +57,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows validation error for missing role", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -70,7 +70,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows validation error for missing email", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -83,7 +83,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "clears validation errors when input is corrected", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -105,7 +105,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   describe "save event" do
     test "shows success result on valid submission", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -120,7 +120,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows validation errors on invalid submission", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -133,7 +133,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows validation error for invalid email on submission", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -148,7 +148,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   describe "styling" do
     test "form container has specified styling", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
@@ -159,7 +159,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "inputs have specified styling", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
@@ -172,7 +172,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "submit button has specified styling", %{conn: conn} do
-      conn = assign_current_user(conn, %{id: 1, role: :administrator})
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
@@ -184,7 +184,8 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
   end
 
-  defp assign_current_user(conn, user) do
-    Plug.Conn.assign(conn, :current_user, user)
+  defp put_user_in_session(conn, user) do
+    session_user = Map.new(user, fn {k, v} -> {to_string(k), v} end)
+    Plug.Conn.put_session(conn, :current_user, session_user)
   end
 end
