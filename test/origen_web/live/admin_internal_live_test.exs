@@ -186,6 +186,9 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   defp put_user_in_session(conn, user) do
     session_user = Map.new(user, fn {k, v} -> {to_string(k), v} end)
-    Plug.Conn.put_session(conn, :current_user, session_user)
+
+    conn
+    |> Plug.Conn.fetch_session()
+    |> Plug.Conn.put_session(:current_user, session_user)
   end
 end
