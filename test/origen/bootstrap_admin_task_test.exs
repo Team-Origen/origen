@@ -2,14 +2,73 @@ defmodule Origen.BootstrapAdminTaskTest do
   use ExUnit.Case, async: false
   import ExUnit.CaptureIO
 
+  defmodule LocalEndpointFake do
+    def start_session(_config, _options) do
+      send(test_process(), :endpoint_started)
+      :ok
+    end
+
+    def await do
+      send(test_process(), :endpoint_waiting)
+
+      receive do
+        :activation_complete -> :activated
+      end
+    end
+
+    def cleanup do
+      send(test_process(), :endpoint_cleaned)
+      :ok
+    end
+
+    defp test_process, do: Application.fetch_env!(:origen, :bootstrap_admin_test_process)
+  end
+
   setup do
-    enabled = Application.get_env(:origen, :bootstrap_admin_enabled)
-    command_options = Application.get_env(:origen, :bootstrap_admin_command_options)
+    keys = [
+      :bootstrap_admin_enabled,
+      :bootstrap_admin_profile,
+      :bootstrap_admin_local_enabled,
+      :bootstrap_admin_local,
+      :bootstrap_admin_command_options
+    ]
+
+    previous = Map.new(keys, &{&1, Application.fetch_env(:origen, &1)})
 
     on_exit(fn ->
-      restore(:bootstrap_admin_enabled, enabled)
-      restore(:bootstrap_admin_command_options, command_options)
+      Enum.each(previous, fn
+        {key, {:ok, value}} -> Application.put_env(:origen, key, value)
+        {key, :error} -> Application.delete_env(:origen, key)
+      end)
     end)
+  end
+
+  test "source local success keeps the command alive through activation and then cleans up" do
+    Application.put_env(:origen, :bootstrap_admin_profile, :local)
+    Application.put_env(:origen, :bootstrap_admin_local, %{enabled: true})
+    Application.put_env(:origen, :bootstrap_admin_test_process, self())
+
+    on_exit(fn -> Application.delete_env(:origen, :bootstrap_admin_test_process) end)
+
+    runner = fn [], :source_checkout, _options ->
+      {:ok, %{account_id: 7, invitation_id: 9, correlation_ref: "local-safe-ref"}}
+    end
+
+    task =
+      Task.async(fn ->
+        capture_task([],
+          command_runner: runner,
+          local_endpoint: LocalEndpointFake,
+          local_endpoint_options: []
+        )
+      end)
+
+    assert_receive :endpoint_started
+    assert_receive :endpoint_waiting
+    refute Task.yield(task, 20)
+    send(task.pid, :activation_complete)
+    assert Task.await(task) =~ "provider reference: local-safe-ref"
+    assert_receive :endpoint_cleaned
   end
 
   test "closed and malformed gates stop before parsing, protected input, and output" do
@@ -26,6 +85,73 @@ defmodule Origen.BootstrapAdminTaskTest do
       output = capture_task_error(["--token", secret], "Bootstrap admin is disabled")
 
       refute output =~ secret
+    end
+  end
+
+  test "local selection in compiled test denies before parser and every downstream seam" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_profile, :local)
+    Application.put_env(:origen, :bootstrap_admin_local_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_local, %{enabled: true})
+
+    Application.put_env(:origen, :bootstrap_admin_command_options,
+      local_parser: fn _ -> flunk("local parser called") end,
+      local_command: fn _ -> flunk("local command called") end,
+      approval_reader: fn _ -> flunk("staging protected input called") end,
+      orchestrator: fn _, _ -> flunk("Repo/token/delivery seam called") end
+    )
+
+    secret = "local-secret-argv-canary"
+    output = capture_task_error(["--token", secret], "Bootstrap admin request was rejected")
+    refute output =~ secret
+  end
+
+  test "unknown trusted selector denies without trying staging" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_profile, :unknown)
+
+    Application.put_env(:origen, :bootstrap_admin_command_options,
+      approval_reader: fn _ -> flunk("staging fallback called") end,
+      orchestrator: fn _, _ -> flunk("staging fallback called") end
+    )
+
+    assert capture_task_error([], "Bootstrap admin request was rejected") == ""
+  end
+
+  test "profile and delivery selection cannot be supplied in argv" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_profile, :staging)
+
+    Application.put_env(:origen, :bootstrap_admin_command_options,
+      approval_reader: fn _ -> flunk("protected input read") end
+    )
+
+    for argv <- [
+          ["--profile", "local"],
+          ["--destination", "student@example.test"],
+          ["--adapter", "Elixir.Swoosh.Adapters.Local"]
+        ] do
+      capture_task_error(argv, "Bootstrap admin received invalid command-line arguments")
+    end
+  end
+
+  test "local reference-only parser accepts only empty argv or one positive account id" do
+    alias Origen.BootstrapAdmin.Command
+
+    assert Command.parse_local_args([]) == {:ok, %{account_id: nil}}
+    assert Command.parse_local_args(["--account-id", "17"]) == {:ok, %{account_id: 17}}
+    assert Command.parse_local_args(["--account-id=19"]) == {:ok, %{account_id: 19}}
+
+    for argv <- [
+          ["--account-id", "0"],
+          ["--account-id", "1", "--account-id", "2"],
+          ["--account-id=1", "--account-id=2"],
+          ["--profile", "local"],
+          ["--token", "secret-canary"],
+          ["--url", "https://127.0.0.1/secret-canary"],
+          ["extra"]
+        ] do
+      assert Command.parse_local_args(argv) == {:error, :invalid_arguments}
     end
   end
 
@@ -106,6 +232,10 @@ defmodule Origen.BootstrapAdminTaskTest do
   end
 
   defp capture_task(args), do: capture_io(fn -> run_task(args) end)
+
+  defp capture_task(args, options) do
+    capture_io(fn -> Mix.Tasks.Origen.BootstrapAdmin.execute(args, :source_checkout, options) end)
+  end
 
   defp capture_task_error(args, message) do
     capture_io(:stderr, fn -> assert_raise Mix.Error, message, fn -> run_task(args) end end)

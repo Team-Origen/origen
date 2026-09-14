@@ -4,9 +4,18 @@ defmodule Origen.Authorization.Rules do
   alias Origen.Authorization.Request
 
   @roles [:administrator, :professional, :secretary, :patient]
-  @channels [:deployment, :deployment_approval, :invitation, :system, :public_possession]
+  @channels [
+    :deployment,
+    :deployment_approval,
+    :invitation,
+    :system,
+    :public_possession,
+    :local_profile
+  ]
   @subjects Enum.map(@roles, &{:role, &1}) ++ Enum.map(@channels, &{:channel, &1})
   @bootstrap_operations [
+    :bootstrap_local_first_administrator,
+    :reissue_local_first_administrator,
     :approve_bootstrap_invitation,
     :bootstrap_first_administrator,
     :reissue_internal_invitation,
@@ -14,6 +23,25 @@ defmodule Origen.Authorization.Rules do
   ]
 
   @rules [
+           {:loc_01, :bootstrap_local_first_administrator, {:channel, :local_profile},
+            :not_applicable, %{administrator_exists: false},
+            %{
+              profile: :dev,
+              readiness: :ready,
+              destination: :example_test,
+              database: :isolated,
+              account: :none
+            }},
+           {:loc_02, :reissue_local_first_administrator, {:channel, :local_profile},
+            :not_applicable, %{role: :administrator, state: :pending_activation},
+            %{
+              profile: :dev,
+              readiness: :ready,
+              destination: :example_test,
+              database: :isolated,
+              active_administrator_exists: false,
+              account: :sole_pending
+            }},
            {:apr_01, :approve_bootstrap_invitation, {:channel, :deployment_approval},
             :not_applicable, %{distinct_principals: true},
             %{
@@ -87,17 +115,24 @@ defmodule Origen.Authorization.Rules do
     Enum.find_value(@rules, {:deny, :no_matching_rule}, fn
       {id, operation, subject, state, target, scope} ->
         if request.operation == {:known, operation} and request.subject == {:known, subject} and
-             fact_matches?(request.account_state, state) and fact_matches?(request.target, target) and
-             fact_matches?(request.scope, scope),
+             fact_matches?(id, request.account_state, state) and
+             fact_matches?(id, request.target, target) and
+             fact_matches?(id, request.scope, scope),
            do: {:allow, id}
     end)
   end
 
-  defp fact_matches?(:not_applicable, :not_applicable), do: true
-  defp fact_matches?({:known, value}, expected) when not is_map(expected), do: value == expected
+  defp fact_matches?(_id, :not_applicable, :not_applicable), do: true
 
-  defp fact_matches?({:known, facts}, required) when is_map(facts) and is_map(required),
+  defp fact_matches?(_id, {:known, value}, expected) when not is_map(expected),
+    do: value == expected
+
+  defp fact_matches?(id, {:known, facts}, required)
+       when id in [:loc_01, :loc_02] and is_map(facts) and is_map(required),
+       do: facts == required
+
+  defp fact_matches?(_id, {:known, facts}, required) when is_map(facts) and is_map(required),
     do: Map.take(facts, Map.keys(required)) == required
 
-  defp fact_matches?(_fact, _expected), do: false
+  defp fact_matches?(_id, _fact, _expected), do: false
 end

@@ -33,19 +33,19 @@ Chain strategy: pending
 
 ### 1.1 RED — Entry-point and configuration denial contracts
 
-- [ ] Add focused tests at `test/origen/bootstrap_admin_task_test.exs`, `test/origen/bootstrap_admin_release_test.exs`, and a new `test/origen/bootstrap_admin/local/eligibility_test.exs` for shared-gate-first ordering; local gate/profile malformed or false; compiled `:dev`/`:test`/`:prod`; unknown profile; local-looking release configuration; forbidden/duplicate local argv; and no parser, Repo, endpoint, mailbox, secret, token, or output seam after denial.
-- [ ] Capture behavioral RED failures with the focused `mix test` command; use spies/canaries that prove secret-bearing arguments never reach a sink.
+- [x] Add focused tests at `test/origen/bootstrap_admin_task_test.exs`, `test/origen/bootstrap_admin_release_test.exs`, and a new `test/origen/bootstrap_admin/local/eligibility_test.exs` for shared-gate-first ordering; local gate/profile malformed or false; compiled `:dev`/`:test`/`:prod`; unknown profile; local-looking release configuration; forbidden/duplicate local argv; and no parser, Repo, endpoint, mailbox, secret, token, or output seam after denial.
+- [x] Capture behavioral RED failures with the focused `mix test` command; use spies/canaries that prove secret-bearing arguments never reach a sink.
 
 ### 1.2 GREEN — Add trusted local dispatch and defaults
 
-- [ ] Update `config/config.exs`, `config/dev.exs`, `config/runtime.exs`, and `config/dev.local.example.exs` with a default staging selector, `false` local gate/map, ignored placeholder-only development contract, and production hard-disablement; include no secret values or guide edits.
-- [ ] Update `lib/origen/bootstrap_admin/command.ex`, `lib/mix/tasks/origen.bootstrap_admin.ex`, and `lib/origen/release.ex`; add `lib/origen/bootstrap_admin/local/eligibility.ex` so the shared gate precedes selector read, local eligibility precedes argv parsing, source checkout is internal-only, and release dispatch always denies local.
-- [ ] Keep staging branch behavior unchanged and do not add `--profile`, destination, origin, adapter, key, token, or URL arguments.
+- [x] Update `config/config.exs`, `config/dev.exs`, `config/runtime.exs`, and `config/dev.local.example.exs` with a default staging selector, `false` local gate/map, ignored placeholder-only development contract, and production hard-disablement; include no secret values or guide edits.
+- [x] Update `lib/origen/bootstrap_admin/command.ex`, `lib/mix/tasks/origen.bootstrap_admin.ex`, and `lib/origen/release.ex`; add `lib/origen/bootstrap_admin/local/eligibility.ex` so the shared gate precedes selector read, local eligibility precedes argv parsing, source checkout is internal-only, and release dispatch always denies local.
+- [x] Keep staging branch behavior unchanged and do not add `--profile`, destination, origin, adapter, key, token, or URL arguments.
 
 ### 1.3 TRIANGULATE / REFACTOR — Prove no fallback or release exposure
 
-- [ ] Add table cases for exact booleans, copied local config in release/test, conflicting selectors, and extra/secret argv; assert selected-path denial never tries staging and safe results contain references/fixed atoms only.
-- [ ] Run the focused tests plus existing staging task/release regressions; format/compile. Security evidence: local policy remains unreachable in packaged releases and before protected access.
+- [x] Add table cases for exact booleans, copied local config in release/test, conflicting selectors, and extra/secret argv; assert selected-path denial never tries staging and safe results contain references/fixed atoms only.
+- [x] Run the focused tests plus existing staging task/release regressions; format/compile. Security evidence: local policy remains unreachable in packaged releases and before protected access.
 
 ## 2. PR 2 — Aggregate readiness and typed local inputs
 
@@ -53,19 +53,19 @@ Chain strategy: pending
 
 ### 2.1 RED — Readiness, destination, and origin contracts
 
-- [ ] Create `test/origen/bootstrap_admin/local/{readiness,destination,origin}_test.exs` for aggregate sorted/deduplicated finding codes, metadata-only key probes, redacted inspection, exact lowercase ASCII `example.test` address, and literal `https://127.0.0.1:<port>/admin/activate` validation.
-- [ ] Cover case/Unicode, multiple addresses/`@`, suffix/real domain, controls/header syntax, unsafe endpoint binds, HTTP/second listener, alternate port/path/query/fragment/userinfo, invalid certificate metadata, retention outside 1..900, and incorrect adapter/preview identities.
-- [ ] Record RED evidence that invalid readiness performs no Repo, secret-content fetch, application start, mailbox access, message construction, token generation, or output.
+- [x] Create `test/origen/bootstrap_admin/local/{readiness,destination,origin}_test.exs` for aggregate sorted/deduplicated finding codes, metadata-only key probes, redacted inspection, exact lowercase ASCII `example.test` address, and literal `https://127.0.0.1:<port>/admin/activate` validation.
+- [x] Cover case/Unicode, multiple addresses/`@`, suffix/real domain, controls/header syntax, unsafe endpoint binds, HTTP/second listener, alternate port/path/query/fragment/userinfo, invalid certificate metadata, retention outside 1..900, and incorrect adapter/preview identities.
+- [x] Record RED evidence that invalid readiness performs no Repo, secret-content fetch, application start, mailbox access, message construction, token generation, or output.
 
 ### 2.2 GREEN — Isolated pure validators
 
-- [ ] Add `lib/origen/bootstrap_admin/local/{readiness,destination,origin}.ex` and typed/redacted structs; add only metadata probing for certificate/key sources and fixed sanitized finding atoms.
-- [ ] Validate one scalar configured destination, exact endpoint/origin tuple, reviewed local mailbox stack, TTL/max-message contract, isolated database declaration/name syntax, and protected-source availability without reading contents.
+- [x] Add `lib/origen/bootstrap_admin/local/{readiness,destination,origin}.ex` and typed/redacted structs; add only metadata probing for certificate/key sources and fixed sanitized finding atoms.
+- [x] Validate one scalar configured destination, exact endpoint/origin tuple, reviewed local mailbox stack, TTL/max-message contract, isolated database declaration/name syntax, and protected-source availability without reading contents.
 
 ### 2.3 TRIANGULATE / REFACTOR — Preserve the staging trust boundary
 
-- [ ] Inject probe dependencies below runtime eligibility and test exception normalization plus TOCTOU-ready metadata changes; verify no configured value appears in errors or `Inspect`.
-- [ ] Run local validator tests and existing `delivery_config_test.exs`, `provider_test.exs`, `approval_verifier_test.exs`, and `origin_test.exs` unchanged. Security evidence: staging still rejects Local/Test/mailbox adapters and loopback origins.
+- [x] Inject probe dependencies below runtime eligibility and test exception normalization plus TOCTOU-ready metadata changes; verify no configured value appears in errors or `Inspect`.
+- [x] Run local validator tests and existing `delivery_config_test.exs`, `provider_test.exs`, `approval_verifier_test.exs`, and `origin_test.exs` unchanged. Security evidence: staging still rejects Local/Test/mailbox adapters and loopback origins.
 
 ## 3. PR 3 — Exact local authorization, target facts, and deferred secret access
 
@@ -73,20 +73,20 @@ Chain strategy: pending
 
 ### 3.1 RED — Initial/recovery default-deny contracts
 
-- [ ] Add `test/origen/bootstrap_admin/local/{authorization,target,secrets}_test.exs` and extend `test/origen/bootstrap_admin/authorization_audit_test.exs` for `:bootstrap_local_first_administrator` and `:reissue_local_first_administrator` exact-map matching.
-- [ ] Exercise each missing, additional, staging-shaped, deployment-approved, wrong channel/environment/gate/profile/readiness/destination/database fact; shared database; active/multiple/wrong pending account; non-positive/mismatched account id; retained mailbox; and handoff state other than `:revoked_or_uncertain`.
-- [ ] Capture RED evidence that denial causes no target mutation, account/invitation write, audit-business effect, or secret file-content read.
+- [x] Add `test/origen/bootstrap_admin/local/{authorization,target,secrets}_test.exs` and extend `test/origen/bootstrap_admin/authorization_audit_test.exs` for `:bootstrap_local_first_administrator` and `:reissue_local_first_administrator` exact-map matching.
+- [x] Exercise each missing, additional, staging-shaped, deployment-approved, wrong channel/environment/gate/profile/readiness/destination/database fact; shared database; active/multiple/wrong pending account; non-positive/mismatched account id; retained mailbox; and handoff state other than `:revoked_or_uncertain`.
+- [x] Capture RED evidence that denial causes no target mutation, account/invitation write, audit-business effect, or secret file-content read.
 
 ### 3.2 GREEN — Local facts, read-only target inspection, and cache
 
-- [ ] Update `lib/origen/authorization/rules.ex` only to add narrow local operations and exact-map matching for those operations; add `lib/origen/bootstrap_admin/local/{authorization,target,secrets}.ex` and the smallest shared `BootstrapSecrets` accessor only if activation needs it.
-- [ ] Establish database isolation from exact configuration plus read-only `current_database()`/local-connection and account-state facts; allow initial absent target or the sole qualifying recovery target only.
-- [ ] Implement post-authorization, bounded, no-symlink recheck/read/decode/cache of verifier/TOTP files, generic safe failures, and cache disposal hooks; never return/inspect/log key contents.
+- [x] Update `lib/origen/authorization/rules.ex` only to add narrow local operations and exact-map matching for those operations; add `lib/origen/bootstrap_admin/local/{authorization,target,secrets}.ex` and the smallest shared `BootstrapSecrets` accessor only if activation needs it.
+- [x] Establish database isolation from exact configuration plus read-only `current_database()`/local-connection and account-state facts; allow initial absent target or the sole qualifying recovery target only.
+- [x] Implement post-authorization, bounded, no-symlink recheck/read/decode/cache of verifier/TOTP files, generic safe failures, and cache disposal hooks; never return/inspect/log key contents.
 
 ### 3.3 TRIANGULATE / REFACTOR — Challenge authority and secret timing
 
-- [ ] Test TOCTOU replacement, malformed key material, cache cleanup, and authorization fact permutations; prove the recovery rule invokes no account creation authority and staging authorization remains unchanged.
-- [ ] Run local authorization/secret tests plus existing authorization, account, and staging approval regressions; format/compile. Security evidence: no staged approval is fabricated and protected values remain unavailable before allow.
+- [x] Test TOCTOU replacement, malformed key material, cache cleanup, and authorization fact permutations; prove the recovery rule invokes no account creation authority and staging authorization remains unchanged.
+- [x] Run local authorization/secret tests plus existing authorization, account, and staging approval regressions; format/compile. Security evidence: no staged approval is fabricated and protected values remain unavailable before allow.
 
 ## 4. PR 4 — Same-VM bounded mailbox, local lifecycle, and compensation
 
@@ -94,20 +94,20 @@ Chain strategy: pending
 
 ### 4.1 RED — Retention and compensation behavior
 
-- [ ] Create `test/origen/bootstrap_admin/local/{mailbox,command,lifecycle}_test.exs` with fake clock/store for one submission, one message, TTL ≤900 seconds, initialization/restart/shutdown clear, expiry removal before revocation, crash between store/ack, handoff/audit/builder exceptions, and no retry.
-- [ ] Cover initial issue serialization, handoff failure/uncertainty revocation, revoked-token activation denial, and recovery that repeats eligibility/readiness/authorization and uses `Account.reissue_first/2` for the same account/new token.
-- [ ] Capture RED evidence that email/message/token/body/destination are never returned, logged, audited, or asserted in output; only safe correlation/account/invitation references may cross the boundary.
+- [x] Create `test/origen/bootstrap_admin/local/{mailbox,command,lifecycle}_test.exs` with fake clock/store for one submission, one message, TTL ≤900 seconds, initialization/restart/shutdown clear, expiry removal before revocation, crash between store/ack, handoff/audit/builder exceptions, and no retry.
+- [x] Cover initial issue serialization, handoff failure/uncertainty revocation, revoked-token activation denial, and recovery that repeats eligibility/readiness/authorization and uses `Account.reissue_first/2` for the same account/new token.
+- [x] Capture RED evidence that email/message/token/body/destination are never returned, logged, audited, or asserted in output; only safe correlation/account/invitation references may cross the boundary.
 
 ### 4.2 GREEN — Local coordinator and orchestration
 
-- [ ] Add `lib/origen/bootstrap_admin/local/{mailbox,mailbox_store,invitation_email,command}.ex` and, only as necessary, local supervision in `lib/origen/application.ex` for a dedicated in-memory coordinator and secret cache.
-- [ ] Verify locked Swoosh Local APIs behind `MailboxStore`; if they cannot identify/clear bounded messages atomically, implement the reviewed bounded in-memory store instead of accepting unbounded storage. Keep it local-only and same-VM.
-- [ ] Reuse `Account.issue_first/1`, `Account.reissue_first/2`, and `Delivery.revoke_delivery_failure/2`; append only existing safe handoff/failure evidence and fail closed if revocation/audit cannot be proved. Do not alter staging provider/configuration modules.
+- [x] Add `lib/origen/bootstrap_admin/local/{mailbox,mailbox_store,invitation_email,command}.ex` and, only as necessary, local supervision in `lib/origen/application.ex` for a dedicated in-memory coordinator and secret cache.
+- [x] Verify locked Swoosh Local APIs behind `MailboxStore`; if they cannot identify/clear bounded messages atomically, implement the reviewed bounded in-memory store instead of accepting unbounded storage. Keep it local-only and same-VM.
+- [x] Reuse `Account.issue_first/1`, `Account.reissue_first/2`, and `Delivery.revoke_delivery_failure/2`; append only existing safe handoff/failure evidence and fail closed if revocation/audit cannot be proved. Do not alter staging provider/configuration modules.
 
 ### 4.3 TRIANGULATE / REFACTOR — Race and retention proof
 
-- [ ] Test consume-versus-expiry/revocation races, retained-message recovery denial, coordinator restart, audit failure, and safe cleanup after activation/operator termination; prove at most one token-bearing message and no fresh same-session issue after uncertain revocation.
-- [ ] Run local lifecycle tests plus existing `issue_and_deliver_test.exs`, `delivery_recovery_test.exs`, `lifecycle_test.exs`, and staging provider regressions; format/compile. Security evidence: token is fragment-only in the approved mailbox and old tokens never revive.
+- [x] Test consume-versus-expiry/revocation races, retained-message recovery denial, coordinator restart, audit failure, and safe cleanup after activation/operator termination; prove at most one token-bearing message and no fresh same-session issue after uncertain revocation.
+- [x] Run local lifecycle tests plus existing `issue_and_deliver_test.exs`, `delivery_recovery_test.exs`, `lifecycle_test.exs`, and staging provider regressions; format/compile. Security evidence: token is fragment-only in the approved mailbox and old tokens never revive.
 
 ## 5. PR 5 — HTTPS local endpoint/activation secret accessor and source command lifetime
 
