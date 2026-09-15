@@ -6,10 +6,21 @@ defmodule Origen.BootstrapAdminReleaseTest do
   alias Origen.Release
 
   setup do
-    previous = Application.get_env(:origen, :bootstrap_admin_enabled)
+    keys = [
+      :bootstrap_admin_enabled,
+      :bootstrap_admin_profile,
+      :bootstrap_admin_local_enabled,
+      :bootstrap_admin_local,
+      :bootstrap_admin_command_options
+    ]
+
+    previous = Map.new(keys, &{&1, Application.fetch_env(:origen, &1)})
 
     on_exit(fn ->
-      Application.put_env(:origen, :bootstrap_admin_enabled, previous)
+      Enum.each(previous, fn
+        {key, {:ok, value}} -> Application.put_env(:origen, key, value)
+        {key, :error} -> Application.delete_env(:origen, key)
+      end)
     end)
 
     :ok
@@ -47,6 +58,29 @@ defmodule Origen.BootstrapAdminReleaseTest do
     error =
       assert_raise Mix.Error, "Bootstrap admin received invalid command-line arguments", fn ->
         Release.bootstrap_admin(["--verifier-key", secret])
+      end
+
+    refute Exception.message(error) =~ secret
+  end
+
+  test "packaged release denies copied local-looking configuration before parsing or seams" do
+    Application.put_env(:origen, :bootstrap_admin_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_profile, :local)
+    Application.put_env(:origen, :bootstrap_admin_local_enabled, true)
+    Application.put_env(:origen, :bootstrap_admin_local, %{enabled: true})
+
+    Application.put_env(:origen, :bootstrap_admin_command_options,
+      local_parser: fn _ -> flunk("local parser called") end,
+      local_command: fn _ -> flunk("local command called") end,
+      approval_reader: fn _ -> flunk("staging fallback called") end,
+      orchestrator: fn _, _ -> flunk("Repo/token/delivery seam called") end
+    )
+
+    secret = "release-local-secret-canary"
+
+    error =
+      assert_raise Mix.Error, "Bootstrap admin request was rejected", fn ->
+        Release.bootstrap_admin(["--token", secret])
       end
 
     refute Exception.message(error) =~ secret

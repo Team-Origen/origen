@@ -72,6 +72,10 @@ config :phoenix_live_view,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
 
+# Local bootstrap remains disabled unless ignored workstation configuration
+# deliberately supplies the reviewed structure and enables both trusted gates.
+config :origen, :bootstrap_admin_local, %{enabled: false}
+
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 

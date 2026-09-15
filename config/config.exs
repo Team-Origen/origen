@@ -11,6 +11,9 @@ config :origen,
   ecto_repos: [Origen.Repo],
   generators: [timestamp_type: :utc_datetime],
   bootstrap_admin_enabled: false,
+  bootstrap_admin_profile: :staging,
+  bootstrap_admin_local_enabled: false,
+  bootstrap_admin_local: %{enabled: false},
   env: config_env()
 
 config :origen, Origen.MigrationRepo,

@@ -79,6 +79,7 @@ defmodule OrigenWeb.AdminActivationController do
 
   alias Origen.BootstrapAdmin
   alias Origen.BootstrapAdmin.Credentials
+  alias Origen.BootstrapAdmin.Local.Endpoint, as: LocalEndpoint
   alias OrigenWeb.AdminActivationSessionStore
 
   @session_key :admin_activation_nonce
@@ -130,6 +131,7 @@ defmodule OrigenWeb.AdminActivationController do
              credentials
            ) do
       AdminActivationSessionStore.delete(nonce)
+      notify_local_activation()
 
       conn
       |> delete_session(@session_key)
@@ -207,7 +209,7 @@ defmodule OrigenWeb.AdminActivationController do
   defp build_credentials(_params, _seed), do: {:error, :invalid_credentials}
 
   defp verifier_key do
-    case Application.get_env(:origen, :bootstrap_admin_verifier_key) do
+    case activation_secret(:verifier_key, :bootstrap_admin_verifier_key) do
       key when is_binary(key) and byte_size(key) >= 32 -> {:ok, key}
       _invalid -> {:error, :invalid_configuration}
     end
@@ -223,12 +225,28 @@ defmodule OrigenWeb.AdminActivationController do
   defp parse_invitation_id(_value), do: {:error, :invalid_request}
 
   defp totp_keyring do
-    keyring = Application.get_env(:origen, :bootstrap_admin_totp_keyring)
+    keyring = activation_secret(:totp_keyring, :bootstrap_admin_totp_keyring)
 
     case Credentials.validate_keyring(keyring) do
       :ok -> {:ok, keyring}
       _invalid -> {:error, :invalid_configuration}
     end
+  end
+
+  defp activation_secret(local_name, staging_name) do
+    if Application.get_env(:origen, :bootstrap_admin_profile) == :local do
+      case LocalEndpoint.fetch_secret(local_name) do
+        {:ok, value} -> value
+        _ -> nil
+      end
+    else
+      Application.get_env(:origen, staging_name)
+    end
+  end
+
+  defp notify_local_activation do
+    if Application.get_env(:origen, :bootstrap_admin_profile) == :local,
+      do: LocalEndpoint.activation_complete()
   end
 
   defp require_tls(%Plug.Conn{scheme: :https}), do: :ok
