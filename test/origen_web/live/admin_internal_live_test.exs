@@ -42,6 +42,24 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
   end
 
+  describe "authorization" do
+    test "redirects away without rendering the screen when there is no session", %{conn: conn} do
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/internal")
+    end
+
+    test "redirects away for a role that is neither administrator nor secretary", %{conn: conn} do
+      conn = put_user_in_session(conn, %{id: 3, role: :professional})
+
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/internal")
+    end
+
+    test "redirects away for a patient session", %{conn: conn} do
+      conn = put_user_in_session(conn, %{id: 4, role: :patient})
+
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/internal")
+    end
+  end
+
   describe "validate event" do
     test "shows validation error for invalid email", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
@@ -143,6 +161,47 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> render_submit()
 
       assert html =~ "must be a valid email address without spaces"
+    end
+  end
+
+  describe "teclado y foco" do
+    # LiveView solo preserva el foco del navegador entre re-renders si el DOM
+    # patchea el mismo nodo (mismo id) en vez de reemplazarlo. Verificar la
+    # verificación real de foco en el navegador requeriría una herramienta de
+    # pruebas end-to-end (Wallaby/Playwright) que este proyecto todavía no
+    # tiene configurada; estos tests son la evidencia disponible sin esa
+    # infraestructura: los inputs no cambian de id y el valor ya tipeado no
+    # se pierde cuando otro campo es inválido.
+    test "role and email inputs keep stable DOM ids across a validation re-render", %{
+      conn: conn
+    } do
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
+
+      {:ok, view, html} = live(conn, ~p"/admin/internal")
+      assert html =~ ~s(id="form_role")
+      assert html =~ ~s(id="form_email")
+
+      html =
+        view
+        |> form("#admin-internal-form", form: %{role: "professional", email: "invalid"})
+        |> render_change()
+
+      assert html =~ ~s(id="form_role")
+      assert html =~ ~s(id="form_email")
+    end
+
+    test "keeps the typed email value visible when the role selection is what fails validation",
+         %{conn: conn} do
+      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      html =
+        view
+        |> form("#admin-internal-form", form: %{role: "", email: "person@example.com"})
+        |> render_change()
+
+      assert html =~ "person@example.com"
     end
   end
 

@@ -16,21 +16,29 @@ defmodule OrigenWeb.AdminInternalLive do
     email: :string
   }
 
+  @dev_env? Mix.env() == :dev
+
   @impl true
   def mount(_params, session, socket) do
     current_user = normalize_user(session["current_user"])
 
     current_user =
-      if current_user == nil and Application.get_env(:origen, :env) == :dev,
+      if current_user == nil and @dev_env?,
         do: %{"id" => 0, "role" => "administrator"},
         else: current_user
 
-    {:ok,
-     socket
-     |> assign(:current_user, current_user)
-     |> assign(:form, to_form(new_changeset(), as: :form))
-     |> assign(:result, nil)
-     |> assign(:allowed_roles, allowed_roles_for(current_user))}
+    allowed_roles = allowed_roles_for(current_user)
+
+    if allowed_roles == [] do
+      {:ok, redirect(socket, to: ~p"/")}
+    else
+      {:ok,
+       socket
+       |> assign(:current_user, current_user)
+       |> assign(:form, to_form(new_changeset(), as: :form))
+       |> assign(:result, nil)
+       |> assign(:allowed_roles, allowed_roles)}
+    end
   end
 
   @impl true
