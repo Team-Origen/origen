@@ -16,14 +16,12 @@ defmodule OrigenWeb.AdminInternalLive do
     email: :string
   }
 
-  @dev_env? Mix.env() == :dev
-
   @impl true
   def mount(_params, session, socket) do
     current_user = normalize_user(session["current_user"])
 
     current_user =
-      if current_user == nil and @dev_env?,
+      if current_user == nil and Application.get_env(:origen, :env) == :dev,
         do: %{"id" => 0, "role" => "administrator"},
         else: current_user
 

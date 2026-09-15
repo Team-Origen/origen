@@ -10,7 +10,8 @@ import Config
 config :origen,
   ecto_repos: [Origen.Repo],
   generators: [timestamp_type: :utc_datetime],
-  bootstrap_admin_enabled: false
+  bootstrap_admin_enabled: false,
+  env: config_env()
 
 config :origen, Origen.MigrationRepo,
   after_connect: {Origen.MigrationRepo, :set_owner_role, []},
