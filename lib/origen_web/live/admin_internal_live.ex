@@ -92,9 +92,9 @@ defmodule OrigenWeb.AdminInternalLive do
   defp role_label(:secretary), do: "Secretaria"
 
   defp role_label_text("professional"), do: "Profesional"
-  defp role_label_text("secretary"), do: "Secretaría"
+  defp role_label_text("secretary"), do: "Secretaria"
   defp role_label_text(:professional), do: "Profesional"
-  defp role_label_text(:secretary), do: "Secretaría"
+  defp role_label_text(:secretary), do: "Secretaria"
   defp role_label_text(role), do: to_string(role)
 
   @impl true
