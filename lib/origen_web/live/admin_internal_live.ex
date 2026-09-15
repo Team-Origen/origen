@@ -87,9 +87,9 @@ defmodule OrigenWeb.AdminInternalLive do
   defp allowed_roles_for(_), do: []
 
   defp role_label("professional"), do: "Profesional"
-  defp role_label("secretary"), do: "Secretaría"
+  defp role_label("secretary"), do: "Secretaria"
   defp role_label(:professional), do: "Profesional"
-  defp role_label(:secretary), do: "Secretaría"
+  defp role_label(:secretary), do: "Secretaria"
 
   defp role_label_text("professional"), do: "Profesional"
   defp role_label_text("secretary"), do: "Secretaría"
@@ -105,7 +105,7 @@ defmodule OrigenWeb.AdminInternalLive do
         <div class="mb-8">
           <h1 class="text-2xl font-semibold text-gray-900 font-inter">Crear Cuenta Demo</h1>
           <p class="mt-2 text-sm text-gray-600 font-inter">
-            Emitir una invitación para una cuenta nueva de profesional o secretaría
+            Emitir una invitación para una cuenta nueva de profesional o secretaria
           </p>
         </div>
 

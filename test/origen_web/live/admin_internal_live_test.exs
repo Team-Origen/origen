@@ -29,7 +29,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
       assert html =~ "Profesional"
-      assert html =~ "Secretaría"
+      assert html =~ "Secretaria"
     end
 
     test "shows only secretary option for non-administrator", %{conn: conn} do
@@ -37,7 +37,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
-      assert html =~ "Secretaría"
+      assert html =~ "Secretaria"
       refute html =~ "Profesional"
     end
   end
