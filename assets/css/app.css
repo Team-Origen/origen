@@ -24,6 +24,14 @@
 
 /* Origen visual-system ramps. PetalComponents consumes the primary,
    secondary, and gray roles; semantic status ramps keep its defaults. */
+@theme static {
+  --color-brand-primary: #0A3847;
+  --color-brand-secondary: #35545A;
+  --color-brand-accent: #DDE6DB;
+  --color-brand-neutral: #AFBAB4;
+  --color-brand-background: #F6F6F4;
+}
+
 @theme {
   --color-primary-50: #f0f6f7;
   --color-primary-100: #d9e8eb;
@@ -32,7 +40,7 @@
   --color-primary-400: #568d9a;
   --color-primary-500: #356c7a;
   --color-primary-600: #1d5362;
-  --color-primary-700: #0a3847;
+  --color-primary-700: #0A3847;
   --color-primary-800: #082f3c;
   --color-primary-900: #072832;
   --color-primary-950: #03191f;
@@ -44,7 +52,7 @@
   --color-secondary-400: #7c9a9d;
   --color-secondary-500: #5c777c;
   --color-secondary-600: #46656a;
-  --color-secondary-700: #35545a;
+  --color-secondary-700: #35545A;
   --color-secondary-800: #2c464b;
   --color-secondary-900: #263c40;
   --color-secondary-950: #142124;
@@ -92,9 +100,8 @@
   --pc-radius: var(--radius-control);
 }
 
-/* daisyUI theme plugin.
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+/* daisyUI themes. The light theme uses the Origen brand palette; the existing dark
+   theme remains available for explicit and system-preferred dark mode. */
 @plugin "daisyui/packages/bundle/daisyui-theme" {
   name: "dark";
   default: false;
@@ -135,18 +142,18 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
-  --color-base-content: oklch(21% 0.006 285.885);
-  --color-primary: oklch(70% 0.213 47.604);
-  --color-primary-content: oklch(98% 0.016 73.684);
-  --color-secondary: oklch(55% 0.027 264.364);
-  --color-secondary-content: oklch(98% 0.002 247.839);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-content: oklch(100% 0 0);
-  --color-neutral: oklch(44% 0.017 285.786);
-  --color-neutral-content: oklch(98% 0 0);
+  --color-base-100: #F6F6F4;
+  --color-base-200: #E9ECE9;
+  --color-base-300: #D5DBD7;
+  --color-base-content: #0A3847;
+  --color-primary: #0A3847;
+  --color-primary-content: #F6F6F4;
+  --color-secondary: #35545A;
+  --color-secondary-content: #F6F6F4;
+  --color-accent: #DDE6DB;
+  --color-accent-content: #0A3847;
+  --color-neutral: #AFBAB4;
+  --color-neutral-content: #0A3847;
   --color-info: oklch(62% 0.214 259.815);
   --color-info-content: oklch(97% 0.014 254.604);
   --color-success: oklch(70% 0.14 182.503);
