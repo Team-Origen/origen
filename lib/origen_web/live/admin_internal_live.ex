@@ -101,10 +101,10 @@ defmodule OrigenWeb.AdminInternalLive do
   def render(assigns) do
     ~H"""
     <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div class="max-w-md w-full bg-white border border-[#E2E8F0] rounded-lg shadow-[0px_4px_12px_rgba(23,75,99,0.05)] p-8 font-inter">
+      <div class="max-w-md lg:max-w-2xl w-full bg-white border border-[#E2E8F0] rounded-lg shadow-[0px_4px_12px_rgba(23,75,99,0.05)] p-8 lg:p-12 font-inter">
         <div class="mb-8">
-          <h1 class="text-2xl font-semibold text-gray-900 font-inter">Crear Cuenta Demo</h1>
-          <p class="mt-2 text-sm text-gray-600 font-inter">
+          <h1 class="text-2xl lg:text-3xl font-semibold text-gray-900 font-inter">Crear Cuenta Demo</h1>
+          <p class="mt-2 text-sm lg:text-base text-gray-600 font-inter">
             Emitir una invitación para una cuenta nueva de profesional o secretaria
           </p>
         </div>
@@ -129,27 +129,29 @@ defmodule OrigenWeb.AdminInternalLive do
           phx-submit="save"
           class="space-y-6"
         >
-          <.field
-            field={@form[:role]}
-            type="select"
-            label="Rol"
-            options={Enum.map(@allowed_roles, fn role -> {role_label(role), role} end)}
-            prompt="Seleccionar rol"
-            required
-            class="py-[12px] px-[16px] rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
-            label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
-          />
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <.field
+              field={@form[:role]}
+              type="select"
+              label="Rol"
+              options={Enum.map(@allowed_roles, fn role -> {role_label(role), role} end)}
+              prompt="Seleccionar rol"
+              required
+              class="py-[12px] px-[16px] rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
+              label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
+            />
 
-          <.field
-            field={@form[:email]}
-            type="email"
-            label="Correo electrónico"
-            placeholder="demo@example.com"
-            required
-            autocomplete="email"
-            class="py-[12px] px-[16px] rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
-            label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
-          />
+            <.field
+              field={@form[:email]}
+              type="email"
+              label="Correo electrónico"
+              placeholder="demo@example.com"
+              required
+              autocomplete="email"
+              class="py-[12px] px-[16px] rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
+              label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
+            />
+          </div>
 
           <.button
             type="submit"
