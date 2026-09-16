@@ -15,13 +15,13 @@ Cada participante ejecuta el recorrido personalmente en su computadora sobre una
 ## 1. Revisión común de aceptación
 
 - **Rama base:** `fix/local-bootstrap-config-lifecycle`
-- **SHA común:** `a90e2132e7b3bcb9d0d6dd9588f3537dc965b353`
+- **SHA común:** `83e0e80e698ab6b9cafd84a1add004406d1255be`
 
 ```bash
 git fetch origin fix/local-bootstrap-config-lifecycle
-git switch --detach a90e2132e7b3bcb9d0d6dd9588f3537dc965b353
+git switch --detach 83e0e80e698ab6b9cafd84a1add004406d1255be
 git rev-parse HEAD
-# Debe imprimir exactamente: a90e2132e7b3bcb9d0d6dd9588f3537dc965b353
+# Debe imprimir exactamente: 83e0e80e698ab6b9cafd84a1add004406d1255be
 ```
 
 ## 2. Preparación de claves y certificado privados
@@ -110,21 +110,21 @@ ORIGEN_BOOTSTRAP_ADMIN_ENABLED=true mix origen.bootstrap_admin
 
 ## 7. Registro de constancias sanitizadas
 
-Las cuatro constancias deben pertenecer a la misma revisión común (`a90e2132e7b3bcb9d0d6dd9588f3537dc965b353`) y ser completadas de manera personal e independiente por cada participante.
+Las cuatro constancias deben pertenecer a la misma revisión común (`83e0e80e698ab6b9cafd84a1add004406d1255be`) y ser completadas de manera personal e independiente por cada participante.
 
 | Participante | SHA | Recorrido completo | Un Administrador y cero adicionales | Consumo único y limpieza | Finalización UTC | Confirmación personal | Motivo | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Lucca Giordana | `a90e2132e7b3bcb9d0d6dd9588f3537dc965b353` | pass | pass | pass | 2026-09-15 00:13:00Z | confirmed | none | ✅ pass |
-| Santiago Casali | `a90e2132e7b3bcb9d0d6dd9588f3537dc965b353` | pending | pending | pending | — | pending | none | ⏳ pendiente |
-| Said Quioto | `a90e2132e7b3bcb9d0d6dd9588f3537dc965b353` | pending | pending | pending | — | pending | none | ⏳ pendiente |
-| Samuel Olmos | `a90e2132e7b3bcb9d0d6dd9588f3537dc965b353` | pending | pending | pending | — | pending | none | ⏳ pendiente |
+| Lucca Giordana | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pass | pass | pass | 2026-09-15 00:13:00Z | confirmed | none | ✅ pass |
+| Santiago Casali | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
+| Said Quioto | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
+| Samuel Olmos | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
 
 ### Detalle de constancias textuales
 
 #### 1. Lucca Giordana
 ```text
 Participante: Lucca Giordana
-SHA: a90e2132e7b3bcb9d0d6dd9588f3537dc965b353
+SHA: 83e0e80e698ab6b9cafd84a1add004406d1255be
 Recorrido completo: pass
 Un Administrador y cero adicionales: pass
 Consumo único y limpieza: pass
