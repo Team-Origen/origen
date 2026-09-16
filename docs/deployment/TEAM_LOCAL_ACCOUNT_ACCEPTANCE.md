@@ -4,6 +4,14 @@ Este documento establece el procedimiento operativo para la aceptación real del
 
 Cada participante ejecuta el recorrido personalmente en su computadora sobre una base PostgreSQL local independiente y sobre la revisión común acordada. No se permite compartir secretos, credenciales, tokens, enlaces, contraseñas, TOTP, contenido del mailbox ni filas de base de datos.
 
+> **Importante para usuarios de Windows (WSL2 obligatorio):**
+> 
+> Si estás en Windows, debés ejecutar todo este proceso dentro de **WSL2 (Ubuntu)**.
+> - **El proyecto debe estar clonado dentro de Ubuntu** (en `~/Documents`, que es `/home/usuario/Documents`), **NUNCA dentro de `/mnt/c/`** (el disco de Windows no soporta los permisos Unix estrictos que valida la aplicación).
+> - Podés abrir y editar los archivos cómodamente con VS Code ejecutando `code .` dentro de la terminal de Ubuntu.
+> - Podés usar tu navegador normal de Windows (Chrome, Edge, etc.) para entrar a `https://127.0.0.1:4001/dev/mailbox`, ya que Windows enlaza automáticamente los puertos de WSL2.
+> - Herramientas necesarias en Ubuntu: `sudo apt update && sudo apt install -y libnss3-tools openssl mkcert` (si `mkcert` no está en los repositorios de tu versión de Ubuntu: `sudo apt install -y libnss3-tools && curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64" && chmod +x mkcert-v*-linux-amd64 && sudo mv mkcert-v*-linux-amd64 /usr/local/bin/mkcert`).
+
 ## 1. Revisión común de aceptación
 
 - **Rama base:** `fix/local-bootstrap-config-lifecycle`
