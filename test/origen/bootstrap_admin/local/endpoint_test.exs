@@ -120,12 +120,11 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
              )
 
     assert_receive {:listener_started, listener}
+    monitor = Process.monitor(listener)
+    assert_receive {:DOWN, ^monitor, :process, ^listener, _reason}
     refute Process.alive?(listener)
     assert :inactive = :sys.get_state(Endpoint)
     assert {:error, :secrets_unavailable} = Endpoint.fetch_secret(:verifier_key)
-    Process.sleep(100)
-    refute Process.alive?(listener)
-    assert :inactive = :sys.get_state(Endpoint)
   end
 
   test "accepts configuration with structured Origin without infinite recursion" do
