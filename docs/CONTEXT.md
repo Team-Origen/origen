@@ -16,8 +16,8 @@
 
 | Término | Definición |
 | --- | --- |
-| Tipo de consulta | Prestación perteneciente a un único Profesional, con identidad propia y una duración vigente derivada de su cantidad de Intervalos de agenda. |
-| Intervalo de agenda | Granularidad temporal propia de la agenda de un Profesional, expresada en minutos. No es la duración histórica de un turno ni el Período de reserva. |
+| Tipo de consulta | Prestación perteneciente a un único Profesional e identificada por una identidad inmutable, no por su nombre, aunque existan nombres duplicados. Mientras está activa, su duración vigente se deriva de su cantidad preservada de Intervalos de agenda; mientras está inactiva y no puede editarse, conserva la duración histórica que tenía al desactivarse. |
+| Intervalo de agenda | Granularidad temporal propia de la agenda de un Profesional, expresada en minutos. Su cambio recalcula las duraciones de los Tipos de consulta activos sin modificar sus cantidades, las duraciones históricas de los inactivos ni los turnos ya reservados. No es el Período de reserva. |
 | Período | Ventana de anticipación futura durante la cual pueden reservarse turnos. No representa la granularidad de la agenda. |
 
 ## Cuentas de pacientes
