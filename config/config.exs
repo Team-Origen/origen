@@ -13,7 +13,8 @@ config :origen,
   bootstrap_admin_enabled: false,
   bootstrap_admin_profile: :staging,
   bootstrap_admin_local_enabled: false,
-  bootstrap_admin_local: %{enabled: false}
+  bootstrap_admin_local: %{enabled: false},
+  consultation_catalog_demo_enabled: false
 
 config :origen, Origen.MigrationRepo,
   after_connect: {Origen.MigrationRepo, :set_owner_role, []},
