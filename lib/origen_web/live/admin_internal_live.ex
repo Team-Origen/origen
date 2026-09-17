@@ -103,7 +103,9 @@ defmodule OrigenWeb.AdminInternalLive do
     <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md lg:max-w-2xl w-full bg-white border border-[#E2E8F0] rounded-lg shadow-[0px_4px_12px_rgba(23,75,99,0.05)] p-8 lg:p-12 font-inter">
         <div class="mb-8">
-          <h1 class="text-2xl lg:text-3xl font-semibold text-gray-900 font-inter">Crear Cuenta Demo</h1>
+          <h1 class="text-2xl lg:text-3xl font-semibold text-gray-900 font-inter">
+            Crear Cuenta Demo
+          </h1>
           <p class="mt-2 text-sm lg:text-base text-gray-600 font-inter">
             Emitir una invitación para una cuenta nueva de profesional o secretaria
           </p>
