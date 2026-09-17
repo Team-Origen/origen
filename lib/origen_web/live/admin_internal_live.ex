@@ -136,8 +136,8 @@ defmodule OrigenWeb.AdminInternalLive do
               options={Enum.map(@allowed_roles, fn role -> {role_label(role), role} end)}
               prompt="Seleccionar rol"
               required
-              class="py-[12px] px-[16px] lg:py-[16px] lg:px-[20px] lg:text-lg rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
-              label_class="block text-[13px] lg:text-sm font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
+              class="py-[20px] px-[16px] lg:py-[16px] lg:px-[20px] lg:text-lg rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
+              label_class="block text-[13px] lg:text-base font-semibold leading-[24px] tracking-[0.05em] text-gray-700 font-inter mb-1"
             />
 
             <.field
@@ -147,8 +147,8 @@ defmodule OrigenWeb.AdminInternalLive do
               placeholder="demo@example.com"
               required
               autocomplete="email"
-              class="py-[12px] px-[16px] rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
-              label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-gray-700 font-inter mb-1"
+              class="py-[20px] px-[16px] lg:py-[16px] lg:px-[20px] lg:text-lg rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
+              label_class="block text-[13px] lg:text-base font-semibold leading-[24px] tracking-[0.05em] text-gray-700 font-inter mb-1"
             />
           </div>
 
