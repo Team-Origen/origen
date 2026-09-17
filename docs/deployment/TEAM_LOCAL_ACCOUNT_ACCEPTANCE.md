@@ -115,7 +115,7 @@ Las cuatro constancias deben pertenecer a la misma revisión común (`83e0e80e69
 | Participante | SHA | Recorrido completo | Un Administrador y cero adicionales | Consumo único y limpieza | Finalización UTC | Confirmación personal | Motivo | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | Lucca Giordana | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pass | pass | pass | 2026-09-15 00:13:00Z | confirmed | none | ✅ pass |
-| Santiago Casali | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
+| Santiago Casali | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pass | pass | pass | 2026-09-17 02:24:18Z | confirmed | Se requirió invocar la tarea mediante `mix run` porque el comando directo no cargó `config/runtime.exs` | ✅ pass |
 | Said Quioto | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
 | Samuel Olmos | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
 
@@ -134,8 +134,15 @@ Motivo: none
 ```
 
 #### 2. Santiago Casali
-*Pendiente de ejecución.*
-
+```text
+Participante: Santiago Casali
+SHA: 83e0e80e698ab6b9cafd84a1add004406d1255be
+Recorrido completo: pass
+Un Administrador y cero adicionales: pass
+Consumo único y limpieza: pass
+Finalización UTC: 2026-09-17 02:24:18Z
+Confirmación personal: confirmed
+Motivo: Se requirió invocar la tarea mediante `mix run` porque el comando directo `mix origen.bootstrap_admin` no cargó `config/runtime.exs` y dejó el gate en `disabled`.
 #### 3. Said Quioto
 *Pendiente de ejecución.*
 
