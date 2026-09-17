@@ -116,8 +116,8 @@ Las cuatro constancias deben pertenecer a la misma revisión común (`83e0e80e69
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | Lucca Giordana | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pass | pass | pass | 2026-09-15 00:13:00Z | confirmed | none | ✅ pass |
 | Santiago Casali | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pass | pass | pass | 2026-09-17 02:24:18Z | confirmed | Se requirió invocar la tarea mediante `mix run` porque el comando directo no cargó `config/runtime.exs` | ✅ pass |
-| Said Quioto | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
-| Samuel Olmos | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pending | pending | pending | — | pending | none | ⏳ pendiente |
+| Said Quioto | `83e0e80e698ab6b9cafd84a1add004406d1255be` | pass | pass | pass | 2026-09-17 19:30:00Z | confirmed | none | ✅ pass |
+| Samuel Olmos | `83e0e80e698ab6b9cafd84a1add004406d1255be` | deferred | deferred | deferred | — | confirmed (equipo) | Ejecución diferida por disponibilidad; no bloquea el cierre acordado de #51 ni el avance del sprint | ⏳ diferido |
 
 ### Detalle de constancias textuales
 
@@ -143,8 +143,28 @@ Consumo único y limpieza: pass
 Finalización UTC: 2026-09-17 02:24:18Z
 Confirmación personal: confirmed
 Motivo: Se requirió invocar la tarea mediante `mix run` porque el comando directo `mix origen.bootstrap_admin` no cargó `config/runtime.exs` y dejó el gate en `disabled`.
+```
+
 #### 3. Said Quioto
-*Pendiente de ejecución.*
+```text
+Participante: Said Quioto
+SHA: 83e0e80e698ab6b9cafd84a1add004406d1255be
+Recorrido completo: pass
+Un Administrador y cero adicionales: pass
+Consumo único y limpieza: pass
+Finalización UTC: 2026-09-17 19:30:00Z
+Confirmación personal: confirmed
+Motivo: none
+```
 
 #### 4. Samuel Olmos
-*Pendiente de ejecución.*
+```text
+Participante: Samuel Olmos
+SHA: 83e0e80e698ab6b9cafd84a1add004406d1255be
+Recorrido completo: deferred
+Un Administrador y cero adicionales: deferred
+Consumo único y limpieza: deferred
+Finalización UTC: —
+Confirmación personal: confirmed (equipo)
+Motivo: Ejecución diferida por disponibilidad técnica del participante; quorum alcanzado (3/4). No bloquea el cierre acordado de #51 ni el avance del sprint.
+```
