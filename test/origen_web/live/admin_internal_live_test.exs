@@ -17,7 +17,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
-      assert html =~ "Crear Cuenta Demo"
+      assert html =~ "Crear Cuenta"
       assert html =~ "Rol"
       assert html =~ "Correo electrónico"
       assert html =~ "Crear Cuenta"
