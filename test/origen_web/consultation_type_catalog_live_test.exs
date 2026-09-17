@@ -73,7 +73,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     id: "018f4a5b-0d62-7a44-8e32-2f608bfcb008",
     name: "Consulta prolongada",
     count: 6,
-    duration: 360,
+    duration: 180,
     price: "ARS 30.000,00",
     color: "#8B5CF6"
   }
@@ -132,7 +132,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
              exact_price_ars: Decimal.new("30000.00"),
              color: "#8B5CF6",
              status: :inactive,
-             inactive_duration_minutes: 360
+             inactive_duration_minutes: 180
            },
            %{
              id: "018f4a5b-0d62-7a44-8e32-2f608bfcb009",
@@ -440,174 +440,70 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, row, @inactive_type.name)
   end
 
-  test "an incompatible reactivation opens the focused modal without changing the type", %{
-    conn: conn
-  } do
+  test "an incompatible reactivation is rejected unchanged without replacement UI", %{conn: conn} do
     use_reactivation_catalog()
     {:ok, view, _html} = live(conn, @professional_configuration_path)
-    open_incompatible_reactivation(view)
+    show_inactive(view)
 
     row = "#consultation-type-#{@incompatible_inactive_type.id}"
+    initial_item_count = rendered_catalog_item_count(view)
+
+    view
+    |> element(~s(#{row} button[phx-click="reactivate_type"]), "Reactivar")
+    |> render_click()
+
+    assert rendered_catalog_item_count(view) == initial_item_count
 
     assert has_element?(
              view,
-             ~s(#reactivate-consultation-type-modal [role="dialog"]),
-             "Reactivar tipo de consulta"
+             "#reactivation-error[role=alert]",
+             "No se reactivó Consulta prolongada"
            )
 
-    assert has_element?(
-             view,
-             "#reactivate-consultation-type-modal",
-             "La cantidad actual no es válida para el Intervalo de Agenda aplicado"
-           )
-
-    assert has_element?(view, "#reactivation-current-count", "6")
-    assert has_element?(view, "#reactivation-current-duration", "360 minutos")
-    assert has_element?(view, "#reactivation-effective-maximum", "4 intervalos")
+    assert has_element?(view, "#reactivation-error", "360 minutos")
+    assert has_element?(view, "#reactivation-error", "máximo de 240 minutos")
     assert has_element?(view, row, "Cantidad de intervalos 6")
+    assert has_element?(view, row, "Duración: 180 minutos")
     assert has_element?(view, row, "Inactivo")
-
-    assert has_element?(
-             view,
-             ~s(#reactivation-interval-count[role="spinbutton"][value=""][aria-valuemin="1"][aria-valuemax="4"])
-           )
-
-    assert has_element?(
-             view,
-             ~s(#reactivation-interval-count-field[data-min="1"][data-max="4"][data-step="1"])
-           )
-
-    assert rendered_element_count(
-             view,
-             "#reactivation-interval-count-field [data-pc-number-step]"
-           ) == 2
-
-    assert has_element?(view, "output#reactivation-duration", "—")
-    assert has_element?(view, "#reactivate-consultation-type-modal button", "Reactivar")
-    assert has_element?(view, "#reactivate-consultation-type-modal button", "Cancelar")
+    refute has_element?(view, "#reactivate-consultation-type-modal")
+    refute has_element?(view, "#reactivate-consultation-type-form")
+    refute has_element?(view, ~s([name="reactivation[interval_count]"]))
+    refute render(view) =~ "change_reactivation"
+    refute render(view) =~ "confirm_reactivation"
+    refute render(view) =~ "cancel_reactivation"
   end
 
-  test "replacement duration updates and explicit confirmation applies count and status atomically",
+  test "a preserved inactive count can reactivate after the current interval becomes compatible",
        %{
          conn: conn
        } do
     use_reactivation_catalog()
     {:ok, view, _html} = live(conn, @professional_configuration_path)
-    open_incompatible_reactivation(view)
+    show_inactive(view)
 
     row = "#consultation-type-#{@incompatible_inactive_type.id}"
-    card = "#consultation-type-mobile-#{@incompatible_inactive_type.id}"
     initial_item_count = rendered_catalog_item_count(view)
 
     view
-    |> form("#reactivate-consultation-type-form", reactivation: %{interval_count: "3"})
-    |> render_change()
-
-    assert has_element?(view, "output#reactivation-duration", "180 minutos")
-
-    view
-    |> form("#reactivate-consultation-type-form", reactivation: %{interval_count: "3"})
+    |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_submit()
 
-    refute has_element?(view, "#reactivate-consultation-type-modal")
-    assert rendered_catalog_item_count(view) == initial_item_count
-    assert has_element?(view, "#consultation-types-table-view tbody tr:nth-child(2)#{row}")
-
-    for container <- [row, card] do
-      assert has_element?(view, container, @incompatible_inactive_type.name)
-      assert has_element?(view, container, "Cantidad de intervalos 3")
-      assert has_element?(view, container, "Duración: 180 minutos")
-      assert has_element?(view, container, @incompatible_inactive_type.price)
-      assert has_element?(view, container, "Activo")
-
-      assert has_element?(
-               view,
-               ~s(#{container} [role="img"][style="background-color: #{@incompatible_inactive_type.color}"])
-             )
-
-      assert has_element?(view, "#{container} button", "Editar")
-      assert has_element?(view, "#{container} button", "Desactivar")
-      refute has_element?(view, "#{container} button", "Reactivar")
-    end
-  end
-
-  test "blank malformed and out-of-range replacements keep the original inactive type", %{
-    conn: conn
-  } do
-    for invalid_count <- ["", "cantidad", "0", "5"] do
-      use_reactivation_catalog()
-      {:ok, view, _html} = live(conn, @professional_configuration_path)
-      open_incompatible_reactivation(view)
-
-      render_submit(view, "confirm_reactivation", %{
-        "reactivation" => %{"interval_count" => invalid_count}
-      })
-
-      row = "#consultation-type-#{@incompatible_inactive_type.id}"
-
-      assert has_element?(view, "#reactivate-consultation-type-modal")
-
-      assert has_element?(
-               view,
-               "#reactivation-errors[role=alert]",
-               "continúa inactivo y no se realizaron cambios"
-             )
-
-      assert has_element?(view, ".pc-form-field-error", "La cantidad debe estar entre 1 y 4")
-
-      assert has_element?(
-               view,
-               ~s(#reactivation-interval-count[aria-invalid="true"][aria-describedby="reactivation-errors"])
-             )
-
-      assert has_element?(view, row, "Cantidad de intervalos 6")
-      assert has_element?(view, row, "Duración: 360 minutos")
-      assert has_element?(view, row, "Inactivo")
-      refute has_element?(view, row, "Cantidad de intervalos 4")
-    end
-  end
-
-  test "reactivation cancellation paths preserve the type and reset replacement state", %{
-    conn: conn
-  } do
-    use_reactivation_catalog()
-    {:ok, view, _html} = live(conn, @professional_configuration_path)
-    row = "#consultation-type-#{@incompatible_inactive_type.id}"
-
-    open_incompatible_reactivation(view)
+    assert has_element?(view, row, "Duración: 180 minutos")
 
     view
-    |> form("#reactivate-consultation-type-form", reactivation: %{interval_count: "3"})
-    |> render_change()
-
-    view
-    |> element("#reactivate-consultation-type-modal button", "Cancelar")
+    |> element(~s(#{row} button[phx-click="reactivate_type"]), "Reactivar")
     |> render_click()
 
-    refute has_element?(view, "#reactivate-consultation-type-modal")
+    assert rendered_catalog_item_count(view) == initial_item_count
+    assert has_element?(view, "#consultation-types-table-view tbody tr:nth-child(2)#{row}")
     assert has_element?(view, row, "Cantidad de intervalos 6")
-    assert has_element?(view, row, "Inactivo")
-
-    open_incompatible_reactivation(view)
-    assert has_element?(view, ~s(#reactivation-interval-count[value=""]))
-
-    assert has_element?(
-             view,
-             ~s(#reactivate-consultation-type-modal[data-cancel*="cancel_reactivation"])
-           )
-
-    assert has_element?(view, "#reactivate-consultation-type-modal .pc-modal__header__button")
-    render_click(view, "cancel_reactivation")
-
+    assert has_element?(view, row, "Duración: 180 minutos")
+    assert has_element?(view, row, "Activo")
+    refute has_element?(view, "#reactivation-error")
     refute has_element?(view, "#reactivate-consultation-type-modal")
-    assert has_element?(view, row, "Cantidad de intervalos 6")
-    assert has_element?(view, row, "Inactivo")
-
-    open_incompatible_reactivation(view)
-    assert has_element?(view, ~s(#reactivation-interval-count[value=""]))
   end
 
-  test "forged reactivation and replacement events fail closed", %{conn: conn} do
+  test "forged reactivation events fail closed", %{conn: conn} do
     {:ok, default_view, _html} = live(conn, @professional_configuration_path)
     show_inactive(default_view)
     default_html = render(default_view)
@@ -621,40 +517,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     render_click(default_view, "reactivate_type", %{})
     assert render(default_view) == default_html
 
-    use_reactivation_catalog()
-    {:ok, incompatible_view, _html} = live(conn, @professional_configuration_path)
-    show_inactive(incompatible_view)
-    incompatible_html = render(incompatible_view)
-
-    render_submit(incompatible_view, "confirm_reactivation", %{
-      "reactivation" => %{"interval_count" => "4"}
-    })
-
-    assert render(incompatible_view) == incompatible_html
-
-    render_click(incompatible_view, "change_reactivation", %{
-      "reactivation" => %{"interval_count" => "4"}
-    })
-
-    assert render(incompatible_view) == incompatible_html
-
-    render_click(incompatible_view, "reactivate_type", %{
-      "id" => @incompatible_inactive_type.id
-    })
-
-    assert has_element?(incompatible_view, "#reactivate-consultation-type-modal")
-
-    assert has_element?(
-             incompatible_view,
-             "#consultation-type-#{@incompatible_inactive_type.id}",
-             "Cantidad de intervalos 6"
-           )
-
-    assert has_element?(
-             incompatible_view,
-             "#consultation-type-#{@incompatible_inactive_type.id}",
-             "Inactivo"
-           )
+    render_click(default_view, "reactivate_type", %{"id" => 123})
+    assert render(default_view) == default_html
   end
 
   test "active deactivation triggers share one accessible Petal confirmation per stable ID", %{
@@ -1431,17 +1295,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     view
     |> form("#consultation-types-filter", show_inactive: "true")
     |> render_change()
-  end
-
-  defp open_incompatible_reactivation(view) do
-    show_inactive(view)
-
-    view
-    |> element(
-      ~s(#consultation-type-#{@incompatible_inactive_type.id} button[phx-click="reactivate_type"]),
-      "Reactivar"
-    )
-    |> render_click()
   end
 
   defp deactivation_dialog_id(type), do: "deactivate-consultation-type-#{type.id}"

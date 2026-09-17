@@ -11,7 +11,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     "color" => "#0A7C86",
     "interval_count" => "1"
   }
-  @reactivation_form_defaults %{"interval_count" => ""}
   @ars_price_pattern ~r/^(?<sign>-?)(?<whole>(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+))(?:,(?<fraction>\d+))?$/
 
   @impl true
@@ -28,9 +27,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         editing_type_id: nil,
         type_form_params: @type_form_defaults,
         type_form_errors: %{},
-        reactivation_type_id: nil,
-        reactivation_form_params: @reactivation_form_defaults,
-        reactivation_form_errors: %{}
+        reactivation_feedback: nil
       )
 
     case Catalog.execute({:list, %{professional_reference: "PRO-DEMO-001"}}) do
@@ -60,7 +57,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         {:noreply,
          assign(socket,
            selected_interval: selected_interval,
-           interval_feedback: nil
+           interval_feedback: nil,
+           reactivation_feedback: nil
          )}
 
       :error ->
@@ -76,7 +74,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
        assign(socket,
          current_interval: selected_interval,
          selected_interval: selected_interval,
-         interval_feedback: :applied
+         interval_feedback: :applied,
+         reactivation_feedback: nil
        )}
     else
       :error ->
@@ -196,15 +195,19 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             end)
 
           {:noreply,
-           socket
-           |> assign(catalog: catalog)
-           |> reset_reactivation_form()}
+           assign(socket,
+             catalog: catalog,
+             reactivation_feedback: nil
+           )}
         else
           {:noreply,
            assign(socket,
-             reactivation_type_id: consultation_type.id,
-             reactivation_form_params: @reactivation_form_defaults,
-             reactivation_form_errors: %{}
+             reactivation_feedback:
+               {:incompatible, consultation_type.name,
+                prospective_duration_minutes(
+                  consultation_type,
+                  socket.assigns.current_interval
+                )}
            )}
         end
     end
@@ -213,63 +216,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   def handle_event("reactivate_type", _params, socket), do: {:noreply, socket}
 
   @impl true
-  def handle_event(
-        "change_reactivation",
-        %{"reactivation" => params},
-        %{assigns: %{reactivation_type_id: id}} = socket
-      )
-      when is_binary(id) and is_map(params) do
-    case inactive_type(socket.assigns.catalog, id) do
-      {_index, consultation_type} ->
-        if compatible_with_interval?(consultation_type, socket.assigns.current_interval) do
-          {:noreply, reset_reactivation_form(socket)}
-        else
-          {:noreply,
-           assign(socket,
-             reactivation_form_params: reactivation_form_params(params),
-             reactivation_form_errors: %{}
-           )}
-        end
-
-      nil ->
-        {:noreply, reset_reactivation_form(socket)}
-    end
-  end
-
-  def handle_event("change_reactivation", _params, socket), do: {:noreply, socket}
-
-  @impl true
-  def handle_event(
-        "confirm_reactivation",
-        %{"reactivation" => params},
-        %{assigns: %{reactivation_type_id: id}} = socket
-      )
-      when is_binary(id) and is_map(params) do
-    params = reactivation_form_params(params)
-
-    case inactive_type(socket.assigns.catalog, id) do
-      {index, consultation_type} ->
-        confirm_reactivation(socket, index, consultation_type, params)
-
-      nil ->
-        {:noreply, reset_reactivation_form(socket)}
-    end
-  end
-
-  def handle_event("confirm_reactivation", _params, socket), do: {:noreply, socket}
-
-  @impl true
-  def handle_event("cancel_reactivation", _params, socket) do
-    {:noreply, reset_reactivation_form(socket)}
-  end
-
-  @impl true
   def render(assigns) do
-    assigns =
-      assign(assigns,
-        visible_catalog: visible_catalog(assigns),
-        reactivation_type: reactivation_type(assigns)
-      )
+    assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
     <main class="min-h-screen bg-page py-6 text-gray-900 sm:py-10">
@@ -399,6 +347,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                 </.card_header>
 
                 <.card_content class="flex flex-col gap-4">
+                  <.reactivation_alert
+                    :if={match?({:incompatible, _, _}, @reactivation_feedback)}
+                    feedback={@reactivation_feedback}
+                  />
+
                   <form id="consultation-types-filter" phx-change="toggle_inactive">
                     <.field
                       id="show-inactive-consultation-types"
@@ -658,114 +611,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               </.button>
             </:footer>
           </.modal>
-
-          <.modal
-            :if={@reactivation_type}
-            id="reactivate-consultation-type-modal"
-            title="Reactivar tipo de consulta"
-            max_width="md"
-            on_cancel={JS.push("cancel_reactivation")}
-          >
-            <div class="flex flex-col gap-5">
-              <p class="text-sm text-gray-700">
-                La cantidad actual no es válida para el Intervalo de Agenda aplicado. Para reactivar este tipo de consulta, ingrese y confirme una nueva cantidad válida.
-              </p>
-
-              <dl class="grid gap-3 text-sm sm:grid-cols-[1fr_auto] sm:items-baseline">
-                <dt class="font-medium">Cantidad actual</dt>
-                <dd id="reactivation-current-count" class="font-semibold">
-                  {@reactivation_type.interval_count}
-                </dd>
-                <dt class="font-medium">Duración resultante actual</dt>
-                <dd id="reactivation-current-duration" class="font-semibold">
-                  {duration_minutes(@reactivation_type, @current_interval)} minutos
-                </dd>
-                <dt class="font-medium">Máximo efectivo</dt>
-                <dd id="reactivation-effective-maximum" class="font-semibold">
-                  {effective_maximum(@current_interval)} intervalos
-                </dd>
-              </dl>
-
-              <form
-                id="reactivate-consultation-type-form"
-                phx-change="change_reactivation"
-                phx-submit="confirm_reactivation"
-                class="flex flex-col gap-5"
-              >
-                <.alert
-                  :if={map_size(@reactivation_form_errors) > 0}
-                  id="reactivation-errors"
-                  color="danger"
-                  variant="callout"
-                  with_icon
-                >
-                  Revise la nueva cantidad. El tipo de consulta continúa inactivo y no se realizaron cambios.
-                </.alert>
-
-                <.field
-                  id="reactivation-interval-count"
-                  type="number-field"
-                  name="reactivation[interval_count]"
-                  label="Nueva cantidad de intervalos"
-                  value={@reactivation_form_params["interval_count"]}
-                  errors={field_errors(@reactivation_form_errors, :interval_count)}
-                  min={1}
-                  max={effective_maximum(@current_interval)}
-                  step={1}
-                  inputmode="numeric"
-                  required
-                  aria-invalid={aria_invalid(@reactivation_form_errors, :interval_count)}
-                  aria-describedby={
-                    reactivation_error_summary_id(@reactivation_form_errors, :interval_count)
-                  }
-                  help_text={
-                    "Valores permitidos: de 1 a #{effective_maximum(@current_interval)}."
-                  }
-                  no_margin
-                />
-
-                <.field_wrapper no_margin>
-                  <.field_label for="reactivation-duration">Duración recalculada</.field_label>
-                  <output
-                    id="reactivation-duration"
-                    for="reactivation-interval-count"
-                    class="block rounded-md bg-gray-50 p-4 text-sm font-semibold text-gray-700"
-                    aria-live="polite"
-                  >
-                    <%= if duration = reactivation_duration_preview(
-                      @reactivation_form_params,
-                      @current_interval
-                    ) do %>
-                      {duration} minutos
-                    <% else %>
-                      —
-                    <% end %>
-                  </output>
-                  <.field_help_text>
-                    Se calcula con el Intervalo de Agenda aplicado de {@current_interval} minutos.
-                  </.field_help_text>
-                </.field_wrapper>
-              </form>
-            </div>
-
-            <:footer>
-              <.button
-                type="button"
-                color="gray"
-                variant="outline"
-                phx-click={JS.push("cancel_reactivation")}
-              >
-                Cancelar
-              </.button>
-              <.button
-                type="submit"
-                form="reactivate-consultation-type-form"
-                color="primary"
-              >
-                Reactivar
-              </.button>
-            </:footer>
-          </.modal>
         </div>
       </.container>
     </main>
@@ -783,6 +628,19 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       <strong>No se aplicó el intervalo.</strong>
       Esta selección admite un máximo de {@maximum} intervalos; los tipos activos incompatibles son: {@names}.
       No se modificó ninguna cantidad.
+    </.alert>
+    """
+  end
+
+  attr :feedback, :any, required: true
+
+  defp reactivation_alert(%{feedback: {:incompatible, name, duration}} = assigns) do
+    assigns = assign(assigns, name: name, duration: duration)
+
+    ~H"""
+    <.alert id="reactivation-error" color="danger" variant="callout" with_icon>
+      <strong>No se reactivó {@name}.</strong>
+      Su cantidad preservada produciría una duración de {@duration} minutos, superior al máximo de 240 minutos. El tipo continúa inactivo y no se realizaron cambios.
     </.alert>
     """
   end
@@ -875,13 +733,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   defp type_form_params(_params), do: @type_form_defaults
-
-  defp reactivation_form_params(params) when is_map(params) do
-    Map.merge(
-      @reactivation_form_defaults,
-      Map.take(params, Map.keys(@reactivation_form_defaults))
-    )
-  end
 
   defp edit_type_form_params(%{
          name: name,
@@ -1023,10 +874,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     if has_field_error?(errors, field), do: "new-consultation-type-errors"
   end
 
-  defp reactivation_error_summary_id(errors, field) do
-    if has_field_error?(errors, field), do: "reactivation-errors"
-  end
-
   defp duration_preview(params, current_interval) do
     with {count, ""} <- Integer.parse(params["interval_count"] || ""),
          true <- count in 1..effective_maximum(current_interval) do
@@ -1034,10 +881,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     else
       _invalid -> nil
     end
-  end
-
-  defp reactivation_duration_preview(params, current_interval) do
-    duration_preview(%{"interval_count" => params["interval_count"]}, current_interval)
   end
 
   defp incompatible_active_types(catalog, selected_interval) do
@@ -1054,12 +897,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     Enum.filter(catalog, &(&1.status == :active))
   end
 
-  defp reactivation_type(%{catalog: catalog, reactivation_type_id: id}) when is_binary(id) do
-    Enum.find(catalog, &(&1.id == id and &1.status == :inactive))
-  end
-
-  defp reactivation_type(_assigns), do: nil
-
   defp inactive_type(catalog, id) do
     case Enum.find_index(catalog, &(&1.id == id and &1.status == :inactive)) do
       nil -> nil
@@ -1070,6 +907,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   defp compatible_with_interval?(consultation_type, interval) do
     consultation_type.interval_count <= effective_maximum(interval)
   end
+
+  defp prospective_duration_minutes(type, interval), do: type.interval_count * interval
 
   defp effective_maximum(interval), do: min(10, div(240, interval))
 
@@ -1144,49 +983,12 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     end
   end
 
-  defp confirm_reactivation(socket, index, consultation_type, params) do
-    if compatible_with_interval?(consultation_type, socket.assigns.current_interval) do
-      {:noreply, reset_reactivation_form(socket)}
-    else
-      case validate_count(params["interval_count"], socket.assigns.current_interval) do
-        {:ok, interval_count} ->
-          catalog =
-            List.update_at(socket.assigns.catalog, index, fn type ->
-              type
-              |> Map.put(:interval_count, interval_count)
-              |> Map.put(:status, :active)
-              |> Map.delete(:inactive_duration_minutes)
-            end)
-
-          {:noreply,
-           socket
-           |> assign(catalog: catalog)
-           |> reset_reactivation_form()}
-
-        {:error, message} ->
-          {:noreply,
-           assign(socket,
-             reactivation_form_params: params,
-             reactivation_form_errors: %{interval_count: [message]}
-           )}
-      end
-    end
-  end
-
   defp reset_type_form(socket) do
     assign(socket,
       type_modal_open: false,
       editing_type_id: nil,
       type_form_params: @type_form_defaults,
       type_form_errors: %{}
-    )
-  end
-
-  defp reset_reactivation_form(socket) do
-    assign(socket,
-      reactivation_type_id: nil,
-      reactivation_form_params: @reactivation_form_defaults,
-      reactivation_form_errors: %{}
     )
   end
 
