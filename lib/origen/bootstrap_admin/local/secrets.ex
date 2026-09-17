@@ -1,70 +1,68 @@
 defmodule Origen.BootstrapAdmin.Local.Secrets do
   @moduledoc false
+  alias Origen.BootstrapAdmin.Local.Readiness
 
-  @doc """
-  Reads and decodes local development secrets securely.
-  Ensures files are regular files (not symlinks), bounded in size.
-  Never returns actual key contents in error messages.
-  """
+  def get_verifier_key(source \\ canonical_ready()), do: load(source, :verifier_key_file)
 
-  def get_verifier_key do
-    with {:ok, path} <- fetch_config(:bootstrap_admin_verifier_key),
-         {:ok, content} <- safe_read(path),
-         {:ok, decoded} <- safe_decode(content, 32) do
-      {:ok, decoded}
+  def get_totp_keyring(source \\ canonical_ready()) do
+    with {:ok, key} <- load(source, :totp_key_file),
+         {:ok, tag} <- fetch(source, :totp_key_tag) do
+      {:ok, %{active: %{tag: tag, key: key}, retired: []}}
     else
       _ -> {:error, :secrets_unavailable}
     end
   end
 
-  def get_totp_keyring do
-    with {:ok, path} <- fetch_config(:bootstrap_admin_totp_keyring),
-         {:ok, content} <- safe_read(path),
-         {:ok, decoded} <- safe_decode(content, 32) do
-      {:ok, %{active: %{tag: "local.dev.v1", key: decoded}, retired: []}}
-    else
-      _ -> {:error, :secrets_unavailable}
+  defp canonical_ready do
+    case Readiness.inspect(Application.get_env(:origen, :bootstrap_admin_local, %{})) do
+      {:ok, ready} -> ready
+      _ -> nil
     end
   end
 
-  defp fetch_config(key) do
-    case Application.get_env(:origen, key) do
-      {:file, path} when is_binary(path) -> {:ok, path}
+  defp load(source, key) do
+    with {:ok, path} <- fetch(source, key),
+         {:ok, content} <- safe_read(path),
+         {:ok, decoded} <- safe_decode(content, 32),
+         do: {:ok, decoded},
+         else: (_ -> {:error, :secrets_unavailable})
+  end
+
+  defp fetch(%{} = source, key) do
+    case Map.fetch(source, key) do
+      {:ok, value} when is_binary(value) -> {:ok, value}
       _ -> {:error, :missing_config}
     end
   end
 
-  defp safe_read(path) do
-    case File.stat(path) do
-      {:ok, %{type: :regular, size: size}} when size <= 4096 ->
-        File.read(path)
+  defp fetch(_, _), do: {:error, :missing_config}
 
-      _ ->
-        {:error, :invalid_file}
-    end
+  defp safe_read(path) do
+    with {:ok, %{type: :regular, size: size, mode: mode} = stat} when size in 1..4096 <-
+           File.lstat(path),
+         true <- Bitwise.band(mode, 0o077) == 0,
+         true <- not Map.has_key?(stat, :links) or stat.links == 1,
+         do: File.read(path),
+         else: (_ -> {:error, :invalid_file})
+  rescue
+    _ -> {:error, :invalid_file}
   end
 
   defp safe_decode(content, expected_bytes) do
     content = String.trim(content)
 
-    case Base.decode64(content, padding: false) do
-      {:ok, bytes} when byte_size(bytes) == expected_bytes ->
-        {:ok, bytes}
+    decoded =
+      case Base.decode64(content, padding: false) do
+        :error -> Base.decode64(content)
+        result -> result
+      end
 
-      {:ok, bytes} when byte_size(bytes) > expected_bytes ->
+    case decoded do
+      {:ok, bytes} when byte_size(bytes) >= expected_bytes ->
         {:ok, binary_part(bytes, 0, expected_bytes)}
 
       _ ->
-        case Base.decode64(content) do
-          {:ok, bytes} when byte_size(bytes) == expected_bytes ->
-            {:ok, bytes}
-
-          {:ok, bytes} when byte_size(bytes) > expected_bytes ->
-            {:ok, binary_part(bytes, 0, expected_bytes)}
-
-          _ ->
-            {:error, :invalid_encoding}
-        end
+        {:error, :invalid_encoding}
     end
   end
 end

@@ -18,7 +18,7 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
     else
       config =
         Keyword.get(opts, :config) ||
-          Application.get_env(:origen, :bootstrap_admin_local_config, %{})
+          Application.get_env(:origen, :bootstrap_admin_local, %{})
 
       destination =
         Keyword.get(opts, :destination) ||
@@ -29,14 +29,11 @@ defmodule Origen.BootstrapAdmin.Local.Mailbox do
           end
 
       origin =
-        Keyword.get(opts, :origin) ||
-          Origin.validate(
-            config[:activation_origin] || "https://127.0.0.1:4443/admin/activate",
-            config[:endpoint] || %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false}
-          )
+        Keyword.get(opts, :origin) || config[:origin] ||
+          Origin.validate(config[:activation_origin], config[:endpoint])
           |> case do
             {:ok, o} -> o
-            _ -> %Origin{uri: URI.parse("https://127.0.0.1:4443/admin/activate")}
+            _ -> nil
           end
 
       correlation_ref =
