@@ -222,7 +222,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
-      assert html =~ "py-[12px]"
+      assert html =~ "py-[20px]"
       assert html =~ "px-[16px]"
       assert html =~ "rounded-md"
       assert html =~ "focus:ring-2"
