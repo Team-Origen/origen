@@ -54,6 +54,10 @@ config :origen, OrigenWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :origen, dev_routes: true
 
+config :origen,
+  consultation_catalog_demo_enabled: true,
+  consultation_type_catalog_adapter: Origen.ConsultationTypes.MockCatalog
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

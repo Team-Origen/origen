@@ -23,6 +23,15 @@ defmodule OrigenWeb.Router do
     post "/admin/activate", AdminActivationController, :create
   end
 
+  if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
+       Mix.env() != :prod do
+    scope "/configuracion", OrigenWeb do
+      pipe_through :browser
+
+      live "/profesional", ConsultationTypeCatalogLive
+    end
+  end
+
   scope "/api/bootstrap", OrigenWeb do
     pipe_through :api
 
