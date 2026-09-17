@@ -50,8 +50,12 @@ defmodule Origen.Sessions do
   def create_session(account_or_id, opts \\ [])
 
   def create_session(account_id, opts) when is_integer(account_id) do
-    case Repo.query("SELECT id, role, state FROM internal_accounts WHERE id = $1", [account_id]) do
-      {:ok, %{rows: [[id, role, "active"]]}} ->
+    case Repo.query(
+           "SELECT id, role, state FROM internal_accounts WHERE id = $1 AND state = 'active'",
+           [account_id]
+         ) do
+      {:ok, %{rows: [[id, role, "active"]]}}
+      when role in ~w(administrator professional secretary) ->
         do_create_session(id, role, opts)
 
       _ ->
@@ -59,12 +63,8 @@ defmodule Origen.Sessions do
     end
   end
 
-  def create_session(%{id: id, state: "active", role: role}, opts) when is_integer(id) do
-    do_create_session(id, to_string(role), opts)
-  end
-
-  def create_session(%{id: id, state: :active, role: role}, opts) when is_integer(id) do
-    do_create_session(id, to_string(role), opts)
+  def create_session(%{id: id}, opts) when is_integer(id) do
+    create_session(id, opts)
   end
 
   def create_session(_invalid, _opts), do: {:error, :unauthenticated}
