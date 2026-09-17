@@ -25,7 +25,7 @@ Each Consultation Type MUST have an immutable identity and exactly one owning Pr
 
 ### Requirement: Derived Duration and Booking Snapshots
 
-An active Consultation Type's current duration MUST equal its interval count multiplied by its owner's current Agenda Interval and MUST be at most three hours. An inactive type's historical duration MUST equal the duration it had when deactivated and MUST NOT change with later Agenda Interval changes. A new booking MUST snapshot the selected type's current normalized name, resulting duration in minutes, and exact ARS base price. Bookings MUST store and display duration as minutes, never as an interval count. Later catalog or Agenda Interval changes MUST NOT alter any existing snapshot.
+An active Consultation Type's current duration MUST equal its interval count multiplied by its owner's current Agenda Interval and MUST be at most 240 minutes. An inactive type's historical duration MUST equal the duration it had when deactivated and MUST NOT change with later Agenda Interval changes. A new booking MUST snapshot the selected type's current normalized name, resulting duration in minutes, and exact ARS base price. Bookings MUST store and display duration as minutes, never as an interval count. Later catalog or Agenda Interval changes MUST NOT alter any existing snapshot.
 
 #### Scenario: Booking captures current values
 

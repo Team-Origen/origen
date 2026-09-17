@@ -133,7 +133,7 @@ Consultation Type creation, modification, deactivation, reactivation, and Agenda
 
 #### Scenario: Agenda Interval application succeeds
 
-- GIVEN an authorized Agenda Interval change preserves every active interval count and produces no duration over three hours
+- GIVEN an authorized Agenda Interval change preserves every active interval count and produces no duration over 240 minutes
 - WHEN the Professional confirms with `Aplicar intervalo` and the complete change succeeds
 - THEN one sanitized outcome MUST evidence the successful atomic operation
 - AND no event MUST imply a replacement, individual adaptation, or partial application
