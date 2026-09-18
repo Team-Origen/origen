@@ -26,6 +26,9 @@ defmodule OrigenWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/activate", InternalActivationController, :new
+    post "/activate/exchange", InternalActivationController, :exchange
+    post "/activate", InternalActivationController, :create
     get "/admin/activate", AdminActivationController, :new
     post "/admin/activate/exchange", AdminActivationController, :exchange
     post "/admin/activate", AdminActivationController, :create
