@@ -31,7 +31,7 @@ defmodule Origen.BootstrapAdmin.CoverageRemediationTest do
     assert {:ok, expired} = BootstrapAdmin.issue_first(%{verifier_key: @key})
 
     Repo.query!(
-      "UPDATE internal_account_invitations SET expires_at = clock_timestamp() WHERE id = $1",
+      "UPDATE internal_account_invitations SET expires_at = issued_at + interval '1 millisecond' WHERE id = $1",
       [expired.invitation_id]
     )
 
