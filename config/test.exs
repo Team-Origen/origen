@@ -37,6 +37,10 @@ config :origen,
   bootstrap_admin_enabled: false,
   consultation_catalog_demo_enabled: true,
   consultation_type_catalog_adapter: Origen.ConsultationTypes.MockCatalog,
+  totp_keyring: %{
+    active: %{tag: "test.v1", key: String.duplicate("k", 32)},
+    retired: []
+  },
   bootstrap_admin_delivery: %{
     enabled: false,
     allowed_adapters: [Origen.TestSupport.BootstrapAdmin.NonRetainingAdapter]
