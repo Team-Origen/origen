@@ -2,8 +2,9 @@ defmodule Origen.AccountsTest do
   use Origen.DataCase
 
   alias Origen.Accounts
+  alias Origen.Audit.Events
   alias Origen.BootstrapAdmin
-  alias Origen.BootstrapAdmin.Credentials
+  alias Origen.BootstrapAdmin.{Credentials, Verifier}
   alias Origen.Repo
   alias Origen.Sessions
 
@@ -543,6 +544,165 @@ defmodule Origen.AccountsTest do
         assert Repo.query!("SELECT role, state FROM internal_accounts WHERE id = $1", [account_id]).rows ==
                  [[Atom.to_string(role), "active"]]
       end
+    end
+  end
+
+  describe "prepare_internal_account_activation/3" do
+    test "returns a short binding for pending professional and secretary invitations without mutating them" do
+      administrator = create_active_account()
+
+      for role <- [:professional, :secretary] do
+        assert {:ok, invitation} =
+                 Accounts.create_and_invite_internal_account(
+                   administrator.id,
+                   %{
+                     email: "prepare.#{role}@clinicaorigen.com",
+                     role: role
+                   },
+                   verifier_key: @verifier_key
+                 )
+
+        assert {:ok,
+                %{
+                  account_id: invitation.account_id,
+                  invitation_id: invitation.invitation_id
+                }} ==
+                 Accounts.prepare_internal_account_activation(
+                   invitation.invitation_id,
+                   invitation.token,
+                   verifier_key: @verifier_key
+                 )
+
+        assert [["pending_activation", nil, nil]] =
+                 Repo.query!(
+                   """
+                   SELECT a.state, i.consumed_at, i.revoked_at
+                   FROM internal_accounts AS a
+                   JOIN internal_account_invitations AS i ON i.account_id = a.id
+                   WHERE i.id = $1
+                   """,
+                   [invitation.invitation_id]
+                 ).rows
+      end
+
+      assert Repo.query!("SELECT count(*) FROM audit_events WHERE event = 'account_activation'").rows ==
+               [[0]]
+    end
+
+    test "fails closed for unusable invitations and records only opaque audit failures" do
+      administrator = create_active_account()
+
+      invitations =
+        for label <- [:invalid_token, :revoked, :expired, :consumed] do
+          assert {:ok, invitation} =
+                   Accounts.create_and_invite_internal_account(
+                     administrator.id,
+                     %{
+                       email: "#{label}@clinicaorigen.com",
+                       role: :professional
+                     },
+                     verifier_key: @verifier_key
+                   )
+
+          invitation
+        end
+
+      [invalid_token, revoked, expired, consumed] = invitations
+
+      Repo.query!(
+        "UPDATE internal_account_invitations SET revoked_at = clock_timestamp() WHERE id = $1",
+        [revoked.invitation_id]
+      )
+
+      Repo.query!(
+        """
+        UPDATE internal_account_invitations
+        SET issued_at = clock_timestamp() - interval '2 hours',
+            expires_at = clock_timestamp() - interval '1 hour'
+        WHERE id = $1
+        """,
+        [expired.invitation_id]
+      )
+
+      Repo.query!(
+        "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
+        [consumed.invitation_id]
+      )
+
+      attempts = [
+        {invalid_token.invitation_id, "wrong-token"},
+        {-1, "nonexistent-token"},
+        {revoked.invitation_id, revoked.token},
+        {expired.invitation_id, expired.token},
+        {consumed.invitation_id, consumed.token},
+        {nil, nil}
+      ]
+
+      for {invitation_id, token} <- attempts do
+        assert {:error, :activation_failed} =
+                 Accounts.prepare_internal_account_activation(
+                   invitation_id,
+                   token,
+                   verifier_key: @verifier_key
+                 )
+      end
+
+      audit_rows =
+        Repo.query!("""
+        SELECT actor_kind, actor_ref, event, entity_kind, entity_ref, result
+        FROM audit_events
+        WHERE event = 'account_activation'
+        ORDER BY id
+        """).rows
+
+      assert length(audit_rows) == length(attempts)
+
+      assert Enum.all?(audit_rows, fn row ->
+               row == ["anonymous", nil, "account_activation", nil, nil, "failed"]
+             end)
+
+      audit_dump = inspect(audit_rows)
+      refute audit_dump =~ invalid_token.token
+      refute audit_dump =~ to_string(invalid_token.invitation_id)
+      refute audit_dump =~ to_string(invalid_token.account_id)
+    end
+
+    test "rejects administrator invitations from the staff boundary with an opaque audit" do
+      %{token: token, verifier_version: version, verifier_digest: digest} =
+        Verifier.issue(@verifier_key)
+
+      account_id = insert_pending_account(:administrator)
+
+      %{rows: [[invitation_id]]} =
+        Repo.query!(
+          """
+          INSERT INTO internal_account_invitations
+            (account_id, verifier_version, verifier_digest, expires_at)
+          VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour')
+          RETURNING id
+          """,
+          [account_id, version, digest]
+        )
+
+      assert {:error, :activation_failed} =
+               Accounts.prepare_internal_account_activation(invitation_id, token,
+                 verifier_key: @verifier_key
+               )
+
+      assert Repo.query!("""
+             SELECT actor_kind, actor_ref, entity_kind, entity_ref, result
+             FROM audit_events
+             WHERE event = 'account_activation'
+             """).rows == [["anonymous", nil, nil, nil, "failed"]]
+    end
+
+    test "activation failures support an anonymous actor with no entity reference" do
+      assert {:ok, event} = Events.activation_failed({:anonymous, nil}, nil)
+      assert event.actor_kind == "anonymous"
+      assert is_nil(event.actor_ref)
+      assert is_nil(event.entity_kind)
+      assert is_nil(event.entity_ref)
+      assert event.result == "failed"
     end
   end
 
