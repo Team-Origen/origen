@@ -21,6 +21,8 @@ defmodule OrigenWeb.Router do
     get "/admin/activate", AdminActivationController, :new
     post "/admin/activate/exchange", AdminActivationController, :exchange
     post "/admin/activate", AdminActivationController, :create
+
+    live "/admin/internal", AdminInternalLive, :index
   end
 
   if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
