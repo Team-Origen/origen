@@ -12,21 +12,15 @@ defmodule Origen.BootstrapAdmin.Local.Authorization do
   Returns `{:ok, ready.destination, target}` on success or `{:error, finding}`.
   """
   def authorize(opts \\ []) do
-    config =
-      Keyword.get(opts, :config) ||
-        Application.get_env(:origen, :bootstrap_admin_local_config, %{})
-
-    probes = Keyword.get(opts, :probes)
-
     readiness_result =
-      if probes do
-        Readiness.inspect(config, probes)
-      else
-        Readiness.inspect(config)
+      case Keyword.get(opts, :ready) do
+        %Readiness.Ready{} = ready -> {:ok, ready}
+        nil -> inspect_canonical_config(opts)
+        _ -> {:error, :local_not_ready}
       end
 
     with {:ok, ready} <- readiness_result,
-         {:ok, database_fact} <- assert_isolated_database(),
+         {:ok, database_fact} <- assert_isolated_database(ready.database_name),
          target_facts = aggregate_target(),
          {:ok, target_record} <- extract_target(target_facts),
          {:ok, _operation} <- evaluate_operation(target_facts, database_fact) do
@@ -34,17 +28,20 @@ defmodule Origen.BootstrapAdmin.Local.Authorization do
     end
   end
 
-  defp assert_isolated_database do
-    case Repo.config()[:database] do
-      name when is_binary(name) ->
-        if String.ends_with?(name, "dev") or String.ends_with?(name, "test") do
-          {:ok, :isolated}
-        else
-          {:error, :shared_database}
-        end
+  defp inspect_canonical_config(opts) do
+    config = Keyword.get(opts, :config, Application.get_env(:origen, :bootstrap_admin_local, %{}))
 
-      _ ->
-        {:error, :database_unverifiable}
+    case Keyword.get(opts, :probes) do
+      nil -> Readiness.inspect(config)
+      probes -> Readiness.inspect(config, probes)
+    end
+  end
+
+  defp assert_isolated_database(configured_name) do
+    case Repo.config()[:database] do
+      ^configured_name when is_binary(configured_name) -> {:ok, :isolated}
+      name when is_binary(name) -> {:error, :shared_database}
+      _ -> {:error, :database_unverifiable}
     end
   end
 

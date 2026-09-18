@@ -59,6 +59,15 @@ defmodule Origen.Audit.Events do
   def delivery_revocation_failed(actor, ref),
     do: invitation(actor, "delivery_revocation_failed", ref, "failed")
 
+  def internal_login_succeeded(actor, ref) when is_binary(ref),
+    do: lifecycle(actor, "internal_login", ref, "succeeded")
+
+  def internal_login_failed(actor, ref) when is_binary(ref),
+    do: lifecycle(actor, "internal_login", ref, "failed")
+
+  def internal_login_failed(actor, nil),
+    do: build(actor, "internal_login", nil, "failed")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 

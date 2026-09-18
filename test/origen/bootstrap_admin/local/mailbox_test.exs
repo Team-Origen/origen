@@ -5,8 +5,23 @@ defmodule Origen.BootstrapAdmin.Local.MailboxTest do
   alias Origen.BootstrapAdmin.Local.MailboxStore
 
   setup do
+    previous = Application.fetch_env(:origen, :bootstrap_admin_local)
     MailboxStore.clear()
     Swoosh.Adapters.Local.Storage.Memory.delete_all()
+
+    Application.put_env(:origen, :bootstrap_admin_local, %{
+      destination: "student@example.test",
+      activation_origin: "https://127.0.0.1:4443/admin/activate",
+      endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false}
+    })
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:origen, :bootstrap_admin_local, value)
+        :error -> Application.delete_env(:origen, :bootstrap_admin_local)
+      end
+    end)
+
     :ok
   end
 

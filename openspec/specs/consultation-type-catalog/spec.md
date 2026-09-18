@@ -8,14 +8,14 @@ Define each Professional's consultation catalog, booking snapshots, and downstre
 
 ### Requirement: Professional-owned Catalog Entries
 
-Each Consultation Type MUST have an immutable identity and exactly one owning Professional. Its mutable fields MUST include an active state, a required normalized name of at most 32 characters, an exact non-negative ARS base price with no more than two decimal places, a `#RRGGBB` color, and an agenda-interval count. Name normalization MUST NOT impose uniqueness; duplicate normalized names MAY coexist for one Professional. An active type's interval count MUST be from 1 through the effective maximum defined by the owner's Agenda Interval; an inactive type MAY retain a count above the current effective maximum but MUST receive an explicit valid replacement as part of atomic reactivation. No business maximum MAY be imposed on an otherwise exactly representable valid price.
+Each Consultation Type MUST have an immutable identity and exactly one owning Professional. Its mutable fields while active MUST include an active state, a required normalized name of at most 32 characters, an exact non-negative ARS base price with no more than two decimal places, a `#RRGGBB` color, and an agenda-interval count. Name normalization MUST NOT impose uniqueness; duplicate normalized names MAY coexist for one Professional, and names MUST NOT serve as record or action identity. An active type's interval count MUST be from 1 through the effective maximum defined by the owner's Agenda Interval. An inactive type MUST NOT be edited and MUST preserve its interval count and deactivation-time duration until reactivation. No business maximum MAY be imposed on an otherwise exactly representable valid price.
 
 #### Scenario: Valid duplicate name
 
 - GIVEN a Professional owns an active type with a normalized name
 - WHEN the Professional creates another valid type with the same normalized name
 - THEN the system MUST retain both under distinct immutable identities
-- AND selection MUST distinguish them by duration and price
+- AND presentation MAY distinguish them by name, duration, and price while selection and actions use their immutable identities
 
 #### Scenario: Invalid catalog fields
 
@@ -25,7 +25,7 @@ Each Consultation Type MUST have an immutable identity and exactly one owning Pr
 
 ### Requirement: Derived Duration and Booking Snapshots
 
-A Consultation Type's current duration MUST equal its interval count multiplied by its owner's current Agenda Interval and MUST be at most 240 minutes. A new booking MUST snapshot the selected type's current normalized name, resulting duration in minutes, and exact ARS base price. Bookings MUST store and display duration as minutes, never as an interval count. Later catalog or Agenda Interval changes MUST NOT alter any existing snapshot.
+An active Consultation Type's current duration MUST equal its interval count multiplied by its owner's current Agenda Interval and MUST be at most 240 minutes. An inactive type's historical duration MUST equal the duration it had when deactivated and MUST NOT change with later Agenda Interval changes. A new booking MUST snapshot the selected type's current normalized name, resulting duration in minutes, and exact ARS base price. Bookings MUST store and display duration as minutes, never as an interval count. Later catalog or Agenda Interval changes MUST NOT alter any existing snapshot.
 
 #### Scenario: Booking captures current values
 
@@ -42,7 +42,7 @@ A Consultation Type's current duration MUST equal its interval count multiplied 
 
 ### Requirement: Lifecycle and Current Color
 
-A Consultation Type MAY be deactivated without deleting its identity or historical references. An inactive type MUST NOT be selected for a new booking. Edits and deactivation MUST affect only future selection. Every booking that references the type MUST use its current color, including after color edits or deactivation; color MUST NOT be snapshotted.
+A Consultation Type MAY be deactivated without deleting its identity or historical references. Deactivation MUST leave already-booked appointments unchanged and make the type unavailable only for new bookings. An inactive type MUST NOT be edited, MAY be shown through `Mostrar consultas inactivas`, and MAY be reactivated under the current Agenda Interval rules. Every booking that references the type MUST use its current color, including after color edits or deactivation; color MUST NOT be snapshotted.
 
 #### Scenario: Type with history is deactivated
 
@@ -59,7 +59,7 @@ A Consultation Type MAY be deactivated without deleting its identity or historic
 
 ### Requirement: Accessible and Unambiguous Selection
 
-Any presentation of a Consultation Type MUST preserve applicable WCAG AA contrast and MUST provide a non-color cue. Selectors MUST show name, duration in minutes, and price so duplicate names remain distinguishable.
+Any presentation of a Consultation Type MUST preserve applicable WCAG AA contrast and MUST provide a non-color cue. Selectors MUST show name, duration in minutes, and price so duplicate names remain distinguishable, while records and actions MUST use immutable identities rather than names.
 
 #### Scenario: Color cannot be perceived
 

@@ -131,12 +131,12 @@ Consultation Type creation, modification, deactivation, reactivation, and Agenda
 - THEN its change and sanitized `succeeded` event MUST commit atomically
 - AND the event MUST contain no mutable catalog values
 
-#### Scenario: Agenda adaptation succeeds
+#### Scenario: Agenda Interval application succeeds
 
-- GIVEN an authorized Agenda Interval change includes every required explicit active-type replacement
-- WHEN the complete change succeeds
+- GIVEN an authorized Agenda Interval change preserves every active interval count and produces no duration over 240 minutes
+- WHEN the Professional confirms with `Aplicar intervalo` and the complete change succeeds
 - THEN one sanitized outcome MUST evidence the successful atomic operation
-- AND no event MUST imply an inferred replacement or partial adaptation
+- AND no event MUST imply a replacement, individual adaptation, or partial application
 
 #### Scenario: Operation is denied
 

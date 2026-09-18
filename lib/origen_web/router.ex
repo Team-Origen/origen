@@ -25,6 +25,15 @@ defmodule OrigenWeb.Router do
     live "/admin/internal", AdminInternalLive, :index
   end
 
+  if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
+       Mix.env() != :prod do
+    scope "/configuracion", OrigenWeb do
+      pipe_through :browser
+
+      live "/profesional", ConsultationTypeCatalogLive
+    end
+  end
+
   scope "/api/bootstrap", OrigenWeb do
     pipe_through :api
 

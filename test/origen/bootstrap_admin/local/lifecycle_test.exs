@@ -10,6 +10,10 @@ defmodule Origen.BootstrapAdmin.Local.LifecycleTest do
     def deliver(_transient, _opts), do: {:error, :simulated_mailer_crash}
   end
 
+  defmodule SecretCache do
+    def fetch_secret(:verifier_key), do: {:ok, String.duplicate("k", 32)}
+  end
+
   setup do
     Repo.query!("DELETE FROM internal_account_invitations")
     Repo.query!("DELETE FROM internal_accounts")
@@ -35,7 +39,8 @@ defmodule Origen.BootstrapAdmin.Local.LifecycleTest do
       Application.delete_env(:origen, :bootstrap_admin_local_profile)
     end)
 
-    {:ok, default_opts: [config: valid_config(), probes: valid_probes()]}
+    {:ok,
+     default_opts: [config: valid_config(), probes: valid_probes(), secret_cache: SecretCache]}
   end
 
   test "failed handoff triggers automatic compensation revoking the invitation", %{
@@ -118,12 +123,12 @@ defmodule Origen.BootstrapAdmin.Local.LifecycleTest do
       retention_owner: Origen.BootstrapAdmin.Local.Mailbox,
       retention_ttl_seconds: 60,
       max_messages: 1,
-      certificate_path: "certificate-canary",
-      certificate_key_path: "certificate-key-canary",
-      verifier_key_path: "verifier-canary",
-      totp_key_path: "totp-canary",
+      certificate_file: "certificate-canary",
+      certificate_key_file: "certificate-key-canary",
+      verifier_key_file: "verifier-canary",
+      totp_key_file: "totp-canary",
       totp_key_tag: "local-totp",
-      database_name: "origen_dev",
+      database_name: Repo.config()[:database],
       database_scope: :isolated_workstation
     }
   end

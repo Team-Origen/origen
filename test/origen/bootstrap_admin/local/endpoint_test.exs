@@ -86,6 +86,72 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
     assert_receive :listener_stopped
   end
 
+  test "bounded slow startup can complete beyond the GenServer default call timeout" do
+    assert :ok =
+             Endpoint.start_session(local_config(),
+               startup_timeout: 6_000,
+               server_start: fn _options ->
+                 Process.sleep(5_100)
+                 {:ok, spawn(fn -> Process.sleep(:infinity) end)}
+               end,
+               secret_loader: fn ->
+                 {:ok, %{verifier_key: "secret", totp_keyring: :keyring}}
+               end
+             )
+
+    assert {:ok, "secret"} = Endpoint.fetch_secret(:verifier_key)
+  end
+
+  test "startup timeout owns and terminates a listener before returning" do
+    parent = self()
+
+    assert {:error, :local_endpoint_invalid} =
+             Endpoint.start_session(local_config(),
+               startup_timeout: 25,
+               server_start: fn _options ->
+                 listener = spawn_link(fn -> Process.sleep(:infinity) end)
+                 send(parent, {:listener_started, listener})
+                 Process.sleep(100)
+                 {:ok, listener}
+               end,
+               secret_loader: fn ->
+                 {:ok, %{verifier_key: "secret", totp_keyring: :keyring}}
+               end
+             )
+
+    assert_receive {:listener_started, listener}
+    monitor = Process.monitor(listener)
+    assert_receive {:DOWN, ^monitor, :process, ^listener, _reason}
+    refute Process.alive?(listener)
+    assert :inactive = :sys.get_state(Endpoint)
+    assert {:error, :secrets_unavailable} = Endpoint.fetch_secret(:verifier_key)
+  end
+
+  test "accepts configuration with structured Origin without infinite recursion" do
+    alias Origen.BootstrapAdmin.Local.Origin
+
+    {:ok, origin} =
+      Origin.validate("https://127.0.0.1:4443/admin/activate", %{
+        scheme: :https,
+        ip: {127, 0, 0, 1},
+        port: 4443,
+        http: false
+      })
+
+    config =
+      local_config()
+      |> Map.delete(:activation_origin)
+      |> Map.put(:origin, origin)
+
+    assert :ok =
+             Endpoint.start_session(config,
+               server_start: fn _ -> {:ok, spawn(fn -> Process.sleep(:infinity) end)} end,
+               secret_loader: fn -> {:ok, %{verifier_key: "secret", totp_keyring: :keyring}} end
+             )
+
+    assert {:ok, "secret"} = Endpoint.fetch_secret(:verifier_key)
+  end
+
   defp start_session(server, config \\ local_config()) do
     Endpoint.start_session(config,
       server_start: fn _ -> {:ok, server.()} end,

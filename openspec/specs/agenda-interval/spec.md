@@ -39,38 +39,38 @@ For an Agenda Interval of `interval_minutes`, the maximum Consultation Type coun
 - WHEN a Consultation Type count is validated
 - THEN the maximum valid count MUST be 10 despite the 240-minute ceiling allowing more
 
-### Requirement: Atomic Interval Adaptation
+### Requirement: Agenda Interval Application
 
-When an Agenda Interval change would make one or more active Consultation Types incompatible, the Professional MUST explicitly assign a valid replacement count to every affected active type and confirm the interval plus all replacements as one atomic operation. The system MUST NOT infer, clamp, or automatically reduce any count. Compatible counts MUST remain unchanged. If any affected active type lacks a valid explicit replacement, the system MUST reject the whole operation and leave the interval and catalog unchanged. Existing booking durations and other snapshots MUST remain unchanged.
+Selecting a new Agenda Interval MUST warn the Professional that active Consultation Type durations will change. Every active type MUST preserve its interval count, and its duration MUST be recalculated from that count and the proposed interval without replacement or individual adaptation. If any resulting active duration would exceed 240 minutes, application MUST be blocked, the interval and catalog MUST remain unchanged, and every blocking type MUST be identified unambiguously while records and actions remain bound to immutable identities. If no active type would exceed 240 minutes, the Professional MUST explicitly confirm with `Aplicar intervalo`, and the interval plus all recalculated active durations MUST become effective atomically. Inactive historical durations, existing booking durations, and other booking snapshots MUST remain unchanged.
 
-#### Scenario: Active types require adaptation
+#### Scenario: Active durations are recalculated
 
-- GIVEN active types have counts both within and above the proposed effective maximum
-- WHEN the owner explicitly assigns a valid replacement to every incompatible type and confirms the complete change
-- THEN the interval and all explicit replacements MUST become effective atomically
-- AND compatible counts and existing booking snapshots MUST remain unchanged
+- GIVEN every active type's preserved count produces a duration of no more than 240 minutes under a proposed Agenda Interval
+- WHEN the owner selects the interval, reviews the warning, and confirms with `Aplicar intervalo`
+- THEN the interval and every recalculated active duration MUST become effective atomically
+- AND all interval counts, inactive historical durations, and existing booking snapshots MUST remain unchanged
 
-#### Scenario: Explicit replacement is missing or invalid
+#### Scenario: Active types block application
 
-- GIVEN a proposed Agenda Interval would make one or more active types incompatible
-- WHEN any affected type lacks an explicit replacement or has a replacement outside the new effective range
+- GIVEN a proposed Agenda Interval would make one or more active types exceed 240 minutes using their preserved counts
+- WHEN the owner attempts to apply the interval
 - THEN the interval and every Consultation Type MUST retain their prior values
-- AND the system MUST NOT infer or alter any replacement count
+- AND the system MUST identify every blocking type unambiguously by presentation while binding each record and action to its immutable identity
 
 ### Requirement: Inactive Type Reactivation
 
-An inactive Consultation Type MAY retain an incompatible count while inactive. To reactivate it, the Professional MUST explicitly assign a valid replacement count and confirm that replacement with reactivation as one atomic operation. The system MUST NOT infer, clamp, or automatically reduce the count. Missing or invalid explicit replacement MUST reject the whole reactivation unchanged. Existing booking snapshots MUST remain unchanged.
+An inactive Consultation Type MUST preserve both its interval count and the historical duration it had when deactivated. Agenda Interval changes MUST NOT alter that historical duration. Reactivation MUST derive the active duration from the preserved count and the current Agenda Interval without replacement or adaptation. If that duration would exceed 240 minutes, the system MUST reject reactivation unchanged and identify the type unambiguously. Existing booking snapshots MUST remain unchanged.
 
 #### Scenario: Incompatible inactive type is reactivated
 
-- GIVEN an inactive type's count exceeds its owner's current effective maximum
-- WHEN its owner explicitly assigns a valid replacement count and confirms reactivation
-- THEN the replacement and reactivation MUST succeed atomically before the type becomes selectable
+- GIVEN an inactive type's preserved count produces a duration of no more than 240 minutes under its owner's current Agenda Interval
+- WHEN its owner confirms reactivation
+- THEN reactivation MUST succeed with the preserved count and current derived duration before the type becomes selectable
 - AND existing booking snapshots MUST remain unchanged
 
-#### Scenario: Incompatible inactive type lacks a valid replacement
+#### Scenario: Inactive type exceeds the current duration maximum
 
-- GIVEN an inactive type's count exceeds its owner's current effective maximum
-- WHEN reactivation omits an explicit replacement or provides an invalid one
-- THEN the type MUST remain inactive with its prior count unchanged
-- AND the system MUST NOT infer or alter a replacement count
+- GIVEN an inactive type's preserved count would produce a duration greater than 240 minutes under its owner's current Agenda Interval
+- WHEN its owner requests reactivation
+- THEN the type MUST remain inactive with its preserved count and historical duration unchanged
+- AND the system MUST identify the rejected type without offering replacement or adaptation

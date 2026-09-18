@@ -97,7 +97,7 @@ Bootstrap creation, invitation reissue, and web activation MUST each be represen
 
 ### Requirement: Consultation Catalog and Agenda Interval Ownership
 
-Only an authenticated Professional with an active account and an explicit authorization grant MAY change that Professional's own Agenda Interval, create a Consultation Type for that Professional's own profile, or modify, deactivate, or reactivate a type owned by that profile. Every decision MUST establish actor, operation, account state, target identity, and ownership. Administrator, Secretary, Patient, unauthenticated, unknown, missing, or mismatched facts MUST be denied without agenda or catalog effects.
+Only an authenticated Professional with an active account and an explicit authorization grant MAY change that Professional's own Agenda Interval, create a Consultation Type for that Professional's own profile, or modify, deactivate, or reactivate a type owned by that profile. Every decision MUST establish actor, operation, account state, immutable target identity, and ownership; a name MUST NOT identify or authorize a target. Administrator, Secretary, Patient, unauthenticated, unknown, missing, or mismatched facts MUST be denied without agenda or catalog effects.
 
 #### Scenario: Owner changes own configuration
 
