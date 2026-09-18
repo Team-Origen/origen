@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+RELEASE_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+exec "$RELEASE_ROOT/origen" eval 'Origen.Release.bootstrap_admin(System.argv())' -- "$@"

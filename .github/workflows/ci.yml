@@ -1,0 +1,144 @@
+name: CI Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  validations:
+    name: Validar Rama e Issue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar nomenclatura de la rama
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          # La rama debe empezar con un tipo válido o ser un hotfix
+          if [[ ! "$BRANCH" =~ ^(feat|feature|fix|chore|docs|style|refactor|perf|test|build|ci|revert)/.*$ ]] && [[ ! "$BRANCH" =~ ^hotfix/.*$ ]]; then
+            echo "Error: La rama debe cumplir con el estándar (ej. feat/1-scaffold-ci, feature/mi-cambio o hotfix/bug-urgente)."
+            exit 1
+          fi
+
+      - name: Validar issue vinculada en el PR
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [[ ! "$BODY" =~ (Closes|Fixes|Resolves)\ #[0-9]+ ]]; then
+            echo "Error: La descripción del PR debe vincular una issue aprobada (ej. 'Closes #1')."
+            exit 1
+          fi
+
+  security:
+    name: Escaneo de Secretos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog Secret Scanner
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  test:
+    name: Build y Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: origen_test
+        ports:
+          - 5432:5432 # En CI usamos el puerto estándar del entorno, no el 5433
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Elixir y Erlang
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "29.0"
+          elixir-version: "1.20.3"
+
+      - name: Caché de dependencias
+        uses: actions/cache@v3
+        with:
+          path: deps
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - name: Instalar dependencias
+        run: mix deps.get
+
+      - name: Verificar Formato
+        run: mix format --check-formatted
+
+      - name: Compilar con advertencias como errores
+        run: mix compile --warnings-as-errors
+
+      - name: Provision least-privilege database roles
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATOR_ROLE: origen_migrator
+          ORIGEN_RUNTIME_ROLE: origen_runtime
+          ORIGEN_VERIFIER_ROLE: origen_verifier
+          ORIGEN_MIGRATOR_PASSWORD: postgres
+          ORIGEN_RUNTIME_PASSWORD: postgres
+          ORIGEN_VERIFIER_PASSWORD: postgres
+        run: psql -X -v ON_ERROR_STOP=1 -d origen_test -f priv/repo/security/provision_roles.sql
+
+      - name: Migrate with SET-only owner capability
+        env:
+          MIX_ENV: test
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATION_DATABASE_URL: ecto://origen_migrator:postgres@localhost:5432/origen_test
+        run: mix ecto.security.migrate
+
+      - name: Apply runtime and verifier grants
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATOR_ROLE: origen_migrator
+          ORIGEN_RUNTIME_ROLE: origen_runtime
+          ORIGEN_VERIFIER_ROLE: origen_verifier
+          ORIGEN_MIGRATOR_PASSWORD: postgres
+          ORIGEN_RUNTIME_PASSWORD: postgres
+          ORIGEN_VERIFIER_PASSWORD: postgres
+        run: psql -X -v ON_ERROR_STOP=1 -d origen_test -f priv/repo/security/provision_roles.sql
+
+      - name: Run application tests
+        env:
+          ORIGEN_TEST_DB_USERNAME: postgres
+          ORIGEN_TEST_DB_PASSWORD: postgres
+          ORIGEN_TEST_DB_PORT: 5432
+        run: mix test
+
+      - name: Prove runtime and verifier capabilities
+        env:
+          ORIGEN_DATABASE_URL: ecto://origen_runtime:postgres@localhost:5432/origen_test
+          ORIGEN_MIGRATION_DATABASE_URL: ecto://origen_migrator:postgres@localhost:5432/origen_test
+          ORIGEN_SECURITY_DATABASE_URL: ecto://origen_verifier:postgres@localhost:5432/origen_test
+          ORIGEN_OWNER_ROLE: origen_owner
+          ORIGEN_MIGRATOR_ROLE: origen_migrator
+          ORIGEN_RUNTIME_ROLE: origen_runtime
+          ORIGEN_VERIFIER_ROLE: origen_verifier
+        run: mix test test/origen/audit/postgres_security_test.exs --include postgres_security

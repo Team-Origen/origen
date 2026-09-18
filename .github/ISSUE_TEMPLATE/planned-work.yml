@@ -1,0 +1,77 @@
+name: Trabajo planificado
+description: Proponer trabajo de producto, infraestructura o seguridad con alcance y aceptación verificables.
+title: "[Plan]: "
+labels:
+  - type:feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Usá este formulario para trabajo planificado. No incluyas credenciales, tokens, direcciones privadas ni otros secretos.
+
+  - type: input
+    id: objective
+    attributes:
+      label: Objetivo
+      description: Resultado observable que debe producir este trabajo.
+      placeholder: Describir el resultado, no la implementación.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Contexto y alcance
+      description: Explicá el problema, las personas involucradas y los límites del cambio.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área principal
+      description: Seleccioná el área que mejor representa el trabajo.
+      options:
+        - Producto
+        - Backend
+        - Frontend
+        - Infraestructura
+        - Seguridad
+        - Documentación
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: Enumerá resultados verificables que permitan cerrar la issue.
+      placeholder: |
+        - [ ] Resultado verificable 1
+        - [ ] Resultado verificable 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencias y bloqueos
+      description: Indicá decisiones, infraestructura, permisos o issues previas necesarias.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Fuera de alcance
+      description: Indicá explícitamente qué no debe resolverse en esta issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia esperada
+      description: Definí pruebas, referencias sanitizadas o aprobaciones necesarias para demostrar la aceptación.
+    validations:
+      required: true

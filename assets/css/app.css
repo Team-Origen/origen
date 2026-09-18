@@ -1,0 +1,186 @@
+/* See the Tailwind configuration guide for advanced usage
+   https://tailwindcss.com/docs/configuration */
+
+@import "tailwindcss" source(none);
+@import "phoenix-colocated/origen/colocated.css";
+@source "../css";
+@source "../js";
+@source "../../lib/origen_web";
+/* Required for Tailwind to automatically pick up changes in colocated CSS files in dev */
+@source "../../_build/dev/phoenix-colocated/origen/*/";
+@source "../../deps/petal_components/**/*.*ex";
+
+@import "../../deps/petal_components/assets/default.css";
+
+@plugin "@tailwindcss/forms";
+/* A Tailwind plugin that makes "hero-#{ICON}" classes available.
+   The heroicons installation itself is managed by your mix.exs */
+@plugin "../vendor/heroicons";
+
+/* daisyUI Tailwind Plugin. */
+@plugin "daisyui/packages/bundle/daisyui" {
+  themes: false;
+}
+
+/* Origen visual-system ramps. PetalComponents consumes the primary,
+   secondary, and gray roles; semantic status ramps keep its defaults. */
+@theme static {
+  --color-brand-primary: #0A3847;
+  --color-brand-secondary: #35545A;
+  --color-brand-accent: #DDE6DB;
+  --color-brand-neutral: #AFBAB4;
+  --color-brand-background: #F6F6F4;
+}
+
+@theme {
+  --color-primary-50: #f0f6f7;
+  --color-primary-100: #d9e8eb;
+  --color-primary-200: #b5d2d8;
+  --color-primary-300: #86b3bd;
+  --color-primary-400: #568d9a;
+  --color-primary-500: #356c7a;
+  --color-primary-600: #1d5362;
+  --color-primary-700: #0A3847;
+  --color-primary-800: #082f3c;
+  --color-primary-900: #072832;
+  --color-primary-950: #03191f;
+
+  --color-secondary-50: #f4f7f7;
+  --color-secondary-100: #e5ebeb;
+  --color-secondary-200: #cad6d7;
+  --color-secondary-300: #a5babc;
+  --color-secondary-400: #7c9a9d;
+  --color-secondary-500: #5c777c;
+  --color-secondary-600: #46656a;
+  --color-secondary-700: #35545A;
+  --color-secondary-800: #2c464b;
+  --color-secondary-900: #263c40;
+  --color-secondary-950: #142124;
+
+  --color-accent-50: #f8faf7;
+  --color-accent-100: #eef3ec;
+  --color-accent-200: #dde6db;
+  --color-accent-300: #c1d0be;
+  --color-accent-400: #9fb69c;
+  --color-accent-500: #7d997a;
+  --color-accent-600: #617a5f;
+  --color-accent-700: #4e624d;
+  --color-accent-800: #404f40;
+  --color-accent-900: #354235;
+  --color-accent-950: #1c251d;
+
+  --color-gray-50: #f6f6f4;
+  --color-gray-100: #e9ece9;
+  --color-gray-200: #d5dbd7;
+  --color-gray-300: #c3ccc7;
+  --color-gray-400: #afbab4;
+  --color-gray-500: #7b8b83;
+  --color-gray-600: #5b6b64;
+  --color-gray-700: #44514b;
+  --color-gray-800: #2d3732;
+  --color-gray-900: #1d2421;
+  --color-gray-950: #101512;
+
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --radius-control: 0.625rem;
+  --radius-surface: 0.75rem;
+  --radius-dialog: 1rem;
+}
+
+@theme inline {
+  --color-page: var(--color-gray-50);
+  --color-surface: var(--color-white);
+  --color-surface-muted: var(--color-gray-100);
+  --color-border: var(--color-gray-400);
+  --color-text: var(--color-primary-700);
+  --color-text-muted: var(--color-secondary-700);
+}
+
+:root {
+  --pc-radius: var(--radius-control);
+}
+
+/* daisyUI themes. The light theme uses the Origen brand palette; the existing dark
+   theme remains available for explicit and system-preferred dark mode. */
+@plugin "daisyui/packages/bundle/daisyui-theme" {
+  name: "dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: "dark";
+  --color-base-100: oklch(30.33% 0.016 252.42);
+  --color-base-200: oklch(25.26% 0.014 253.1);
+  --color-base-300: oklch(20.15% 0.012 254.09);
+  --color-base-content: oklch(97.807% 0.029 256.847);
+  --color-primary: oklch(58% 0.233 277.117);
+  --color-primary-content: oklch(96% 0.018 272.314);
+  --color-secondary: oklch(58% 0.233 277.117);
+  --color-secondary-content: oklch(96% 0.018 272.314);
+  --color-accent: oklch(60% 0.25 292.717);
+  --color-accent-content: oklch(96% 0.016 293.756);
+  --color-neutral: oklch(37% 0.044 257.287);
+  --color-neutral-content: oklch(98% 0.003 247.858);
+  --color-info: oklch(58% 0.158 241.966);
+  --color-info-content: oklch(97% 0.013 236.62);
+  --color-success: oklch(60% 0.118 184.704);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "daisyui/packages/bundle/daisyui-theme" {
+  name: "light";
+  default: true;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: #F6F6F4;
+  --color-base-200: #E9ECE9;
+  --color-base-300: #D5DBD7;
+  --color-base-content: #0A3847;
+  --color-primary: #0A3847;
+  --color-primary-content: #F6F6F4;
+  --color-secondary: #35545A;
+  --color-secondary-content: #F6F6F4;
+  --color-accent: #DDE6DB;
+  --color-accent-content: #0A3847;
+  --color-neutral: #AFBAB4;
+  --color-neutral-content: #0A3847;
+  --color-info: oklch(62% 0.214 259.815);
+  --color-info-content: oklch(97% 0.014 254.604);
+  --color-success: oklch(70% 0.14 182.503);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Add variants based on LiveView classes */
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+
+/* Use the data attribute for dark mode  */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Make LiveView wrapper divs transparent for layout */
+[data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* This file is for your main application CSS */
