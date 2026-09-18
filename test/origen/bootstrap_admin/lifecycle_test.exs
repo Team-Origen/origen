@@ -110,7 +110,7 @@ defmodule Origen.BootstrapAdmin.LifecycleTest do
     assert {:ok, replacement} = BootstrapAdmin.reissue_first(account_id, %{verifier_key: @key})
 
     Repo.query!(
-      "UPDATE internal_account_invitations SET expires_at = issued_at + interval '1 millisecond' WHERE id = $1",
+      "UPDATE internal_account_invitations SET expires_at = clock_timestamp() WHERE id = $1",
       [replacement.invitation_id]
     )
 
