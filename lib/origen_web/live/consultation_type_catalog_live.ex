@@ -1,6 +1,8 @@
 defmodule OrigenWeb.ConsultationTypeCatalogLive do
   use OrigenWeb, :live_view
 
+  on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
+
   alias Origen.ConsultationTypes.Catalog
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})

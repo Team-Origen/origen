@@ -148,7 +148,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     end
   end
 
-  setup do
+  setup %{conn: conn} do
     previous_adapter = Application.get_env(:origen, :consultation_type_catalog_adapter)
 
     Application.put_env(
@@ -164,6 +164,26 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
         Application.delete_env(:origen, :consultation_type_catalog_adapter)
       end
     end)
+
+    professional = insert_active_internal_account!(:professional)
+    {:ok, conn: log_in_internal_account(conn, professional)}
+  end
+
+  test "rejects unauthenticated access on the server" do
+    conn = get(build_conn(), @professional_configuration_path)
+
+    assert response(conn, 401) == "Unauthorized"
+  end
+
+  test "rejects administrator and secretary access on the server" do
+    for role <- [:administrator, :secretary] do
+      conn =
+        build_conn()
+        |> log_in_internal_account(insert_active_internal_account!(role))
+        |> get(@professional_configuration_path)
+
+      assert response(conn, 403) == "Forbidden"
+    end
   end
 
   test "renders the requested catalog without demo copy or technical references", %{conn: conn} do
@@ -1338,5 +1358,21 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
+  end
+
+  defp insert_active_internal_account!(role) do
+    %{rows: [[account_id]]} =
+      Origen.Repo.query!(
+        """
+        INSERT INTO internal_accounts
+          (role, state, password_hash, totp_secret, activated_at)
+        VALUES
+          ($1, 'active', 'argon2_hash_dummy', decode('0102030405', 'hex'), NOW())
+        RETURNING id
+        """,
+        [Atom.to_string(role)]
+      )
+
+    %{id: account_id, role: role, state: :active}
   end
 end
