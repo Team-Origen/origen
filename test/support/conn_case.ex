@@ -35,4 +35,15 @@ defmodule OrigenWeb.ConnCase do
     Origen.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
+
+  @doc """
+  Creates and stores an internal session for an active account.
+  """
+  def log_in_internal_account(conn, account) do
+    {:ok, %{token: token}} = Origen.Sessions.create_session(account)
+
+    conn
+    |> Plug.Test.init_test_session(%{})
+    |> Plug.Conn.put_session(:internal_session_token, token)
+  end
 end

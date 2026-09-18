@@ -14,6 +14,14 @@ defmodule OrigenWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :require_internal_session do
+    plug OrigenWeb.Plugs.AuthenticateInternalSession
+  end
+
+  pipeline :require_professional do
+    plug OrigenWeb.Plugs.RequireInternalRole, roles: [:professional]
+  end
+
   scope "/", OrigenWeb do
     pipe_through :browser
 
@@ -28,7 +36,7 @@ defmodule OrigenWeb.Router do
   if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
        Mix.env() != :prod do
     scope "/configuracion", OrigenWeb do
-      pipe_through :browser
+      pipe_through [:browser, :require_internal_session, :require_professional]
 
       live "/profesional", ConsultationTypeCatalogLive
     end

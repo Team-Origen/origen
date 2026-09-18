@@ -36,6 +36,12 @@ defmodule Origen.Audit.Events do
   def reissue_allowed(actor, ref), do: lifecycle(actor, "invitation_reissue", ref, "allowed")
   def reissue_denied(actor, ref), do: lifecycle(actor, "invitation_reissue", ref, "denied")
 
+  def internal_invitation_issued(actor, ref),
+    do: invitation(actor, "internal_invitation_issued", ref, "succeeded")
+
+  def internal_invitation_reissued(actor, ref),
+    do: invitation(actor, "internal_invitation_reissued", ref, "succeeded")
+
   def activation_succeeded(actor, ref),
     do: lifecycle(actor, "account_activation", ref, "succeeded")
 

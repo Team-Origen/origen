@@ -20,7 +20,8 @@ defmodule Origen.BootstrapAdmin.Invitation do
            """,
            [invitation_id]
          ).rows do
-      [[account_id, version, digest, expires_at, nil, nil, "administrator", "pending_activation"]] ->
+      [[account_id, version, digest, expires_at, nil, nil, role, "pending_activation"]]
+      when role in ["administrator", "professional", "secretary"] ->
         if DateTime.compare(expires_at, DateTime.utc_now()) == :gt and
              Verifier.verify(token, version, digest, key) do
           {:ok, %{account_id: account_id, invitation_id: invitation_id}}
@@ -85,32 +86,31 @@ defmodule Origen.BootstrapAdmin.Invitation do
              [invitation_id]
            ).rows do
         [[account_id]] ->
-          Repo.query!("SELECT id FROM internal_accounts WHERE id = $1 FOR UPDATE", [account_id])
+          account =
+            Repo.query!(
+              "SELECT role, state FROM internal_accounts WHERE id = $1 FOR UPDATE",
+              [account_id]
+            ).rows
 
-          case Repo.query!(
-                 """
-                   SELECT account_id, verifier_version, verifier_digest, expires_at, consumed_at, revoked_at
-                   FROM internal_account_invitations WHERE id = $1 FOR UPDATE
-                 """,
-                 [invitation_id]
-               ).rows do
-            [[^account_id, version, digest, expires_at, consumed_at, revoked_at]] ->
-              ensure_usable!(expires_at, consumed_at, revoked_at)
+          invitation =
+            Repo.query!(
+              """
+              SELECT account_id, verifier_version, verifier_digest, expires_at, consumed_at, revoked_at
+              FROM internal_account_invitations WHERE id = $1 FOR UPDATE
+              """,
+              [invitation_id]
+            ).rows
 
-              unless Verifier.verify(token, version, digest, key),
-                do: Repo.rollback(:invalid_token)
-
-              Repo.query!(
-                "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
-                [invitation_id]
-              )
-
-              authorize_activation!()
-              persist_activation!(account_id, invitation_id, password_hash, totp_secret)
-
-            [] ->
-              Repo.rollback(:invitation_not_found)
-          end
+          activate_locked!(
+            account,
+            invitation,
+            account_id,
+            invitation_id,
+            token,
+            key,
+            password_hash,
+            totp_secret
+          )
 
         [] ->
           Repo.rollback(:invitation_not_found)
@@ -145,10 +145,10 @@ defmodule Origen.BootstrapAdmin.Invitation do
         ).rows
 
       case {account, invitation} do
-        {[["administrator", "pending_activation"]],
-         [[^account_id, expires_at, consumed_at, revoked_at]]} ->
+        {[[role, "pending_activation"]], [[^account_id, expires_at, consumed_at, revoked_at]]}
+        when role in ["administrator", "professional", "secretary"] ->
           ensure_usable!(expires_at, consumed_at, revoked_at)
-          authorize_activation!()
+          authorize_activation!(role)
 
           Repo.query!(
             "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
@@ -165,6 +165,36 @@ defmodule Origen.BootstrapAdmin.Invitation do
   end
 
   def activate_bound(_invitation_id, _account_id, _credentials), do: {:error, :invalid_request}
+
+  defp activate_locked!(
+         [[role, state]],
+         [[account_id, version, digest, expires_at, consumed_at, revoked_at]],
+         account_id,
+         invitation_id,
+         token,
+         key,
+         password_hash,
+         totp_secret
+       )
+       when role in ["administrator", "professional", "secretary"] do
+    ensure_usable!(expires_at, consumed_at, revoked_at)
+    if state != "pending_activation", do: Repo.rollback(:account_not_pending)
+    unless Verifier.verify(token, version, digest, key), do: Repo.rollback(:invalid_token)
+
+    Repo.query!(
+      "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
+      [invitation_id]
+    )
+
+    authorize_activation!(role)
+    persist_activation!(account_id, invitation_id, password_hash, totp_secret)
+  end
+
+  defp activate_locked!(_account, [], _account_id, _id, _token, _key, _hash, _secret),
+    do: Repo.rollback(:invitation_not_found)
+
+  defp activate_locked!(_account, _invitation, _account_id, _id, _token, _key, _hash, _secret),
+    do: Repo.rollback(:account_not_pending)
 
   defp consume_locked(_, _, _, _, _, consumed, _, _, _) when not is_nil(consumed),
     do: Repo.rollback(:already_consumed)
@@ -201,13 +231,13 @@ defmodule Origen.BootstrapAdmin.Invitation do
     if DateTime.compare(expires_at, DateTime.utc_now()) != :gt, do: Repo.rollback(:expired)
   end
 
-  defp authorize_activation! do
+  defp authorize_activation!(role) do
     request =
       Request.new(
         operation: Fact.known(:activate_internal_account),
         subject: Fact.known({:channel, :invitation}),
         account_state: Fact.known(:pending_activation),
-        target: Fact.known(%{role: :administrator}),
+        target: Fact.known(%{role: String.to_existing_atom(role)}),
         scope:
           Fact.known(%{
             account_matches: true,
