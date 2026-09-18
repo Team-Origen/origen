@@ -11,6 +11,7 @@ defmodule Origen.Application do
       OrigenWeb.Telemetry,
       Origen.Repo,
       OrigenWeb.AdminActivationSessionStore,
+      OrigenWeb.InternalActivationSessionStore,
       Origen.BootstrapAdmin.Local.Endpoint,
       OrigenWeb.ProviderEventReplay,
       {DNSCluster, query: Application.get_env(:origen, :dns_cluster_query) || :ignore},
