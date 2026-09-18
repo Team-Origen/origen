@@ -11,6 +11,7 @@ defmodule Origen.Accounts do
   alias Origen.Sessions
 
   @allowed_roles ~w(administrator professional secretary)
+  @staff_roles ~w(professional secretary)
 
   @type account_summary :: %{
           id: integer(),
@@ -134,12 +135,85 @@ defmodule Origen.Accounts do
          {:ok, binding} <- verify_staff_activation_invitation(invitation_id, token, key) do
       {:ok, binding}
     else
-      _invalid -> activation_preparation_failed()
+      _invalid -> opaque_activation_failure()
     end
   end
 
   def prepare_internal_account_activation(_invitation_id, _token, _opts),
-    do: activation_preparation_failed()
+    do: opaque_activation_failure()
+
+  @doc """
+  Activates a pending professional or secretary account atomically: consumes its invitation,
+  stores the Argon2 password hash and the keyring-encrypted TOTP secret, and activates the
+  account in one transaction. Every rejection fails closed with `{:error, :activation_failed}`
+  and an opaque audit event without account or invitation references.
+
+  ## Options
+
+    * `:verifier_key` - shared invitation verifier key.
+    * `:totp_keyring` - explicit keyring used to encrypt the TOTP seed.
+    * `:time` - optional unix timestamp in seconds used for TOTP validation.
+  """
+  @spec activate_internal_account(map(), map(), keyword()) ::
+          {:ok, %{account_id: integer(), invitation_id: integer()}}
+          | {:error, :activation_failed | :audit_unavailable}
+  def activate_internal_account(activation, params, opts \\ [])
+
+  def activate_internal_account(
+        %{
+          invitation_id: invitation_id,
+          account_id: account_id,
+          token: token,
+          totp_seed: totp_seed
+        },
+        %{password: password, password_confirmation: password_confirmation, totp_code: totp_code},
+        opts
+      )
+      when is_integer(invitation_id) and is_integer(account_id) and is_binary(token) and
+             is_binary(totp_seed) and is_binary(password) and is_binary(password_confirmation) and
+             is_binary(totp_code) and is_list(opts) do
+    with {:ok, key} <- verifier_key(opts),
+         {:ok, keyring} <- activation_totp_keyring(opts) do
+      time = Keyword.get(opts, :time, System.os_time(:second))
+
+      Repo.transaction(fn ->
+        account = lock_account!(account_id, "FOR UPDATE")
+
+        unless account.role in @staff_roles and account.state == "pending_activation",
+          do: Repo.rollback(:activation_failed)
+
+        lock_and_validate_activation_invitation!(invitation_id, account_id, token, key)
+        authorize_staff_activation!(account.role)
+        ensure_activation_factors!(password, password_confirmation, totp_seed, totp_code, time)
+
+        password_hash = Credentials.hash_password(password)
+        encrypted_seed = encrypt_activation_seed!(totp_seed, keyring)
+
+        Repo.query!(
+          "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
+          [invitation_id]
+        )
+
+        activate_staff_account!(account_id, password_hash, encrypted_seed)
+        append_activation_success_audit!(account_id, invitation_id)
+      end)
+      |> case do
+        {:ok, result} ->
+          {:ok, result}
+
+        {:error, :audit_unavailable} ->
+          _ = opaque_activation_failure()
+          {:error, :audit_unavailable}
+
+        {:error, _reason} ->
+          opaque_activation_failure()
+      end
+    else
+      _invalid -> opaque_activation_failure()
+    end
+  end
+
+  def activate_internal_account(_activation, _params, _opts), do: opaque_activation_failure()
 
   @doc """
   Authenticates an internal account using an identifier (email or id), password, and TOTP code.
@@ -514,7 +588,105 @@ defmodule Origen.Accounts do
     end
   end
 
-  defp activation_preparation_failed do
+  defp lock_and_validate_activation_invitation!(invitation_id, account_id, token, key) do
+    case Repo.query!(
+           """
+           SELECT account_id, verifier_version, verifier_digest, expires_at, consumed_at, revoked_at
+           FROM internal_account_invitations
+           WHERE id = $1
+           FOR UPDATE
+           """,
+           [invitation_id]
+         ).rows do
+      [[^account_id, version, digest, expires_at, nil, nil]] ->
+        if DateTime.compare(expires_at, DateTime.utc_now()) == :gt and
+             Verifier.verify(token, version, digest, key) do
+          :ok
+        else
+          Repo.rollback(:activation_failed)
+        end
+
+      _invalid ->
+        Repo.rollback(:activation_failed)
+    end
+  end
+
+  defp ensure_activation_factors!(password, password_confirmation, seed, code, time) do
+    clean_code = String.trim(code)
+
+    factors_valid =
+      password == password_confirmation and byte_size(password) in 12..1024 and
+        Regex.match?(~r/^\d{6}$/, clean_code) and NimbleTOTP.valid?(seed, clean_code, time: time)
+
+    if factors_valid, do: :ok, else: Repo.rollback(:activation_failed)
+  end
+
+  defp encrypt_activation_seed!(seed, keyring) do
+    case Credentials.encrypt_seed(seed, keyring) do
+      {:ok, ciphertext} -> ciphertext
+      _invalid -> Repo.rollback(:activation_failed)
+    end
+  end
+
+  defp activate_staff_account!(account_id, password_hash, totp_secret) do
+    rows =
+      Repo.query!(
+        """
+        UPDATE internal_accounts
+        SET state = 'active', password_hash = $2, totp_secret = $3,
+            activated_at = clock_timestamp(), updated_at = clock_timestamp()
+        WHERE id = $1 AND state = 'pending_activation'
+        RETURNING id
+        """,
+        [account_id, password_hash, totp_secret]
+      ).rows
+
+    if rows == [[account_id]], do: :ok, else: Repo.rollback(:activation_failed)
+  end
+
+  defp append_activation_success_audit!(account_id, invitation_id) do
+    with {:ok, event} <- Events.activation_succeeded({:system, nil}, to_string(account_id)),
+         {:ok, _audit} <- Writer.append(event, {:allow, :sys_01}) do
+      %{account_id: account_id, invitation_id: invitation_id}
+    else
+      _audit_failure -> Repo.rollback(:audit_unavailable)
+    end
+  end
+
+  defp authorize_staff_activation!(role) do
+    request =
+      Request.new(
+        operation: Fact.known(:activate_internal_account),
+        subject: Fact.known({:channel, :invitation}),
+        account_state: Fact.known(:pending_activation),
+        target: Fact.known(%{role: role_atom(role)}),
+        scope:
+          Fact.known(%{
+            account_matches: true,
+            password_defined: true,
+            token_valid: true,
+            totp_enrolled: true
+          })
+      )
+
+    case Authorization.decide(request) do
+      {:allow, :inv_01} -> :ok
+      _denied -> Repo.rollback(:activation_failed)
+    end
+  end
+
+  defp activation_totp_keyring(opts) do
+    keyring =
+      opts[:totp_keyring] || Application.get_env(:origen, :totp_keyring) ||
+        Application.get_env(:origen, :bootstrap_admin_totp_keyring)
+
+    case Credentials.validate_keyring(keyring) do
+      :ok -> {:ok, keyring}
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  defp opaque_activation_failure do
     with {:ok, event} <- Events.activation_failed({:anonymous, nil}, nil),
          {:ok, _audit} <- Writer.append(event, {:allow, :sys_01}) do
       {:error, :activation_failed}

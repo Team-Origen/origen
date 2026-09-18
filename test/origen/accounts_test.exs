@@ -13,6 +13,7 @@ defmodule Origen.AccountsTest do
     retired: []
   }
   @verifier_key String.duplicate("v", 32)
+  @valid_password "ActivationPassword123!"
 
   defp create_active_account(attrs \\ %{}) do
     email =
@@ -704,6 +705,273 @@ defmodule Origen.AccountsTest do
       assert is_nil(event.entity_ref)
       assert event.result == "failed"
     end
+  end
+
+  describe "activate_internal_account/3" do
+    test "activates pending professional and secretary accounts atomically" do
+      for role <- [:professional, :secretary] do
+        invitation = invite_staff_account(role)
+
+        assert {:ok, result} = activate_account(invitation)
+        assert result.account_id == invitation.account_id
+        assert result.invitation_id == invitation.invitation_id
+
+        assert [[state, password_hash, totp_secret]] =
+                 Repo.query!(
+                   "SELECT state, password_hash, totp_secret FROM internal_accounts WHERE id = $1",
+                   [invitation.account_id]
+                 ).rows
+
+        assert state == "active"
+        assert Credentials.verify_password(@valid_password, password_hash)
+        assert {:ok, decrypted_seed} = Credentials.decrypt_seed(totp_secret, @default_keyring)
+        assert decrypted_seed == invitation.seed
+
+        assert [[true]] =
+                 Repo.query!(
+                   "SELECT consumed_at IS NOT NULL FROM internal_account_invitations WHERE id = $1",
+                   [invitation.invitation_id]
+                 ).rows
+
+        assert Repo.query!(
+                 """
+                 SELECT actor_kind, entity_ref, result
+                 FROM audit_events
+                 WHERE event = 'account_activation' AND entity_ref = $1
+                 """,
+                 [to_string(invitation.account_id)]
+               ).rows == [["system", to_string(invitation.account_id), "succeeded"]]
+      end
+    end
+
+    test "rejects every invalid activation factor opaquely and leaves the invitation usable" do
+      invitation = invite_staff_account(:professional)
+      other_account_id = insert_pending_account(:secretary)
+      oversized = String.duplicate("a", 1025)
+
+      attempts = [
+        {%{}, %{password_confirmation: "DifferentPassword99!"}},
+        {%{}, %{password: "short", password_confirmation: "short"}},
+        {%{}, %{password: oversized, password_confirmation: oversized}},
+        {%{}, %{totp_code: "000000"}},
+        {%{token: "wrong-token"}, %{}},
+        {%{account_id: other_account_id}, %{}}
+      ]
+
+      for {activation_overrides, params_overrides} <- attempts do
+        assert {:error, :activation_failed} =
+                 activate_account(invitation, activation_overrides, params_overrides)
+      end
+
+      assert Repo.query!(
+               """
+               SELECT a.state, i.consumed_at
+               FROM internal_accounts AS a
+               JOIN internal_account_invitations AS i ON i.account_id = a.id
+               WHERE i.id = $1
+               """,
+               [invitation.invitation_id]
+             ).rows == [["pending_activation", nil]]
+
+      assert_opaque_activation_failure_audits(length(attempts))
+
+      assert {:ok, _result} = activate_account(invitation)
+
+      assert Repo.query!("SELECT state FROM internal_accounts WHERE id = $1", [
+               invitation.account_id
+             ]).rows == [["active"]]
+    end
+
+    test "rejects expired, revoked, and consumed invitations opaquely with a failure audit" do
+      expired = invite_staff_account(:professional)
+      revoked = invite_staff_account(:professional)
+      consumed = invite_staff_account(:professional)
+
+      Repo.query!(
+        """
+        UPDATE internal_account_invitations
+        SET issued_at = clock_timestamp() - interval '2 hours',
+            expires_at = clock_timestamp() - interval '1 hour'
+        WHERE id = $1
+        """,
+        [expired.invitation_id]
+      )
+
+      Repo.query!(
+        "UPDATE internal_account_invitations SET revoked_at = clock_timestamp() WHERE id = $1",
+        [revoked.invitation_id]
+      )
+
+      Repo.query!(
+        "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
+        [consumed.invitation_id]
+      )
+
+      for invitation <- [expired, revoked, consumed] do
+        assert {:error, :activation_failed} = activate_account(invitation)
+
+        assert Repo.query!("SELECT state, password_hash FROM internal_accounts WHERE id = $1", [
+                 invitation.account_id
+               ]).rows == [["pending_activation", nil]]
+      end
+
+      assert_opaque_activation_failure_audits(3)
+    end
+
+    test "rejects administrator invitations through the staff activation boundary" do
+      %{token: token, verifier_version: version, verifier_digest: digest} =
+        Verifier.issue(@verifier_key)
+
+      account_id = insert_pending_account(:administrator)
+      seed = NimbleTOTP.secret()
+
+      %{rows: [[invitation_id]]} =
+        Repo.query!(
+          """
+          INSERT INTO internal_account_invitations
+            (account_id, verifier_version, verifier_digest, expires_at)
+          VALUES ($1, $2, $3, clock_timestamp() + interval '1 hour')
+          RETURNING id
+          """,
+          [account_id, version, digest]
+        )
+
+      binding = %{
+        invitation_id: invitation_id,
+        account_id: account_id,
+        token: token,
+        totp_seed: seed
+      }
+
+      params = %{
+        password: @valid_password,
+        password_confirmation: @valid_password,
+        totp_code: NimbleTOTP.verification_code(seed)
+      }
+
+      assert {:error, :activation_failed} =
+               Accounts.activate_internal_account(binding, params,
+                 verifier_key: @verifier_key,
+                 totp_keyring: @default_keyring
+               )
+
+      assert Repo.query!("SELECT state, password_hash FROM internal_accounts WHERE id = $1", [
+               account_id
+             ]).rows == [["pending_activation", nil]]
+
+      assert Repo.query!(
+               "SELECT consumed_at FROM internal_account_invitations WHERE id = $1",
+               [invitation_id]
+             ).rows == [[nil]]
+
+      assert_opaque_activation_failure_audits(1)
+    end
+
+    test "an activation audit write failure rolls back account and invitation mutations" do
+      invitation = invite_staff_account(:secretary)
+
+      Repo.query!("""
+      CREATE OR REPLACE FUNCTION pg_temp.reject_activation_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.event = 'account_activation' AND NEW.result = 'succeeded' THEN
+          RAISE EXCEPTION 'audit unavailable' USING ERRCODE = '55000';
+        END IF;
+        RETURN NEW;
+      END $$
+      """)
+
+      Repo.query!("""
+      CREATE TRIGGER reject_activation_audit BEFORE INSERT ON audit_events
+      FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_activation_audit()
+      """)
+
+      assert {:error, :audit_unavailable} = activate_account(invitation)
+
+      assert Repo.query!(
+               """
+               SELECT a.state, a.password_hash, a.totp_secret, i.consumed_at
+               FROM internal_accounts AS a
+               JOIN internal_account_invitations AS i ON i.account_id = a.id
+               WHERE i.id = $1
+               """,
+               [invitation.invitation_id]
+             ).rows == [["pending_activation", nil, nil, nil]]
+
+      assert Repo.query!(
+               "SELECT result FROM audit_events WHERE event = 'account_activation' ORDER BY id DESC"
+             ).rows == [["failed"]]
+    end
+
+    test "rejects malformed or misconfigured activation attempts fail-closed" do
+      invitation = invite_staff_account(:professional)
+
+      assert {:error, :activation_failed} = Accounts.activate_internal_account(%{}, %{}, [])
+
+      assert {:error, :activation_failed} =
+               activate_account(invitation, %{}, %{}, verifier_key: nil)
+
+      assert Repo.query!("SELECT count(*) FROM audit_events WHERE event = 'account_activation'").rows ==
+               [[2]]
+    end
+  end
+
+  defp invite_staff_account(role) do
+    administrator = create_active_account()
+
+    email = "#{role}_#{System.unique_integer([:positive])}@clinicaorigen.com"
+
+    assert {:ok, invitation} =
+             Accounts.create_and_invite_internal_account(
+               administrator.id,
+               %{email: email, role: role},
+               verifier_key: @verifier_key
+             )
+
+    Map.put(invitation, :seed, NimbleTOTP.secret())
+  end
+
+  defp activate_account(
+         invitation,
+         activation_overrides \\ %{},
+         params_overrides \\ %{},
+         opts \\ []
+       ) do
+    activation =
+      Map.merge(
+        %{
+          invitation_id: invitation.invitation_id,
+          account_id: invitation.account_id,
+          token: invitation.token,
+          totp_seed: invitation.seed
+        },
+        activation_overrides
+      )
+
+    params =
+      Map.merge(
+        %{
+          password: @valid_password,
+          password_confirmation: @valid_password,
+          totp_code: NimbleTOTP.verification_code(invitation.seed)
+        },
+        params_overrides
+      )
+
+    Accounts.activate_internal_account(
+      activation,
+      params,
+      Keyword.merge([verifier_key: @verifier_key, totp_keyring: @default_keyring], opts)
+    )
+  end
+
+  defp assert_opaque_activation_failure_audits(expected_count) do
+    rows =
+      Repo.query!(
+        "SELECT actor_kind, actor_ref, entity_kind, entity_ref, result FROM audit_events WHERE event = 'account_activation'"
+      ).rows
+
+    assert length(rows) == expected_count
+    assert Enum.all?(rows, &(&1 == ["anonymous", nil, nil, nil, "failed"]))
   end
 
   defp insert_pending_account(role) do
