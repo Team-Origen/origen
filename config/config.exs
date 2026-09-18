@@ -14,7 +14,7 @@ config :origen,
   bootstrap_admin_profile: :staging,
   bootstrap_admin_local_enabled: false,
   bootstrap_admin_local: %{enabled: false},
-  env: config_env()
+  env: config_env(),
   consultation_catalog_demo_enabled: false
 
 config :origen, Origen.MigrationRepo,
