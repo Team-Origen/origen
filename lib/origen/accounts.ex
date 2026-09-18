@@ -120,6 +120,28 @@ defmodule Origen.Accounts do
     do: {:error, :unauthorized}
 
   @doc """
+  Verifies a pending professional or secretary invitation and returns its activation binding.
+
+  This preparation step does not consume the invitation or modify the account. All rejected inputs
+  return the same error and emit an opaque audit failure without account or invitation references.
+  """
+  @spec prepare_internal_account_activation(integer(), String.t(), keyword()) ::
+          {:ok, %{account_id: integer(), invitation_id: integer()}}
+          | {:error, :activation_failed}
+  def prepare_internal_account_activation(invitation_id, token, opts)
+      when is_integer(invitation_id) and is_binary(token) and is_list(opts) do
+    with {:ok, key} <- verifier_key(opts),
+         {:ok, binding} <- verify_staff_activation_invitation(invitation_id, token, key) do
+      {:ok, binding}
+    else
+      _invalid -> activation_preparation_failed()
+    end
+  end
+
+  def prepare_internal_account_activation(_invitation_id, _token, _opts),
+    do: activation_preparation_failed()
+
+  @doc """
   Authenticates an internal account using an identifier (email or id), password, and TOTP code.
 
   ## Options
@@ -465,6 +487,42 @@ defmodule Origen.Accounts do
     else
       _audit_failure -> Repo.rollback(:audit_unavailable)
     end
+  end
+
+  defp verify_staff_activation_invitation(invitation_id, token, key) do
+    case Repo.query!(
+           """
+           SELECT i.account_id, i.verifier_version, i.verifier_digest, i.expires_at,
+                  i.consumed_at, i.revoked_at, a.role, a.state
+           FROM internal_account_invitations AS i
+           JOIN internal_accounts AS a ON a.id = i.account_id
+           WHERE i.id = $1
+           """,
+           [invitation_id]
+         ).rows do
+      [[account_id, version, digest, expires_at, nil, nil, role, "pending_activation"]]
+      when role in ["professional", "secretary"] ->
+        if DateTime.compare(expires_at, DateTime.utc_now()) == :gt and
+             Verifier.verify(token, version, digest, key) do
+          {:ok, %{account_id: account_id, invitation_id: invitation_id}}
+        else
+          {:error, :activation_failed}
+        end
+
+      _invalid ->
+        {:error, :activation_failed}
+    end
+  end
+
+  defp activation_preparation_failed do
+    with {:ok, event} <- Events.activation_failed({:anonymous, nil}, nil),
+         {:ok, _audit} <- Writer.append(event, {:allow, :sys_01}) do
+      {:error, :activation_failed}
+    else
+      _audit_unavailable -> {:error, :activation_failed}
+    end
+  rescue
+    _audit_unavailable -> {:error, :activation_failed}
   end
 
   defp verifier_key(opts) do

@@ -27,6 +27,12 @@ defmodule Origen.BootstrapAdminSchemaTest do
 
     query!(connection, "DELETE FROM internal_account_invitations")
     query!(connection, "DELETE FROM internal_accounts")
+
+    on_exit(fn ->
+      query!(connection, "DELETE FROM internal_account_invitations")
+      query!(connection, "DELETE FROM internal_accounts")
+    end)
+
     :ok
   end
 

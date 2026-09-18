@@ -45,7 +45,11 @@ defmodule Origen.Audit.Events do
   def activation_succeeded(actor, ref),
     do: lifecycle(actor, "account_activation", ref, "succeeded")
 
-  def activation_failed(actor, ref), do: lifecycle(actor, "account_activation", ref, "failed")
+  def activation_failed(actor, ref) when is_binary(ref),
+    do: lifecycle(actor, "account_activation", ref, "failed")
+
+  def activation_failed(actor, nil),
+    do: build(actor, "account_activation", nil, "failed")
 
   def invitation_consumed(actor, ref),
     do: lifecycle(actor, "invitation_consumption", ref, "succeeded")
