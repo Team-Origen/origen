@@ -15,7 +15,7 @@ defmodule OrigenWeb.InternalSessionControllerTest do
     conn = get(conn, https("/login"))
     body = html_response(conn, 200)
 
-    assert body =~ "Sign in"
+    assert body =~ "Iniciar sesión"
     assert body =~ ~s(action="/login")
     assert body =~ ~s(name="_csrf_token")
     assert body =~ ~s(name="identifier")

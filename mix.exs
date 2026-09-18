@@ -53,6 +53,7 @@ defmodule Origen.MixProject do
       {:tidewave, "~> 0.9.0", only: :dev},
       {:argon2_elixir, "~> 4.1.3"},
       {:nimble_totp, "~> 1.0.0"},
+      {:eqrcode, "~> 0.2"},
       {:cloak, "~> 1.1.4"},
       {:cloak_ecto, "~> 1.3.0"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},

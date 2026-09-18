@@ -40,40 +40,69 @@ defmodule OrigenWeb.InternalActivationHTML do
       <h1 class="text-2xl font-semibold">Secure internal account</h1>
       <p :if={@error} role="alert" class="mt-4">{@error}</p>
       <section :if={@totp_uri} class="mt-6">
-        <h2 class="font-semibold">Add the authenticator factor</h2>
-        <p>Scan this one-time enrollment payload with your authenticator application.</p>
-        <code data-totp-uri={@totp_uri} class="mt-2 block break-all">{@totp_uri}</code>
+        <h2 class="font-semibold text-lg">Configurar factor de autenticación (TOTP)</h2>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+          Escaneá este código QR con Google Authenticator, 1Password o tu aplicación preferida.
+        </p>
+
+        <div class="flex justify-center p-4 mt-4 bg-white rounded-lg border border-gray-200 w-fit mx-auto">
+          <.qr_code
+            value={@totp_uri}
+            background="white"
+            label="Código QR para enrolar autenticador"
+            class="size-48 text-gray-900"
+          />
+        </div>
+
+        <div class="mt-3 text-xs text-gray-500 text-center">
+          ¿No podés escanear? Clave de configuración:
+        </div>
+        <code
+          data-totp-uri={@totp_uri}
+          class="mt-1 block break-all text-xs font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded text-center"
+        >
+          {@totp_uri}
+        </code>
       </section>
       <form action={~p"/activate"} method="post" class="mt-6 space-y-4">
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
         <.input
           name="password"
           type="password"
-          label="Password"
+          label="Contraseña"
           value=""
           required
           minlength="12"
           autocomplete="new-password"
         />
+        <p class="text-xs text-gray-500 -mt-2">
+          Elegí tu contraseña para iniciar sesión. Mínimo 12 caracteres.
+        </p>
         <.input
           name="password_confirmation"
           type="password"
-          label="Confirm password"
+          label="Confirmar contraseña"
           value=""
           required
           minlength="12"
           autocomplete="new-password"
         />
+        <p class="text-xs text-gray-500 -mt-2">
+          Repetí la misma contraseña para verificar que la escribiste bien.
+        </p>
         <.input
           name="totp_code"
           type="text"
-          label="Authenticator code"
+          label="Código del autenticador"
           value=""
           required
           inputmode="numeric"
           pattern="[0-9]{6}"
           autocomplete="one-time-code"
         />
+        <p class="text-xs text-gray-500 -mt-2">
+          Los 6 dígitos que te muestra la app después de escanear el QR de arriba.
+        </p>
         <button type="submit" class="btn btn-primary">Activate account</button>
       </form>
     </main>
