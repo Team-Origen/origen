@@ -141,7 +141,14 @@ defmodule OrigenWeb.InternalActivationController do
   defp parse_invitation_id(_value), do: {:error, :invalid_request}
 
   defp require_tls(%Plug.Conn{scheme: :https}), do: :ok
-  defp require_tls(_conn), do: {:error, :tls_required}
+
+  defp require_tls(_conn) do
+    if Application.get_env(:origen, :allow_insecure_http_activation, false) do
+      :ok
+    else
+      {:error, :tls_required}
+    end
+  end
 
   defp unavailable(conn) do
     conn
