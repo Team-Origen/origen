@@ -8,6 +8,8 @@ defmodule Mix.Tasks.Origen.BootstrapAdmin do
 
   use Mix.Task
 
+  @requirements ["app.config"]
+
   alias Origen.BootstrapAdmin.Command
   alias Origen.BootstrapAdmin.Gate
   alias Origen.BootstrapAdmin.Local.{Eligibility, Readiness}
