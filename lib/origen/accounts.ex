@@ -116,12 +116,13 @@ defmodule Origen.Accounts do
   defp validate_totp_and_complete(account, totp_code, opts) do
     keyring = resolve_totp_keyring(opts)
     time = Keyword.get(opts, :time, System.os_time(:second))
+    period_index = div(time, 30)
 
     with {:ok, seed} <- resolve_seed(account.totp_secret, keyring),
-         true <- valid_totp_code?(seed, totp_code, account.totp_last_period, time) do
+         true <- valid_totp_code?(seed, totp_code, account.totp_last_period, period_index, time) do
       Repo.query!(
         "UPDATE internal_accounts SET totp_last_period = $1, updated_at = clock_timestamp() WHERE id = $2",
-        [time, account.id]
+        [period_index, account.id]
       )
 
       record_audit_success(account)
@@ -224,20 +225,18 @@ defmodule Origen.Accounts do
 
   defp resolve_seed(_secret, _keyring), do: {:error, :invalid_seed}
 
-  defp valid_totp_code?(seed, code, last_period, current_time) do
+  defp valid_totp_code?(seed, code, last_period, period_index, current_time) do
     clean_code = String.trim(code)
 
-    if Regex.match?(~r/^\d{6}$/, clean_code) do
-      opts =
-        if is_integer(last_period) do
-          [time: current_time, since: last_period]
-        else
-          [time: current_time]
-        end
+    cond do
+      not Regex.match?(~r/^\d{6}$/, clean_code) ->
+        false
 
-      NimbleTOTP.valid?(seed, clean_code, opts)
-    else
-      false
+      is_integer(last_period) and period_index <= last_period ->
+        false
+
+      true ->
+        NimbleTOTP.valid?(seed, clean_code, time: current_time)
     end
   end
 

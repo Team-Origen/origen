@@ -149,17 +149,25 @@ defmodule Origen.Sessions do
            ]
          ]
        }} ->
+        elapsed_idle = DateTime.diff(now, last_activity_at, :second)
+        elapsed_total = DateTime.diff(now, issued_at, :second)
+
         cond do
           not is_nil(revoked_at) ->
             {:error, :unauthenticated}
 
+          # Clock skew / negative elapsed time fails closed
+          elapsed_total < 0 or elapsed_idle < 0 ->
+            revoke_by_digest(token_digest, now)
+            {:error, :unauthenticated}
+
           # Check maximum absolute duration
-          DateTime.diff(now, issued_at, :second) > max_duration ->
+          elapsed_total > max_duration ->
             revoke_by_digest(token_digest, now)
             {:error, :unauthenticated}
 
           # Check inactivity (idle timeout)
-          DateTime.diff(now, last_activity_at, :second) > idle_timeout ->
+          elapsed_idle > idle_timeout ->
             revoke_by_digest(token_digest, now)
             {:error, :unauthenticated}
 
