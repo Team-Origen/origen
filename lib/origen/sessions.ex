@@ -205,7 +205,7 @@ defmodule Origen.Sessions do
       Repo.query!(
         """
         UPDATE internal_account_sessions
-        SET last_activity_at = $1, updated_at = clock_timestamp()
+        SET last_activity_at = $1, updated_at = $1
         WHERE token_digest = $2 AND revoked_at IS NULL
         """,
         [now, token_digest]
