@@ -2,6 +2,7 @@ defmodule Origen.AccountsTest do
   use Origen.DataCase
 
   alias Origen.Accounts
+  alias Origen.BootstrapAdmin
   alias Origen.BootstrapAdmin.Credentials
   alias Origen.Repo
   alias Origen.Sessions
@@ -10,6 +11,7 @@ defmodule Origen.AccountsTest do
     active: %{tag: "test.v1", key: String.duplicate("k", 32)},
     retired: []
   }
+  @verifier_key String.duplicate("v", 32)
 
   defp create_active_account(attrs \\ %{}) do
     email =
@@ -268,5 +270,289 @@ defmodule Origen.AccountsTest do
 
       assert count == 0
     end
+  end
+
+  describe "internal account invitation lifecycle" do
+    test "an active administrator atomically creates and invites professionals and secretaries" do
+      administrator = create_active_account()
+      ttl = Application.fetch_env!(:origen, :internal_invitation_ttl_seconds)
+
+      for role <- [:professional, :secretary] do
+        email = "#{role}_#{System.unique_integer([:positive])}@clinicaorigen.com"
+
+        assert {:ok, invitation} =
+                 Accounts.create_and_invite_internal_account(
+                   administrator.id,
+                   %{email: email, role: role},
+                   verifier_key: @verifier_key
+                 )
+
+        assert invitation.account.role == role
+        assert invitation.account.state == :pending_activation
+        assert invitation.account.email == email
+        assert invitation.account.id == invitation.account_id
+        assert is_binary(invitation.token)
+        assert DateTime.diff(invitation.expires_at, invitation.issued_at, :second) == ttl
+
+        assert Repo.query!(
+                 "SELECT role, state, email FROM internal_accounts WHERE id = $1",
+                 [invitation.account_id]
+               ).rows == [[Atom.to_string(role), "pending_activation", email]]
+
+        [[version, digest]] =
+          Repo.query!(
+            "SELECT verifier_version, verifier_digest FROM internal_account_invitations WHERE id = $1",
+            [invitation.invitation_id]
+          ).rows
+
+        assert version == "v1"
+        assert is_binary(digest)
+        refute digest == invitation.token
+      end
+    end
+
+    test "create-and-invite denies every non-active-administrator path opaquely" do
+      professional = create_active_account(%{role: "professional"})
+      pending_admin = insert_pending_account(:administrator)
+      initial_accounts = Repo.aggregate("internal_accounts", :count)
+      initial_invitations = Repo.aggregate("internal_account_invitations", :count)
+
+      for actor_id <- [professional.id, pending_admin, -1] do
+        assert {:error, :unauthorized} =
+                 Accounts.create_and_invite_internal_account(
+                   actor_id,
+                   %{email: "denied_#{actor_id}@clinicaorigen.com", role: :professional},
+                   verifier_key: @verifier_key
+                 )
+      end
+
+      assert {:error, :unauthorized} =
+               Accounts.create_and_invite_internal_account(
+                 pending_admin,
+                 %{email: "admin@clinicaorigen.com", role: :administrator},
+                 verifier_key: @verifier_key
+               )
+
+      assert Repo.aggregate("internal_accounts", :count) == initial_accounts
+      assert Repo.aggregate("internal_account_invitations", :count) == initial_invitations
+    end
+
+    test "an active administrator atomically revokes and replaces a pending account invitation" do
+      administrator = create_active_account()
+
+      assert {:ok, first} =
+               Accounts.create_and_invite_internal_account(
+                 administrator.id,
+                 %{email: "pending.professional@clinicaorigen.com", role: :professional},
+                 verifier_key: @verifier_key
+               )
+
+      assert {:ok, replacement} =
+               Accounts.reissue_internal_invitation(
+                 administrator.id,
+                 first.account_id,
+                 verifier_key: @verifier_key
+               )
+
+      assert replacement.account_id == first.account_id
+      assert replacement.invitation_id != first.invitation_id
+      assert replacement.token != first.token
+
+      assert [[nil, %DateTime{}]] =
+               Repo.query!(
+                 "SELECT consumed_at, revoked_at FROM internal_account_invitations WHERE id = $1",
+                 [first.invitation_id]
+               ).rows
+
+      assert Repo.query!(
+               "SELECT count(*) FROM internal_account_invitations WHERE account_id = $1 AND consumed_at IS NULL AND revoked_at IS NULL",
+               [first.account_id]
+             ).rows == [[1]]
+
+      assert {:error, :invalid_invitation} =
+               BootstrapAdmin.exchange(first.invitation_id, first.token, @verifier_key)
+
+      assert {:ok, %{account_id: account_id}} =
+               BootstrapAdmin.exchange(
+                 replacement.invitation_id,
+                 replacement.token,
+                 @verifier_key
+               )
+
+      assert account_id == first.account_id
+    end
+
+    test "reissue denies non-administrators and non-pending targets opaquely without revocation" do
+      administrator = create_active_account()
+      professional = create_active_account(%{role: "professional"})
+
+      assert {:ok, invitation} =
+               Accounts.create_and_invite_internal_account(
+                 administrator.id,
+                 %{email: "pending.secretary@clinicaorigen.com", role: :secretary},
+                 verifier_key: @verifier_key
+               )
+
+      for {actor_id, target_id} <- [
+            {professional.id, invitation.account_id},
+            {administrator.id, professional.id},
+            {administrator.id, -1}
+          ] do
+        assert {:error, :unauthorized} =
+                 Accounts.reissue_internal_invitation(
+                   actor_id,
+                   target_id,
+                   verifier_key: @verifier_key
+                 )
+      end
+
+      assert Repo.query!(
+               "SELECT revoked_at FROM internal_account_invitations WHERE id = $1",
+               [invitation.invitation_id]
+             ).rows == [[nil]]
+    end
+
+    test "issuance and reissue audits contain references but no raw token or digest" do
+      administrator = create_active_account()
+
+      assert {:ok, first} =
+               Accounts.create_and_invite_internal_account(
+                 administrator.id,
+                 %{email: "audit.target@clinicaorigen.com", role: :professional},
+                 verifier_key: @verifier_key
+               )
+
+      assert {:ok, replacement} =
+               Accounts.reissue_internal_invitation(
+                 administrator.id,
+                 first.account_id,
+                 verifier_key: @verifier_key
+               )
+
+      audit_rows =
+        Repo.query!(
+          "SELECT actor_kind, actor_ref, event, entity_kind, entity_ref, result FROM audit_events WHERE event IN ('internal_invitation_issued', 'internal_invitation_reissued') ORDER BY id"
+        ).rows
+
+      assert audit_rows == [
+               [
+                 "administrator",
+                 to_string(administrator.id),
+                 "internal_invitation_issued",
+                 "invitation",
+                 to_string(first.invitation_id),
+                 "succeeded"
+               ],
+               [
+                 "administrator",
+                 to_string(administrator.id),
+                 "internal_invitation_reissued",
+                 "invitation",
+                 to_string(replacement.invitation_id),
+                 "succeeded"
+               ]
+             ]
+
+      [[first_digest], [replacement_digest]] =
+        Repo.query!(
+          "SELECT verifier_digest FROM internal_account_invitations WHERE account_id = $1 ORDER BY id",
+          [first.account_id]
+        ).rows
+
+      audit_dump = inspect(audit_rows)
+      refute audit_dump =~ first.token
+      refute audit_dump =~ replacement.token
+      refute audit_dump =~ Base.encode16(first_digest)
+      refute audit_dump =~ Base.encode16(replacement_digest)
+    end
+
+    test "a required issuance audit failure rolls back both account and invitation" do
+      administrator = create_active_account()
+      initial_accounts = Repo.aggregate("internal_accounts", :count)
+
+      Repo.query!("""
+      CREATE OR REPLACE FUNCTION pg_temp.reject_internal_invitation_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.event = 'internal_invitation_issued' THEN
+          RAISE EXCEPTION 'audit unavailable' USING ERRCODE = '55000';
+        END IF;
+        RETURN NEW;
+      END $$
+      """)
+
+      Repo.query!("""
+      CREATE TRIGGER reject_internal_invitation_audit BEFORE INSERT ON audit_events
+      FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_internal_invitation_audit()
+      """)
+
+      assert {:error, :audit_unavailable} =
+               Accounts.create_and_invite_internal_account(
+                 administrator.id,
+                 %{email: "rollback@clinicaorigen.com", role: :secretary},
+                 verifier_key: @verifier_key
+               )
+
+      assert Repo.aggregate("internal_accounts", :count) == initial_accounts
+      assert Repo.aggregate("internal_account_invitations", :count) == 0
+    end
+
+    test "professional and secretary invitations activate through the existing verifier protocol" do
+      administrator = create_active_account()
+
+      for role <- [:professional, :secretary] do
+        assert {:ok, invitation} =
+                 Accounts.create_and_invite_internal_account(
+                   administrator.id,
+                   %{
+                     email: "activation.#{role}@clinicaorigen.com",
+                     role: role
+                   },
+                   verifier_key: @verifier_key
+                 )
+
+        credentials = %{password_hash: "argon2id-hash", totp_secret: <<1, 2, 3>>}
+
+        activation =
+          case role do
+            :professional ->
+              BootstrapAdmin.activate(
+                invitation.invitation_id,
+                invitation.token,
+                @verifier_key,
+                credentials
+              )
+
+            :secretary ->
+              assert {:ok, binding} =
+                       BootstrapAdmin.exchange(
+                         invitation.invitation_id,
+                         invitation.token,
+                         @verifier_key
+                       )
+
+              BootstrapAdmin.activate_bound(
+                binding.invitation_id,
+                binding.account_id,
+                credentials
+              )
+          end
+
+        assert {:ok, %{account_id: account_id}} = activation
+        assert account_id == invitation.account_id
+
+        assert Repo.query!("SELECT role, state FROM internal_accounts WHERE id = $1", [account_id]).rows ==
+                 [[Atom.to_string(role), "active"]]
+      end
+    end
+  end
+
+  defp insert_pending_account(role) do
+    %{rows: [[id]]} =
+      Repo.query!(
+        "INSERT INTO internal_accounts (role, state) VALUES ($1, 'pending_activation') RETURNING id",
+        [Atom.to_string(role)]
+      )
+
+    id
   end
 end
