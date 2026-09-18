@@ -4,7 +4,9 @@ defmodule Origen.Accounts do
   """
 
   alias Origen.Audit.{Events, Writer}
-  alias Origen.BootstrapAdmin.Credentials
+  alias Origen.Authorization
+  alias Origen.Authorization.{Fact, Request}
+  alias Origen.BootstrapAdmin.{Credentials, Verifier}
   alias Origen.Repo
   alias Origen.Sessions
 
@@ -25,6 +27,97 @@ defmodule Origen.Accounts do
              session: Sessions.session_data()
            }}
           | {:error, :unauthenticated}
+
+  @type invitation_result :: %{
+          account: %{
+            id: integer(),
+            email: String.t(),
+            role: :professional | :secretary,
+            state: atom()
+          },
+          account_id: integer(),
+          invitation_id: integer(),
+          token: String.t(),
+          issued_at: DateTime.t(),
+          expires_at: DateTime.t()
+        }
+
+  @doc """
+  Creates a pending professional or secretary account and its first invitation atomically.
+
+  The raw invitation token exists only in the successful return value. Persistence stores the
+  versioned verifier digest, and audit records contain identifiers only.
+  """
+  @spec create_and_invite_internal_account(integer(), map(), keyword()) ::
+          {:ok, invitation_result()} | {:error, atom()}
+  def create_and_invite_internal_account(actor_id, attrs, opts \\ [])
+
+  def create_and_invite_internal_account(
+        actor_id,
+        %{email: email, role: role},
+        opts
+      )
+      when is_integer(actor_id) and is_binary(email) and role in [:professional, :secretary] and
+             is_list(opts) do
+    with {:ok, key} <- verifier_key(opts),
+         {:ok, ttl_seconds} <- invitation_ttl_seconds(),
+         {:ok, clean_email} <- normalize_email(email) do
+      Repo.transaction(fn ->
+        authorize_create!(actor_id, role)
+        account_id = insert_pending_account!(clean_email, role)
+
+        issue_internal_invitation!(
+          actor_id,
+          %{id: account_id, email: clean_email, role: role, state: :pending_activation},
+          key,
+          ttl_seconds,
+          :issue
+        )
+      end)
+      |> unwrap_invitation_transaction()
+    end
+  end
+
+  def create_and_invite_internal_account(_actor_id, _attrs, _opts),
+    do: {:error, :unauthorized}
+
+  @doc """
+  Atomically revokes the active invitation for a pending professional or secretary and issues a
+  replacement. Only an active administrator may perform the operation.
+  """
+  @spec reissue_internal_invitation(integer(), integer(), keyword()) ::
+          {:ok, invitation_result()} | {:error, atom()}
+  def reissue_internal_invitation(actor_id, account_id, opts \\ [])
+
+  def reissue_internal_invitation(actor_id, account_id, opts)
+      when is_integer(actor_id) and is_integer(account_id) and is_list(opts) do
+    with {:ok, key} <- verifier_key(opts),
+         {:ok, ttl_seconds} <- invitation_ttl_seconds() do
+      Repo.transaction(fn ->
+        actor = lock_account!(actor_id, "FOR SHARE")
+        target = lock_account!(account_id, "FOR UPDATE")
+        authorize_reissue!(actor, target)
+        revoke_active_invitation!(account_id)
+
+        issue_internal_invitation!(
+          actor_id,
+          %{
+            id: account_id,
+            email: target.email,
+            role: role_atom(target.role),
+            state: :pending_activation
+          },
+          key,
+          ttl_seconds,
+          :reissue
+        )
+      end)
+      |> unwrap_invitation_transaction()
+    end
+  end
+
+  def reissue_internal_invitation(_actor_id, _account_id, _opts),
+    do: {:error, :unauthorized}
 
   @doc """
   Authenticates an internal account using an identifier (email or id), password, and TOTP code.
@@ -239,6 +332,173 @@ defmodule Origen.Accounts do
         NimbleTOTP.valid?(seed, clean_code, time: current_time)
     end
   end
+
+  defp authorize_create!(actor_id, role) do
+    actor = lock_account!(actor_id, "FOR SHARE")
+
+    operation =
+      case role do
+        :professional -> :create_professional_account
+        :secretary -> :create_secretary_account
+      end
+
+    request =
+      Request.new(
+        operation: Fact.known(operation),
+        subject: Fact.known({:role, role_atom(actor.role)}),
+        account_state: Fact.known(state_atom(actor.state)),
+        target: Fact.known(%{role: role, state: :pending_activation}),
+        scope: :not_applicable
+      )
+
+    case Authorization.decide(request) do
+      {:allow, rule} when rule in [:s1_02, :s1_03] -> :ok
+      _denied -> Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp authorize_reissue!(actor, target) do
+    request =
+      Request.new(
+        operation: Fact.known(:reissue_internal_invitation),
+        subject: Fact.known({:role, role_atom(actor.role)}),
+        account_state: Fact.known(state_atom(actor.state)),
+        target:
+          Fact.known(%{
+            role: role_atom(target.role),
+            state: state_atom(target.state)
+          }),
+        scope: Fact.known(%{authenticated: true})
+      )
+
+    case Authorization.decide(request) do
+      {:allow, :rei_02} -> :ok
+      _denied -> Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp lock_account!(account_id, lock) when lock in ["FOR SHARE", "FOR UPDATE"] do
+    case Repo.query!(
+           "SELECT id, email, role, state FROM internal_accounts WHERE id = $1 #{lock}",
+           [account_id]
+         ).rows do
+      [[id, email, role, state]] -> %{id: id, email: email, role: role, state: state}
+      [] -> Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp insert_pending_account!(email, role) do
+    case Repo.query!(
+           """
+           INSERT INTO internal_accounts (email, role, state)
+           VALUES ($1, $2, 'pending_activation')
+           ON CONFLICT DO NOTHING
+           RETURNING id
+           """,
+           [email, Atom.to_string(role)]
+         ).rows do
+      [[account_id]] -> account_id
+      [] -> Repo.rollback(:invalid_request)
+    end
+  end
+
+  defp revoke_active_invitation!(account_id) do
+    case Repo.query!(
+           """
+           SELECT id
+           FROM internal_account_invitations
+           WHERE account_id = $1 AND consumed_at IS NULL AND revoked_at IS NULL
+           FOR UPDATE
+           """,
+           [account_id]
+         ).rows do
+      [[invitation_id]] ->
+        Repo.query!(
+          "UPDATE internal_account_invitations SET revoked_at = clock_timestamp() WHERE id = $1",
+          [invitation_id]
+        )
+
+      _missing_or_invalid ->
+        Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp issue_internal_invitation!(actor_id, account, key, ttl_seconds, operation) do
+    %{token: token, verifier_version: version, verifier_digest: digest} = Verifier.issue(key)
+
+    %{rows: [[invitation_id, issued_at, expires_at]]} =
+      Repo.query!(
+        """
+        INSERT INTO internal_account_invitations
+          (account_id, verifier_version, verifier_digest, issued_by_ref, expires_at)
+        VALUES ($1, $2, $3, $4, clock_timestamp() + ($5 * interval '1 second'))
+        RETURNING id, issued_at, expires_at
+        """,
+        [account.id, version, digest, to_string(actor_id), ttl_seconds]
+      )
+
+    event =
+      case operation do
+        :issue ->
+          Events.internal_invitation_issued(
+            {:administrator, to_string(actor_id)},
+            to_string(invitation_id)
+          )
+
+        :reissue ->
+          Events.internal_invitation_reissued(
+            {:administrator, to_string(actor_id)},
+            to_string(invitation_id)
+          )
+      end
+
+    with {:ok, audit_event} <- event,
+         {:ok, _audit} <- Writer.append(audit_event, {:allow, :sys_01}) do
+      %{
+        account: account,
+        account_id: account.id,
+        invitation_id: invitation_id,
+        token: token,
+        issued_at: issued_at,
+        expires_at: expires_at
+      }
+    else
+      _audit_failure -> Repo.rollback(:audit_unavailable)
+    end
+  end
+
+  defp verifier_key(opts) do
+    case Keyword.get(opts, :verifier_key) do
+      key when is_binary(key) and byte_size(key) >= 32 -> {:ok, key}
+      _invalid -> {:error, :invalid_verifier_key}
+    end
+  end
+
+  defp invitation_ttl_seconds do
+    case Application.get_env(:origen, :internal_invitation_ttl_seconds) do
+      seconds when is_integer(seconds) and seconds > 0 -> {:ok, seconds}
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  defp normalize_email(email) do
+    case String.trim(email) do
+      "" -> {:error, :invalid_request}
+      clean_email -> {:ok, clean_email}
+    end
+  end
+
+  defp role_atom("administrator"), do: :administrator
+  defp role_atom("professional"), do: :professional
+  defp role_atom("secretary"), do: :secretary
+  defp role_atom(_unknown), do: :unknown
+
+  defp state_atom("active"), do: :active
+  defp state_atom("pending_activation"), do: :pending_activation
+  defp state_atom(_unknown), do: :unknown
+
+  defp unwrap_invitation_transaction({:ok, result}), do: {:ok, result}
+  defp unwrap_invitation_transaction({:error, reason}), do: {:error, reason}
 
   defp record_audit_success(account) do
     role_atom =
