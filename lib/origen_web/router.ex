@@ -37,6 +37,7 @@ defmodule OrigenWeb.Router do
     post "/admin/activate", AdminActivationController, :create
 
     live "/admin/internal", AdminInternalLive, :index
+    live "/access", PatientAccessLive, :index
   end
 
   if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
