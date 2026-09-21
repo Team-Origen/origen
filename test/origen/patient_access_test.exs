@@ -1,32 +1,40 @@
 defmodule Origen.PatientAccessTest do
   use Origen.DataCase
 
+  import Ecto.Query
   import Swoosh.TestAssertions
   alias Origen.PatientAccess
   alias Origen.PatientAccess.MagicLink
   alias Origen.Repo
 
-  @valid_email "paciente@example.test"
+  @valid_email "paciente_unit@example.test"
+
+  setup do
+    Repo.delete_all(MagicLink)
+    :ok
+  end
 
   describe "request_magic_link/2" do
     test "delivers single-use email and stores SHA-256 digest without raw token" do
       assert {:ok, :delivered} = PatientAccess.request_magic_link(@valid_email)
 
-      # 1. Assert email is delivered with Swoosh
       assert_email_sent(fn email ->
         assert email.to == [{"", @valid_email}]
         assert email.subject == "Tu enlace de acceso a Origen"
         assert email.html_body =~ "/access/verify?token="
 
-        # Capture raw token from email link
         [_, raw_token] = Regex.run(~r/token=([^"s&]+)/, email.html_body)
+        decoded_token = URI.decode_www_form(raw_token)
 
         # 2. Assert raw token is NOT in database
-        refute Repo.get_by(MagicLink, token_digest: raw_token)
+        refute Repo.get_by(MagicLink, token_digest: decoded_token)
 
         # 3. Assert digest of raw token IS in database
-        expected_digest = :crypto.hash(:sha256, URI.decode_www_form(raw_token))
-        link = Repo.get_by(MagicLink, email: @valid_email)
+        expected_digest = :crypto.hash(:sha256, decoded_token)
+
+        link =
+          Repo.one(from m in MagicLink, where: m.email == ^@valid_email and is_nil(m.consumed_at))
+
         assert link != nil
         assert link.token_digest == expected_digest
         assert link.consumed_at == nil
@@ -38,7 +46,10 @@ defmodule Origen.PatientAccessTest do
 
     test "invalidates prior unconsumed links when requesting a new one" do
       assert {:ok, :delivered} = PatientAccess.request_magic_link(@valid_email)
-      link1 = Repo.get_by(MagicLink, email: @valid_email, consumed_at: nil)
+
+      link1 =
+        Repo.one(from m in MagicLink, where: m.email == ^@valid_email and is_nil(m.consumed_at))
+
       assert link1 != nil
 
       assert {:ok, :delivered} = PatientAccess.request_magic_link(@valid_email)

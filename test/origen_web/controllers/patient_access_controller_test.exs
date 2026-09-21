@@ -14,7 +14,7 @@ defmodule OrigenWeb.PatientAccessControllerTest do
       raw_token =
         receive do
           {:email, email} ->
-            [_, token] = Regex.run(~r/token=([^"s&]+)/, email.html_body)
+            [_, token] = Regex.run(~r/token=([^"&]+)/, email.html_body)
             URI.decode_www_form(token)
         after
           1000 -> flunk("Expected email to be delivered")
