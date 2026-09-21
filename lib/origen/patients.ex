@@ -326,4 +326,173 @@ defmodule Origen.Patients do
         {:error, reason}
     end
   end
+
+  defp audit_phone_challenge_consumed(email) do
+    with {:ok, event} <- Events.phone_challenge_consumed({:patient, email}, email),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
+  defp audit_phone_challenge_failed(email) do
+    with {:ok, event} <- Events.phone_challenge_failed({:patient, email}, email),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
+  @doc """
+  Verifies a user-supplied code against the active phone verification challenge.
+  Enforces:
+  1. Corresponds to the same patient account and phone number.
+  2. Constant-time hash verification.
+  3. Atomic consumption: single-use only, sets state to "consumed".
+  4. Marks patient_profile phone_verified: true upon success.
+  5. Rejection of expired challenges (state "expired").
+  6. Rejection of consumed challenges (reutilization prevention).
+  7. Strict attempt limiting: increments attempts_count on mismatch; marks
+     "max_attempts_exceeded" upon reaching 3 failed attempts.
+  8. Sanitized audit logging of success or failure without leaking secrets.
+  """
+  @spec verify_phone_code(PatientProfile.t() | String.t(), String.t(), keyword()) ::
+          {:ok, %{profile: PatientProfile.t(), challenge: PhoneVerificationChallenge.t()}}
+          | {:error, atom()}
+  def verify_phone_code(profile_or_email, code, opts \\ [])
+
+  def verify_phone_code(%PatientProfile{} = profile, code, opts) do
+    case Repo.get(PatientProfile, profile.id) do
+      nil -> {:error, :profile_not_found}
+      fresh_profile -> do_verify_phone_code(fresh_profile, code, opts)
+    end
+  end
+
+  def verify_phone_code(email, code, opts) when is_binary(email) do
+    clean_email = email |> String.trim() |> String.downcase()
+
+    case Repo.one(from p in PatientProfile, where: p.email == ^clean_email) do
+      %PatientProfile{} = profile -> do_verify_phone_code(profile, code, opts)
+      nil -> {:error, :profile_not_found}
+    end
+  end
+
+  defp do_verify_phone_code(profile, code, opts) when is_binary(code) do
+    clean_code = String.trim(code)
+
+    if String.length(clean_code) != PhoneVerificationConfig.code_length() or
+         not Regex.match?(~r/^[0-9]+$/, clean_code) do
+      {:error, :invalid_code}
+    else
+      now = Keyword.get(opts, :now, DateTime.utc_now())
+
+      Repo.transaction(fn ->
+        case find_challenge_for_verification(profile.id) do
+          {:ok, challenge} ->
+            validate_and_consume_challenge(profile, challenge, clean_code, now)
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+      end)
+      |> case do
+        {:ok, {:ok, result}} -> {:ok, result}
+        {:ok, {:error, reason}} -> {:error, reason}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  defp do_verify_phone_code(_profile, _code, _opts), do: {:error, :invalid_code}
+
+  defp find_challenge_for_verification(profile_id) do
+    query =
+      from c in PhoneVerificationChallenge,
+        where: c.patient_profile_id == ^profile_id,
+        order_by: [desc: c.id],
+        limit: 1,
+        lock: "FOR UPDATE"
+
+    case Repo.one(query) do
+      nil ->
+        {:error, :no_active_challenge}
+
+      %PhoneVerificationChallenge{state: "consumed"} ->
+        {:error, :challenge_consumed}
+
+      %PhoneVerificationChallenge{state: "max_attempts_exceeded"} ->
+        {:error, :max_attempts_exceeded}
+
+      %PhoneVerificationChallenge{state: "expired"} ->
+        {:error, :challenge_expired}
+
+      %PhoneVerificationChallenge{state: "pending"} = challenge ->
+        {:ok, challenge}
+    end
+  end
+
+  defp validate_and_consume_challenge(profile, challenge, code, now) do
+    cond do
+      challenge.phone != profile.phone ->
+        audit_phone_challenge_failed(profile.email)
+        {:error, :phone_mismatch}
+
+      DateTime.compare(now, challenge.expires_at) == :gt ->
+        challenge
+        |> Ecto.Changeset.change(%{state: "expired", updated_at: now})
+        |> Repo.update!()
+
+        audit_phone_challenge_failed(profile.email)
+        {:error, :challenge_expired}
+
+      challenge.attempts_count >= PhoneVerificationConfig.max_attempts() ->
+        challenge
+        |> Ecto.Changeset.change(%{state: "max_attempts_exceeded", updated_at: now})
+        |> Repo.update!()
+
+        audit_phone_challenge_failed(profile.email)
+        {:error, :max_attempts_exceeded}
+
+      PhoneVerificationConfig.verify_code_hash(code, challenge.code_hash) ->
+        {:ok, consumed_challenge} =
+          challenge
+          |> Ecto.Changeset.change(%{state: "consumed", updated_at: now})
+          |> Repo.update()
+
+        {:ok, updated_profile} =
+          profile
+          |> Ecto.Changeset.change(%{phone_verified: true, updated_at: now})
+          |> Repo.update()
+
+        audit_phone_challenge_consumed(profile.email)
+        {:ok, %{profile: updated_profile, challenge: consumed_challenge}}
+
+      true ->
+        new_attempts = challenge.attempts_count + 1
+        max_att = PhoneVerificationConfig.max_attempts()
+
+        new_state =
+          if new_attempts >= max_att,
+            do: "max_attempts_exceeded",
+            else: "pending"
+
+        challenge
+        |> Ecto.Changeset.change(%{
+          attempts_count: new_attempts,
+          state: new_state,
+          updated_at: now
+        })
+        |> Repo.update!()
+
+        audit_phone_challenge_failed(profile.email)
+
+        if new_state == "max_attempts_exceeded" do
+          {:error, :max_attempts_exceeded}
+        else
+          {:error, :invalid_code}
+        end
+    end
+  end
 end
