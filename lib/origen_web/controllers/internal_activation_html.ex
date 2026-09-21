@@ -5,6 +5,7 @@ defmodule OrigenWeb.InternalActivationHTML do
     ~H"""
     <main class="mx-auto max-w-lg p-8">
       <h1 class="text-2xl font-semibold">Account activation</h1>
+
       <p id="activation-status" class="mt-4">Checking invitation…</p>
       <meta name="_csrf_token" content={@csrf_token} />
       <form id="fragment-exchange" action={~p"/activate/exchange"} method="post" hidden>
@@ -12,6 +13,7 @@ defmodule OrigenWeb.InternalActivationHTML do
         <input id="invitation-id" type="hidden" name="invitation_id" />
         <input id="invitation-token" type="hidden" name="token" />
       </form>
+
       <script>
         (() => {
           const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -38,9 +40,12 @@ defmodule OrigenWeb.InternalActivationHTML do
     ~H"""
     <main class="mx-auto max-w-lg p-8">
       <h1 class="text-2xl font-semibold">Secure internal account</h1>
+
       <p :if={@error} role="alert" class="mt-4">{@error}</p>
+
       <section :if={@totp_uri} class="mt-6">
         <h2 class="font-semibold text-lg">Configurar factor de autenticación (TOTP)</h2>
+
         <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
           Escaneá este código QR con Google Authenticator, 1Password o tu aplicación preferida.
         </p>
@@ -57,6 +62,7 @@ defmodule OrigenWeb.InternalActivationHTML do
         <div class="mt-3 text-xs text-gray-500 text-center">
           ¿No podés escanear? Clave de configuración:
         </div>
+
         <code
           data-totp-uri={@totp_uri}
           class="mt-1 block break-all text-xs font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded text-center"
@@ -64,6 +70,7 @@ defmodule OrigenWeb.InternalActivationHTML do
           {@totp_uri}
         </code>
       </section>
+
       <form action={~p"/activate"} method="post" class="mt-6 space-y-4">
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
         <.input
@@ -78,6 +85,7 @@ defmodule OrigenWeb.InternalActivationHTML do
         <p class="text-xs text-gray-500 -mt-2">
           Elegí tu contraseña para iniciar sesión. Mínimo 12 caracteres.
         </p>
+
         <.input
           name="password_confirmation"
           type="password"
@@ -90,6 +98,7 @@ defmodule OrigenWeb.InternalActivationHTML do
         <p class="text-xs text-gray-500 -mt-2">
           Repetí la misma contraseña para verificar que la escribiste bien.
         </p>
+
         <.input
           name="totp_code"
           type="text"

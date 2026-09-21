@@ -38,6 +38,7 @@ defmodule OrigenWeb.Router do
 
     live "/admin/internal", AdminInternalLive, :index
     live "/access", PatientAccessLive, :index
+    get "/access/verify", PatientAccessController, :verify
   end
 
   if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and

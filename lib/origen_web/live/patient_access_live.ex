@@ -30,7 +30,8 @@ defmodule OrigenWeb.PatientAccessLive do
     changeset = build_changeset(params)
 
     if changeset.valid? do
-      email = Changeset.get_change(changeset, :email)
+      email = Changeset.get_change(changeset, :email) || Changeset.get_field(changeset, :email)
+      Origen.PatientAccess.request_magic_link(email)
 
       # Security: Non-enumerating response (does not disclose account existence)
       {:noreply,
@@ -87,11 +88,27 @@ defmodule OrigenWeb.PatientAccessLive do
     ~H"""
     <div class="min-h-screen flex items-center justify-center bg-[#F6F6F4] py-12 px-4 sm:px-6 lg:px-8 font-inter">
       <div class="max-w-md w-full bg-white border border-[#AFBAB4]/40 rounded-xl shadow-[0px_4px_20px_rgba(10,56,71,0.06)] p-8">
+        <div
+          :if={Phoenix.Flash.get(@flash, :error)}
+          class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-inter"
+          role="alert"
+        >
+          {Phoenix.Flash.get(@flash, :error)}
+        </div>
+        <div
+          :if={Phoenix.Flash.get(@flash, :info)}
+          class="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm font-inter"
+          role="status"
+        >
+          {Phoenix.Flash.get(@flash, :info)}
+        </div>
+
         <div :if={not @submitted}>
           <div class="mb-8">
             <h1 class="text-2xl font-semibold text-[#0A3847] font-inter tracking-tight">
               Acceso para Pacientes
             </h1>
+
             <p class="mt-2 text-sm text-[#35545A] font-inter">
               Ingresá tu correo electrónico para recibir un enlace de acceso seguro sin contraseña.
             </p>
@@ -114,7 +131,6 @@ defmodule OrigenWeb.PatientAccessLive do
               class="py-[12px] px-[16px] rounded-md w-full border border-[#AFBAB4] text-[#0A3847] placeholder-[#AFBAB4] focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847] font-inter"
               label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-[#35545A] font-inter mb-1"
             />
-
             <.button
               type="submit"
               class="w-full bg-[#0A3847] text-white h-[44px] px-6 rounded-md font-inter font-semibold hover:bg-[#072732] focus:ring-2 focus:ring-[#0A3847] focus:ring-offset-2 cursor-pointer transition-colors shadow-sm"
@@ -128,15 +144,19 @@ defmodule OrigenWeb.PatientAccessLive do
           <div class="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-[#DDE6DB] mb-4">
             <.icon name="hero-envelope-open" class="h-7 w-7 text-[#0A3847]" />
           </div>
+
           <h2 class="text-xl font-semibold text-[#0A3847] mb-2 font-inter">
             Revisá tu casilla de correo
           </h2>
+
           <p class="text-sm text-[#35545A] mb-4 leading-relaxed font-inter">
             Si el correo ingresado corresponde a un paciente registrado, enviamos un enlace de acceso temporal para que puedas ingresar.
           </p>
+
           <p class="text-xs text-[#35545A]/80 mb-6 font-inter">
             El enlace es de un solo uso y expira en pocos minutos por motivos de seguridad.
           </p>
+
           <.button
             id="reset-access-button"
             phx-click="reset"

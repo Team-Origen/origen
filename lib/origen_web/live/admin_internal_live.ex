@@ -104,11 +104,11 @@ defmodule OrigenWeb.AdminInternalLive do
       <div class="max-w-md lg:max-w-3xl xl:max-w-4xl w-full bg-white border border-[#E2E8F0] rounded-lg shadow-[0px_4px_12px_rgba(23,75,99,0.05)] p-8 lg:p-14 font-inter">
         <div class="mb-8">
           <h1 class="text-2xl lg:text-4xl font-semibold text-gray-900 font-inter">Crear Cuenta</h1>
+
           <p class="mt-2 text-sm lg:text-lg text-gray-600 font-inter">
             Emitir una invitación para una cuenta nueva de profesional o secretaria
           </p>
         </div>
-
         <%!-- Result display --%>
         <div :if={@result} class="mb-6 p-4 rounded-lg border" role="status">
           <p :if={match?({:ok, _}, @result)} class="text-sm text-green-700 font-inter">
@@ -116,11 +116,11 @@ defmodule OrigenWeb.AdminInternalLive do
               elem(@result, 1).role
             )}.
           </p>
+
           <p :if={match?({:error, _}, @result)} class="text-sm text-red-600 font-inter" role="alert">
             {error_message(elem(@result, 1))}
           </p>
         </div>
-
         <%!-- Form --%>
         <.form
           for={@form}
@@ -140,7 +140,6 @@ defmodule OrigenWeb.AdminInternalLive do
               class="py-[20px] px-[16px] lg:py-[16px] lg:px-[20px] lg:text-lg rounded-md w-full border border-gray-300 text-[#1a1c1e] focus:ring-2 focus:ring-[#174B63] focus:border-[#174B63] font-inter"
               label_class="block text-[13px] lg:text-base font-semibold leading-[24px] tracking-[0.05em] text-gray-700 font-inter mb-1"
             />
-
             <.field
               field={@form[:email]}
               type="email"

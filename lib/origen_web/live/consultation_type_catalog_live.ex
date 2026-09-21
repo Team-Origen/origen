@@ -227,6 +227,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         <div class="flex flex-col gap-6 sm:gap-8">
           <header class="space-y-2">
             <.h1 no_margin>Configuración</.h1>
+
             <.text_muted>
               Preferencias operativas de la práctica profesional.
             </.text_muted>
@@ -248,6 +249,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               <.card variant="basic">
                 <.card_header>
                   <.h2 id="agenda-interval-heading" no_margin>Intervalo de Agenda</.h2>
+
                   <.text_muted>
                     Unidad de tiempo utilizada para organizar la agenda profesional.
                   </.text_muted>
@@ -256,6 +258,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                 <.card_content class="flex flex-col gap-6">
                   <dl class="grid gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline sm:gap-4">
                     <dt class="font-medium">Intervalo aplicado</dt>
+
                     <dd id="current-agenda-interval" class="font-semibold">
                       {@current_interval} minutos
                     </dd>
@@ -277,7 +280,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       help_text="Valores permitidos: de 5 a 240 minutos, en pasos de 5."
                       no_margin
                     />
-
                     <.alert
                       :if={@selected_interval != @current_interval}
                       id="interval-change-warning"
@@ -317,7 +319,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       :if={match?({:incompatible, _, _}, @interval_feedback)}
                       feedback={@interval_feedback}
                     />
-
                     <div>
                       <.button
                         type="submit"
@@ -336,6 +337,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               <.card variant="basic">
                 <.card_header>
                   <.h2 id="consultation-types-heading" no_margin>Tipos de consulta</.h2>
+
                   <:action>
                     <.button
                       color="primary"
@@ -353,7 +355,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                     :if={match?({:incompatible, _, _}, @reactivation_feedback)}
                     feedback={@reactivation_feedback}
                   />
-
                   <form id="consultation-types-filter" phx-change="toggle_inactive">
                     <.field
                       id="show-inactive-consultation-types"
@@ -383,16 +384,21 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                           <span>{type.name}</span>
                         </span>
                       </:col>
+
                       <:col :let={type} label="Cantidad de intervalos">
                         <span class="sr-only">Cantidad de intervalos </span>{type.interval_count}
                       </:col>
+
                       <:col :let={type} label="Duración">
                         Duración: {duration_minutes(type, @current_interval)} minutos
                       </:col>
+
                       <:col :let={type} label="Precio">{format_ars(type.exact_price_ars)}</:col>
+
                       <:col :let={type} label="Estado">
                         <.status_badge status={type.status} />
                       </:col>
+
                       <:col :let={type} label="Acciones">
                         <.prepared_actions type={type} presentation="desktop" />
                       </:col>
@@ -417,24 +423,32 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                             <.color_swatch color={type.color} name={type.name} />
                             <span>{type.name}</span>
                           </span>
+
                           <:action>
                             <.status_badge status={type.status} />
                           </:action>
                         </.card_header>
+
                         <.card_content>
                           <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 text-sm">
                             <dt class="font-medium">Cantidad de intervalos</dt>
+
                             <dd class="text-right">{type.interval_count}</dd>
+
                             <dt class="font-medium">Duración</dt>
+
                             <dd class="text-right">
                               Duración: {duration_minutes(type, @current_interval)} minutos
                             </dd>
+
                             <dt class="font-medium">Precio</dt>
+
                             <dd class="text-right font-semibold">
                               {format_ars(type.exact_price_ars)}
                             </dd>
                           </dl>
                         </.card_content>
+
                         <.card_footer>
                           <.prepared_actions type={type} presentation="mobile" />
                         </.card_footer>
@@ -498,7 +512,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   help_text="Máximo de 32 caracteres. Los nombres duplicados están permitidos."
                   no_margin
                 />
-
                 <.field_wrapper
                   errors={price_control_errors(@type_form_errors)}
                   name="consultation_type[exact_price_ars]"
@@ -507,6 +520,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   <.field_label for="new-consultation-type-price" required>
                     Precio base
                   </.field_label>
+
                   <.input_group>
                     <:leading>
                       <select
@@ -523,6 +537,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                         </option>
                       </select>
                     </:leading>
+
                     <.input
                       id="new-consultation-type-price"
                       type="text"
@@ -536,9 +551,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       aria-describedby={price_described_by(@type_form_errors, :exact_price_ars)}
                     />
                   </.input_group>
+
                   <.field_error :for={message <- price_control_errors(@type_form_errors)}>
                     {message}
                   </.field_error>
+
                   <.field_help_text id="new-consultation-type-price-help">
                     Ingrese un importe no negativo, por ejemplo 18.000,00, con hasta dos decimales.
                   </.field_help_text>
@@ -557,7 +574,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   help_text="Seleccione el color que identificará este tipo de consulta."
                   no_margin
                 />
-
                 <.field
                   id="new-consultation-type-count"
                   type="number"
@@ -581,6 +597,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
               <.field_wrapper no_margin>
                 <.field_label for="new-consultation-type-duration">Duración</.field_label>
+
                 <output
                   id="new-consultation-type-duration"
                   for="new-consultation-type-count"
@@ -593,6 +610,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                     —
                   <% end %>
                 </output>
+
                 <.field_help_text>
                   Se calcula según la cantidad y el intervalo de Agenda actual de {@current_interval} minutos.
                 </.field_help_text>
@@ -608,6 +626,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               >
                 Cancelar
               </.button>
+
               <.button type="submit" form="new-consultation-type-form" color="primary">
                 {type_submit_label(@editing_type_id)}
               </.button>
@@ -663,6 +682,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       >
         Editar
       </.button>
+
       <.button
         :if={@type.status == :active}
         color="danger"
@@ -675,6 +695,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       >
         Desactivar
       </.button>
+
       <.button
         :if={@type.status == :inactive}
         color="secondary"
