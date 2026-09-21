@@ -63,3 +63,7 @@ Backend robusto y seguro para la emisión, entrega y consumo de enlaces de acces
 - Tests de consumo (éxito, expiración, reutilización/un solo uso, tokens corruptos).
 - Tests de no enumeración y protección de secretos (probar que ningún token llega a logs ni auditoría).
 - Verificación de formato (`mix format --check-formatted`) y compilación limpia (`mix compile --warnings-as-errors`).
+
+## Evidence
+- Commit: `a115cea` (feat(auth): implementar emisión y consumo de magic link para pacientes)
+- Acceptance criteria verified: all 4 criteria satisfied.
