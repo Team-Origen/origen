@@ -100,11 +100,50 @@ defmodule OrigenWeb.PatientProfileCompletionLive do
       message: "debe ser un tipo de documento válido"
     )
     |> normalize_doc_number()
-    |> Changeset.validate_format(:document_number, ~r/^[A-Za-z0-9]{1,32}$/,
-      message: "debe ser alfanumérico válido"
-    )
+    |> validate_document_number_by_type()
     |> validate_birthdate()
     |> Map.put(:action, :validate)
+  end
+
+  defp validate_document_number_by_type(changeset) do
+    doc_type = Changeset.get_field(changeset, :document_type)
+
+    case Changeset.get_change(changeset, :document_number) do
+      nil ->
+        changeset
+
+      num when is_binary(num) ->
+        case doc_type do
+          "dni" ->
+            if Regex.match?(~r/^[0-9]{6,9}$/, num) do
+              changeset
+            else
+              Changeset.add_error(
+                changeset,
+                :document_number,
+                "el DNI debe contener solo números (entre 6 y 9 dígitos)"
+              )
+            end
+
+          "passport" ->
+            if Regex.match?(~r/^[A-Za-z0-9]{3,20}$/, num) do
+              changeset
+            else
+              Changeset.add_error(
+                changeset,
+                :document_number,
+                "el pasaporte debe ser alfanumérico (entre 3 y 20 caracteres)"
+              )
+            end
+
+          _other ->
+            if Regex.match?(~r/^[A-Za-z0-9]{1,32}$/, num) do
+              changeset
+            else
+              Changeset.add_error(changeset, :document_number, "debe ser alfanumérico válido")
+            end
+        end
+    end
   end
 
   defp normalize_doc_number(changeset) do
@@ -185,8 +224,15 @@ defmodule OrigenWeb.PatientProfileCompletionLive do
               <.field
                 field={@form[:document_number]}
                 type="text"
+                inputmode={
+                  if @form[:document_type].value in [nil, "", "dni"], do: "numeric", else: "text"
+                }
                 label="Número de documento"
-                placeholder="Sin puntos ni espacios"
+                placeholder={
+                  if @form[:document_type].value == "passport",
+                    do: "Ej. A12345678",
+                    else: "Ej. 38123456"
+                }
                 required
                 class="py-2.5 px-3.5 rounded-md w-full border border-[#AFBAB4] text-[#0A3847] focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847]"
                 label_class="block text-xs font-semibold text-[#35545A] mb-1"

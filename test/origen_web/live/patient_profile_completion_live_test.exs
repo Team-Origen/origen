@@ -58,6 +58,20 @@ defmodule OrigenWeb.PatientProfileCompletionLiveTest do
 
       assert html =~ "debe ser una fecha en el pasado"
     end
+
+    test "validates DNI requires numeric format", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/patient/profile/complete")
+
+      html =
+        view
+        |> form("#patient-profile-form",
+          profile:
+            Map.merge(@valid_form, %{"document_type" => "dni", "document_number" => "38123abc"})
+        )
+        |> render_change()
+
+      assert html =~ "el DNI debe contener solo números"
+    end
   end
 
   describe "form submission (phx-submit)" do
