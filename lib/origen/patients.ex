@@ -215,7 +215,7 @@ defmodule Origen.Patients do
   end
 
   defp do_request_phone_verification(profile, phone, opts) when is_binary(phone) do
-    normalized_phone = String.replace(phone, ~r/\s+/, "")
+    normalized_phone = String.replace(phone, ~r/[-.\s]/, "")
 
     if String.length(normalized_phone) < 6 do
       {:error, :invalid_phone}
