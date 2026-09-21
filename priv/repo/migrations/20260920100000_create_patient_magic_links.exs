@@ -11,7 +11,7 @@ defmodule Origen.Repo.Migrations.CreatePatientMagicLinks do
       consumed_at timestamptz(6),
       created_at timestamptz(6) NOT NULL DEFAULT clock_timestamp(),
       CONSTRAINT patient_magic_links_digest_check CHECK (octet_length(token_digest) = 32),
-      CONSTRAINT patient_magic_links_email_format CHECK (email ~ '^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
+      CONSTRAINT patient_magic_links_email_format CHECK (email ~ '^[a-zA-Z0-9_.-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9.-]+$')
     )
     """)
 
