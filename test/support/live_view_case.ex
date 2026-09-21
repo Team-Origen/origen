@@ -24,7 +24,10 @@ defmodule OrigenWeb.LiveViewCase do
   end
 
   setup tags do
-    Origen.DataCase.setup_sandbox(tags)
+    unless tags[:skip_db] do
+      Origen.DataCase.setup_sandbox(tags)
+    end
+
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end
