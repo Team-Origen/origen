@@ -30,7 +30,8 @@ defmodule OrigenWeb.PatientAccessLive do
     changeset = build_changeset(params)
 
     if changeset.valid? do
-      email = Changeset.get_change(changeset, :email)
+      email = Changeset.get_change(changeset, :email) || Changeset.get_field(changeset, :email)
+      Origen.PatientAccess.request_magic_link(email)
 
       # Security: Non-enumerating response (does not disclose account existence)
       {:noreply,
