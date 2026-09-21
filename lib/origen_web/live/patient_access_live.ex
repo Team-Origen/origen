@@ -88,6 +88,13 @@ defmodule OrigenWeb.PatientAccessLive do
     ~H"""
     <div class="min-h-screen flex items-center justify-center bg-[#F6F6F4] py-12 px-4 sm:px-6 lg:px-8 font-inter">
       <div class="max-w-md w-full bg-white border border-[#AFBAB4]/40 rounded-xl shadow-[0px_4px_20px_rgba(10,56,71,0.06)] p-8">
+        <div :if={Phoenix.Flash.get(@flash, :error)} class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm font-inter" role="alert">
+          {Phoenix.Flash.get(@flash, :error)}
+        </div>
+        <div :if={Phoenix.Flash.get(@flash, :info)} class="mb-6 p-4 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm font-inter" role="status">
+          {Phoenix.Flash.get(@flash, :info)}
+        </div>
+
         <div :if={not @submitted}>
           <div class="mb-8">
             <h1 class="text-2xl font-semibold text-[#0A3847] font-inter tracking-tight">

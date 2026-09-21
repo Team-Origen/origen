@@ -22,7 +22,7 @@ defmodule Origen.PatientAccess.Email do
       <h2>Acceso sin contraseña</h2>
       <p>Hacé clic en el siguiente enlace para ingresar a tu cuenta de paciente:</p>
       <p style="margin: 24px 0;">
-        <a href="#{link}" style="background-color: #0A3847; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+        <a href="#{link}" target="_blank" rel="noopener noreferrer" style="background-color: #0A3847; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
           Ingresar a Origen
         </a>
       </p>
