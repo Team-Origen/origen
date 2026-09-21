@@ -23,7 +23,7 @@ defmodule Origen.PatientAccessTest do
         assert email.subject == "Tu enlace de acceso a Origen"
         assert email.html_body =~ "/access/verify?token="
 
-        [_, raw_token] = Regex.run(~r/token=([^"s&]+)/, email.html_body)
+        [_, raw_token] = Regex.run(~r/token=([^"&]+)/, email.html_body)
         decoded_token = URI.decode_www_form(raw_token)
 
         # 2. Assert raw token is NOT in database
@@ -103,7 +103,7 @@ defmodule Origen.PatientAccessTest do
       raw_token =
         receive do
           {:email, email} ->
-            [_, token] = Regex.run(~r/token=([^"s&]+)/, email.html_body)
+            [_, token] = Regex.run(~r/token=([^"&]+)/, email.html_body)
             URI.decode_www_form(token)
         after
           1000 -> flunk("Expected email to be delivered")
