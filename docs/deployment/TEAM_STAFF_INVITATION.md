@@ -19,13 +19,13 @@ Esta guía permite que cada desarrollador cree y active cuentas locales de `prof
     }
   ```
 
-- Para la prueba local por HTTP, conservá también:
+- Para la prueba local por HTTP, agregá también:
 
   ```elixir
   config :origen, allow_insecure_http_activation: true
   ```
 
-  Esto es exclusivamente local. No lo copies a configuración compartida, staging ni producción.
+  Después de cambiar `config/dev.local.exs`, reiniciá `mix phx.server`. Esto es exclusivamente local. No lo copies a configuración compartida, staging ni producción.
 
 ## 1. Iniciar la aplicación
 
@@ -85,7 +85,9 @@ En la misma consola, ejecutá:
 "http://localhost:4000/activate#invitation_id=#{secretary.invitation_id}&token=#{secretary.token}"
 ```
 
-Abrí cada enlace en el navegador. No publiques, subas ni pegues estos enlaces en tickets, PRs o chats: contienen un token de invitación.
+Abrí la **URL completa** que imprime cada expresión, incluyendo `#invitation_id=...&token=...`. Abrir solamente `http://localhost:4000/activate` no alcanza y mostrará `Activation unavailable`, porque no identifica ninguna invitación.
+
+No publiques, subas ni pegues estos enlaces en tickets, PRs o chats: contienen un token de invitación.
 
 ## 4. Activar cada cuenta
 
