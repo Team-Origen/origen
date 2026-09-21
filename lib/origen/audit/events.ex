@@ -90,6 +90,12 @@ defmodule Origen.Audit.Events do
   def magic_link_failed(actor, nil),
     do: build(actor, "magic_link_consumed", nil, "failed")
 
+  def patient_profile_completed(actor, ref) when is_binary(ref),
+    do: build(actor, "patient_profile_completed", {:patient, ref}, "succeeded")
+
+  def document_collision_derived(actor, ref) when is_binary(ref),
+    do: build(actor, "document_collision_derived", {:patient, ref}, "succeeded")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 
