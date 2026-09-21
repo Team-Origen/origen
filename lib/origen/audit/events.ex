@@ -78,6 +78,18 @@ defmodule Origen.Audit.Events do
   def internal_login_failed(actor, nil),
     do: build(actor, "internal_login", nil, "failed")
 
+  def magic_link_issued(actor, ref) when is_binary(ref),
+    do: build(actor, "magic_link_issued", {:patient, ref}, "succeeded")
+
+  def magic_link_consumed(actor, ref) when is_binary(ref),
+    do: build(actor, "magic_link_consumed", {:patient, ref}, "succeeded")
+
+  def magic_link_failed(actor, ref) when is_binary(ref),
+    do: build(actor, "magic_link_consumed", {:patient, ref}, "failed")
+
+  def magic_link_failed(actor, nil),
+    do: build(actor, "magic_link_consumed", nil, "failed")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 

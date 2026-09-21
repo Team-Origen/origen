@@ -92,11 +92,12 @@ defmodule OrigenWeb.PatientAccessLive do
             <h1 class="text-2xl font-semibold text-[#0A3847] font-inter tracking-tight">
               Acceso para Pacientes
             </h1>
+            
             <p class="mt-2 text-sm text-[#35545A] font-inter">
               Ingresá tu correo electrónico para recibir un enlace de acceso seguro sin contraseña.
             </p>
           </div>
-
+          
           <.form
             for={@form}
             id="patient-access-form"
@@ -114,7 +115,6 @@ defmodule OrigenWeb.PatientAccessLive do
               class="py-[12px] px-[16px] rounded-md w-full border border-[#AFBAB4] text-[#0A3847] placeholder-[#AFBAB4] focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847] font-inter"
               label_class="block text-[13px] font-semibold leading-[18px] tracking-[0.05em] text-[#35545A] font-inter mb-1"
             />
-
             <.button
               type="submit"
               class="w-full bg-[#0A3847] text-white h-[44px] px-6 rounded-md font-inter font-semibold hover:bg-[#072732] focus:ring-2 focus:ring-[#0A3847] focus:ring-offset-2 cursor-pointer transition-colors shadow-sm"
@@ -123,20 +123,24 @@ defmodule OrigenWeb.PatientAccessLive do
             </.button>
           </.form>
         </div>
-
+        
         <div :if={@submitted} class="text-center py-4">
           <div class="mx-auto flex items-center justify-center h-14 w-14 rounded-full bg-[#DDE6DB] mb-4">
             <.icon name="hero-envelope-open" class="h-7 w-7 text-[#0A3847]" />
           </div>
+          
           <h2 class="text-xl font-semibold text-[#0A3847] mb-2 font-inter">
             Revisá tu casilla de correo
           </h2>
+          
           <p class="text-sm text-[#35545A] mb-4 leading-relaxed font-inter">
             Si el correo ingresado corresponde a un paciente registrado, enviamos un enlace de acceso temporal para que puedas ingresar.
           </p>
+          
           <p class="text-xs text-[#35545A]/80 mb-6 font-inter">
             El enlace es de un solo uso y expira en pocos minutos por motivos de seguridad.
           </p>
+          
           <.button
             id="reset-access-button"
             phx-click="reset"
