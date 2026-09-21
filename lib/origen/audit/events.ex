@@ -96,6 +96,9 @@ defmodule Origen.Audit.Events do
   def document_collision_derived(actor, ref) when is_binary(ref),
     do: build(actor, "document_collision_derived", {:patient, ref}, "succeeded")
 
+  def phone_challenge_issued(actor, ref) when is_binary(ref),
+    do: build(actor, "phone_challenge_issued", {:patient, ref}, "succeeded")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 
