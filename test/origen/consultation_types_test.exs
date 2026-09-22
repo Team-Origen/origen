@@ -848,3 +848,306 @@ defmodule Origen.ConsultationTypesTest do
     consultation_type
   end
 end
+
+defmodule Origen.ConsultationTypesConcurrencyTest do
+  use ExUnit.Case, async: false
+
+  alias Ecto.Adapters.SQL.Sandbox
+  alias Origen.ConsultationTypes
+  alias Origen.Repo
+  alias Origen.Sessions
+
+  test "configuration reads serialize mutations behind one consistent snapshot" do
+    fixture = start_concurrency_fixture!()
+    parent = self()
+
+    {:ok, {read_task, create_task}} =
+      Repo.transaction(fn ->
+        [[holder_backend]] = Repo.query!("SELECT pg_backend_pid()").rows
+        Repo.query!("LOCK TABLE consultation_types IN ACCESS EXCLUSIVE MODE")
+
+        read_task =
+          start_database_task(parent, :read, fn ->
+            ConsultationTypes.get_own_configuration(fixture.principal)
+          end)
+
+        read_backend = await_backend!(:read)
+        assert_blocked_by!(read_backend, holder_backend)
+
+        create_task =
+          start_database_task(parent, :create, fn ->
+            ConsultationTypes.create_type(fixture.principal, valid_concurrent_type_attrs())
+          end)
+
+        create_backend = await_backend!(:create)
+        assert_blocked_by!(create_backend, read_backend)
+
+        {read_task, create_task}
+      end)
+
+    assert {:ok, %{agenda_interval_minutes: 30, consultation_types: []}} =
+             Task.await(read_task, 5_000)
+
+    assert {:ok, _created} = Task.await(create_task, 5_000)
+    finish_concurrency_fixture!(fixture)
+  end
+
+  test "Agenda Interval application serializes behind Consultation Type creation" do
+    fixture = start_concurrency_fixture!()
+    blocker = install_mutation_blocker!(:insert, fixture.account_id)
+
+    {create_task, apply_task} =
+      serialize_mutation_before_interval!(fixture.principal, blocker, fn ->
+        ConsultationTypes.create_type(fixture.principal, valid_concurrent_type_attrs())
+      end)
+
+    assert {:ok, created} = Task.await(create_task, 5_000)
+
+    assert {:ok, %{agenda_interval_minutes: 60, consultation_types: [^created]}} =
+             Task.await(apply_task, 5_000)
+
+    finish_concurrency_fixture!(fixture, blocker)
+  end
+
+  test "Agenda Interval application serializes behind Consultation Type update" do
+    fixture = start_concurrency_fixture!()
+
+    {:ok, consultation_type} =
+      ConsultationTypes.create_type(fixture.principal, valid_concurrent_type_attrs())
+
+    blocker = install_mutation_blocker!(:update, fixture.account_id)
+
+    {update_task, apply_task} =
+      serialize_mutation_before_interval!(fixture.principal, blocker, fn ->
+        ConsultationTypes.update_type(
+          fixture.principal,
+          consultation_type.id,
+          valid_concurrent_type_attrs(%{interval_count: 5})
+        )
+      end)
+
+    assert {:ok, %{interval_count: 5}} = Task.await(update_task, 5_000)
+
+    assert {:error,
+            {:incompatible,
+             %{maximum_interval_count: 4, blockers: [%{id: blocker_id, interval_count: 5}]}}} =
+             Task.await(apply_task, 5_000)
+
+    assert blocker_id == consultation_type.id
+    finish_concurrency_fixture!(fixture, blocker)
+  end
+
+  test "Agenda Interval application serializes behind Consultation Type reactivation" do
+    fixture = start_concurrency_fixture!()
+
+    {:ok, consultation_type} =
+      ConsultationTypes.create_type(
+        fixture.principal,
+        valid_concurrent_type_attrs(%{interval_count: 5})
+      )
+
+    assert {:ok, %{status: :inactive}} =
+             ConsultationTypes.deactivate_type(fixture.principal, consultation_type.id)
+
+    blocker = install_mutation_blocker!(:update, fixture.account_id)
+
+    {reactivate_task, apply_task} =
+      serialize_mutation_before_interval!(fixture.principal, blocker, fn ->
+        ConsultationTypes.reactivate_type(fixture.principal, consultation_type.id)
+      end)
+
+    assert {:ok, %{status: :active, interval_count: 5}} =
+             Task.await(reactivate_task, 5_000)
+
+    assert {:error,
+            {:incompatible,
+             %{maximum_interval_count: 4, blockers: [%{id: blocker_id, interval_count: 5}]}}} =
+             Task.await(apply_task, 5_000)
+
+    assert blocker_id == consultation_type.id
+    finish_concurrency_fixture!(fixture, blocker)
+  end
+
+  defp start_concurrency_fixture! do
+    :ok = Sandbox.checkout(Repo, sandbox: false)
+    account_id = insert_active_professional!()
+    {:ok, %{session: principal}} = Sessions.create_session(account_id)
+
+    assert {:ok, %{agenda_interval_minutes: 30}} =
+             ConsultationTypes.get_own_configuration(principal)
+
+    fixture = %{account_id: account_id, principal: principal}
+
+    on_exit(fn ->
+      :ok = Sandbox.checkout(Repo, sandbox: false)
+
+      try do
+        cleanup_concurrency_fixture!(nil, fixture.account_id)
+      after
+        Sandbox.checkin(Repo)
+      end
+    end)
+
+    fixture
+  end
+
+  defp finish_concurrency_fixture!(fixture, blocker \\ nil) do
+    cleanup_concurrency_fixture!(blocker, fixture.account_id)
+    :ok = Sandbox.checkin(Repo)
+  end
+
+  defp serialize_mutation_before_interval!(principal, blocker, mutation) do
+    parent = self()
+
+    {:ok, tasks} =
+      Repo.transaction(fn ->
+        [[holder_backend]] = Repo.query!("SELECT pg_backend_pid()").rows
+        Repo.query!("SELECT pg_advisory_xact_lock($1)", [blocker.advisory_key])
+
+        mutation_task = start_database_task(parent, :mutation, mutation)
+        mutation_backend = await_backend!(:mutation)
+        assert_blocked_by!(mutation_backend, holder_backend)
+
+        apply_task =
+          start_database_task(parent, :apply, fn ->
+            ConsultationTypes.apply_agenda_interval(principal, 60)
+          end)
+
+        apply_backend = await_backend!(:apply)
+        assert_blocked_by!(apply_backend, mutation_backend)
+
+        {mutation_task, apply_task}
+      end)
+
+    tasks
+  end
+
+  defp start_database_task(parent, label, operation) do
+    Task.async(fn ->
+      :ok = Sandbox.checkout(Repo, sandbox: false)
+      [[backend]] = Repo.query!("SELECT pg_backend_pid()").rows
+      send(parent, {label, backend})
+
+      try do
+        operation.()
+      after
+        Sandbox.checkin(Repo)
+      end
+    end)
+  end
+
+  defp await_backend!(label) do
+    assert_receive {^label, backend}, 1_000
+    backend
+  end
+
+  defp assert_blocked_by!(blocked_backend, blocking_backend) do
+    deadline = System.monotonic_time(:millisecond) + 2_000
+    await_blocking_backend(blocked_backend, blocking_backend, deadline)
+  end
+
+  defp await_blocking_backend(blocked_backend, blocking_backend, deadline) do
+    [[blocking_backends]] =
+      Repo.query!("SELECT pg_blocking_pids($1)", [blocked_backend]).rows
+
+    cond do
+      blocking_backend in blocking_backends ->
+        :ok
+
+      System.monotonic_time(:millisecond) < deadline ->
+        await_blocking_backend(blocked_backend, blocking_backend, deadline)
+
+      true ->
+        flunk(
+          "expected backend #{blocked_backend} to be blocked by backend #{blocking_backend}, " <>
+            "observed blockers: #{inspect(blocking_backends)}"
+        )
+    end
+  end
+
+  defp install_mutation_blocker!(operation, account_id) do
+    suffix = System.unique_integer([:positive])
+    operation_name = operation |> Atom.to_string() |> String.downcase()
+    function_name = "test_block_consultation_#{operation_name}_#{suffix}"
+    trigger_name = "test_block_consultation_#{operation_name}_#{suffix}"
+    advisory_key = suffix
+
+    Repo.query!("""
+    CREATE FUNCTION public.#{function_name}()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      IF NEW.owner_account_id = #{account_id} THEN
+        PERFORM pg_advisory_xact_lock(#{advisory_key});
+      END IF;
+
+      RETURN NEW;
+    END;
+    $$
+    """)
+
+    Repo.query!("""
+    CREATE TRIGGER #{trigger_name}
+    BEFORE #{operation} ON public.consultation_types
+    FOR EACH ROW EXECUTE FUNCTION public.#{function_name}()
+    """)
+
+    blocker = %{
+      trigger_name: trigger_name,
+      function_name: function_name,
+      advisory_key: advisory_key
+    }
+
+    on_exit(fn ->
+      :ok = Sandbox.checkout(Repo, sandbox: false)
+
+      try do
+        cleanup_mutation_blocker!(blocker)
+      after
+        Sandbox.checkin(Repo)
+      end
+    end)
+
+    blocker
+  end
+
+  defp cleanup_concurrency_fixture!(blocker, account_id) do
+    if blocker, do: cleanup_mutation_blocker!(blocker)
+
+    Repo.query!("DELETE FROM consultation_types WHERE owner_account_id = $1", [account_id])
+    Repo.query!("DELETE FROM agenda_settings WHERE owner_account_id = $1", [account_id])
+    Repo.query!("DELETE FROM internal_account_sessions WHERE account_id = $1", [account_id])
+    Repo.query!("DELETE FROM internal_accounts WHERE id = $1", [account_id])
+  end
+
+  defp cleanup_mutation_blocker!(blocker) do
+    Repo.query!("DROP TRIGGER IF EXISTS #{blocker.trigger_name} ON public.consultation_types")
+    Repo.query!("DROP FUNCTION IF EXISTS public.#{blocker.function_name}()")
+  end
+
+  defp insert_active_professional! do
+    [[account_id]] =
+      Repo.query!("""
+      INSERT INTO internal_accounts
+        (role, state, password_hash, totp_secret, activated_at)
+      VALUES
+        ('professional', 'active', 'argon2_hash_dummy', decode('0102030405', 'hex'), NOW())
+      RETURNING id
+      """).rows
+
+    account_id
+  end
+
+  defp valid_concurrent_type_attrs(overrides \\ %{}) do
+    Map.merge(
+      %{
+        name: "Serialized consultation",
+        exact_price_ars: "18000.50",
+        color: "#0A7C86",
+        interval_count: 2
+      },
+      overrides
+    )
+  end
+end
