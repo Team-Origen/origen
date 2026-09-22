@@ -77,6 +77,177 @@ defmodule Origen.ConsultationTypes do
 
   def create_type(_invalid_principal, _attrs), do: {:error, :unauthorized}
 
+  @spec update_type(map(), String.t(), map()) ::
+          {:ok, map()}
+          | {:error,
+             :unauthorized | :not_found | :unavailable | {:validation, validation_errors()}}
+  def update_type(%{session_id: session_id, account_id: account_id}, consultation_type_id, attrs)
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      interval_minutes = get_or_create_agenda_settings!(owner_account_id, :lock)
+      persisted_id = lock_active_owned_type!(owner_account_id, consultation_type_id)
+
+      case validate_type_attrs(attrs, interval_minutes) do
+        {:ok, validated_attrs} ->
+          update_consultation_type!(owner_account_id, persisted_id, validated_attrs)
+
+        {:error, errors} ->
+          Repo.rollback({:validation, errors})
+      end
+    end)
+    |> case do
+      {:ok, consultation_type} -> {:ok, consultation_type}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, :not_found} -> {:error, :not_found}
+      {:error, {:validation, errors}} -> {:error, {:validation, errors}}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def update_type(_invalid_principal, _consultation_type_id, _attrs),
+    do: {:error, :unauthorized}
+
+  @spec deactivate_type(map(), String.t()) ::
+          {:ok, map()} | {:error, :unauthorized | :not_found | :unavailable}
+  def deactivate_type(
+        %{session_id: session_id, account_id: account_id},
+        consultation_type_id
+      )
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      interval_minutes = get_or_create_agenda_settings!(owner_account_id, :lock)
+      persisted_id = lock_active_owned_type!(owner_account_id, consultation_type_id)
+
+      deactivate_consultation_type!(owner_account_id, persisted_id, interval_minutes)
+    end)
+    |> case do
+      {:ok, consultation_type} -> {:ok, consultation_type}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, :not_found} -> {:error, :not_found}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def deactivate_type(_invalid_principal, _consultation_type_id),
+    do: {:error, :unauthorized}
+
+  @spec reactivate_type(map(), String.t()) ::
+          {:ok, map()}
+          | {:error,
+             :unauthorized
+             | :not_found
+             | :unavailable
+             | {:incompatible, %{name: String.t(), prospective_duration_minutes: pos_integer()}}}
+  def reactivate_type(
+        %{session_id: session_id, account_id: account_id},
+        consultation_type_id
+      )
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      interval_minutes = get_or_create_agenda_settings!(owner_account_id, :lock)
+
+      %{id: persisted_id, name: name, interval_count: interval_count} =
+        lock_inactive_owned_type!(owner_account_id, consultation_type_id)
+
+      prospective_duration_minutes = interval_count * interval_minutes
+
+      if prospective_duration_minutes <= 240 do
+        reactivate_consultation_type!(owner_account_id, persisted_id)
+      else
+        Repo.rollback(
+          {:incompatible,
+           %{name: name, prospective_duration_minutes: prospective_duration_minutes}}
+        )
+      end
+    end)
+    |> case do
+      {:ok, consultation_type} -> {:ok, consultation_type}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, :not_found} -> {:error, :not_found}
+      {:error, {:incompatible, evidence}} -> {:error, {:incompatible, evidence}}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def reactivate_type(_invalid_principal, _consultation_type_id),
+    do: {:error, :unauthorized}
+
+  @spec apply_agenda_interval(map(), integer() | String.t()) ::
+          {:ok, configuration()}
+          | {:error,
+             :unauthorized
+             | :unavailable
+             | {:validation, %{agenda_interval_minutes: :invalid}}
+             | {:incompatible,
+                %{
+                  maximum_interval_count: pos_integer(),
+                  blockers: [
+                    %{
+                      id: String.t(),
+                      name: String.t(),
+                      interval_count: pos_integer(),
+                      prospective_duration_minutes: pos_integer()
+                    }
+                  ]
+                }}}
+  def apply_agenda_interval(
+        %{session_id: session_id, account_id: account_id},
+        proposed_interval
+      )
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      current_interval = get_or_create_agenda_settings!(owner_account_id, :lock)
+
+      case validate_agenda_interval(proposed_interval) do
+        {:ok, interval_minutes} ->
+          active_types = lock_active_owned_types!(owner_account_id)
+          blockers = interval_blockers(active_types, interval_minutes)
+
+          if blockers == [] do
+            apply_interval_if_changed!(owner_account_id, current_interval, interval_minutes)
+
+            %{
+              agenda_interval_minutes: interval_minutes,
+              consultation_types: list_consultation_types!(owner_account_id)
+            }
+          else
+            Repo.rollback(
+              {:incompatible,
+               %{
+                 maximum_interval_count: min(10, div(240, interval_minutes)),
+                 blockers: blockers
+               }}
+            )
+          end
+
+        :error ->
+          Repo.rollback({:validation, %{agenda_interval_minutes: :invalid}})
+      end
+    end)
+    |> case do
+      {:ok, configuration} -> {:ok, configuration}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, {:validation, errors}} -> {:error, {:validation, errors}}
+      {:error, {:incompatible, evidence}} -> {:error, {:incompatible, evidence}}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def apply_agenda_interval(_invalid_principal, _proposed_interval),
+    do: {:error, :unauthorized}
+
   defp resolve_owner!(session_id, account_id) do
     query = """
     SELECT accounts.id
@@ -221,6 +392,30 @@ defmodule Origen.ConsultationTypes do
 
   defp parse_integer(_value), do: :error
 
+  defp validate_agenda_interval(value) do
+    with {:ok, interval_minutes} <- parse_canonical_integer(value),
+         true <- interval_minutes in 5..240,
+         true <- rem(interval_minutes, 5) == 0 do
+      {:ok, interval_minutes}
+    else
+      _invalid -> :error
+    end
+  end
+
+  defp parse_canonical_integer(value) when is_integer(value), do: {:ok, value}
+
+  defp parse_canonical_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} ->
+        if value == Integer.to_string(integer), do: {:ok, integer}, else: :error
+
+      _invalid ->
+        :error
+    end
+  end
+
+  defp parse_canonical_integer(_value), do: :error
+
   defp fetch_attr(attrs, field) do
     case Map.fetch(attrs, field) do
       {:ok, value} -> value
@@ -249,6 +444,142 @@ defmodule Origen.ConsultationTypes do
           attrs.color,
           attrs.interval_count
         ]
+      ).rows
+
+    row_to_consultation_type(row)
+  end
+
+  defp lock_active_owned_type!(owner_account_id, consultation_type_id) do
+    with {:ok, ^consultation_type_id} <- Ecto.UUID.cast(consultation_type_id),
+         persisted_id <- Ecto.UUID.dump!(consultation_type_id),
+         [[^persisted_id]] <-
+           Repo.query!(
+             """
+             SELECT id
+             FROM consultation_types
+             WHERE id = $1 AND owner_account_id = $2 AND status = 'active'
+             FOR UPDATE
+             """,
+             [persisted_id, owner_account_id]
+           ).rows do
+      persisted_id
+    else
+      _missing_or_invalid -> Repo.rollback(:not_found)
+    end
+  end
+
+  defp lock_inactive_owned_type!(owner_account_id, consultation_type_id) do
+    with {:ok, ^consultation_type_id} <- Ecto.UUID.cast(consultation_type_id),
+         persisted_id <- Ecto.UUID.dump!(consultation_type_id),
+         [[^persisted_id, name, interval_count]] <-
+           Repo.query!(
+             """
+             SELECT id, name, interval_count
+             FROM consultation_types
+             WHERE id = $1 AND owner_account_id = $2 AND status = 'inactive'
+             FOR UPDATE
+             """,
+             [persisted_id, owner_account_id]
+           ).rows do
+      %{id: persisted_id, name: name, interval_count: interval_count}
+    else
+      _missing_or_invalid -> Repo.rollback(:not_found)
+    end
+  end
+
+  defp lock_active_owned_types!(owner_account_id) do
+    Repo.query!(
+      """
+      SELECT id, name, interval_count
+      FROM consultation_types
+      WHERE owner_account_id = $1 AND status = 'active'
+      ORDER BY created_at, id
+      FOR UPDATE
+      """,
+      [owner_account_id]
+    ).rows
+    |> Enum.map(fn [id, name, interval_count] ->
+      %{id: Ecto.UUID.load!(id), name: name, interval_count: interval_count}
+    end)
+  end
+
+  defp interval_blockers(active_types, interval_minutes) do
+    active_types
+    |> Enum.map(fn type ->
+      Map.put(type, :prospective_duration_minutes, type.interval_count * interval_minutes)
+    end)
+    |> Enum.filter(&(&1.prospective_duration_minutes > 240))
+  end
+
+  defp apply_interval_if_changed!(_owner_account_id, interval_minutes, interval_minutes), do: :ok
+
+  defp apply_interval_if_changed!(owner_account_id, _current_interval, interval_minutes) do
+    Repo.query!(
+      """
+      UPDATE agenda_settings
+      SET interval_minutes = $2, updated_at = clock_timestamp()
+      WHERE owner_account_id = $1
+      """,
+      [owner_account_id, interval_minutes]
+    )
+
+    :ok
+  end
+
+  defp update_consultation_type!(owner_account_id, persisted_id, attrs) do
+    [row] =
+      Repo.query!(
+        """
+        UPDATE consultation_types
+        SET name = $3, exact_price_ars = $4, color = $5, interval_count = $6,
+            updated_at = clock_timestamp()
+        WHERE id = $1 AND owner_account_id = $2 AND status = 'active'
+        RETURNING id, name, exact_price_ars, color, interval_count, status,
+                  inactive_duration_minutes
+        """,
+        [
+          persisted_id,
+          owner_account_id,
+          attrs.name,
+          attrs.exact_price_ars,
+          attrs.color,
+          attrs.interval_count
+        ]
+      ).rows
+
+    row_to_consultation_type(row)
+  end
+
+  defp deactivate_consultation_type!(owner_account_id, persisted_id, interval_minutes) do
+    [row] =
+      Repo.query!(
+        """
+        UPDATE consultation_types
+        SET status = 'inactive',
+            inactive_duration_minutes = interval_count * $3,
+            updated_at = clock_timestamp()
+        WHERE id = $1 AND owner_account_id = $2 AND status = 'active'
+        RETURNING id, name, exact_price_ars, color, interval_count, status,
+                  inactive_duration_minutes
+        """,
+        [persisted_id, owner_account_id, interval_minutes]
+      ).rows
+
+    row_to_consultation_type(row)
+  end
+
+  defp reactivate_consultation_type!(owner_account_id, persisted_id) do
+    [row] =
+      Repo.query!(
+        """
+        UPDATE consultation_types
+        SET status = 'active', inactive_duration_minutes = NULL,
+            updated_at = clock_timestamp()
+        WHERE id = $1 AND owner_account_id = $2 AND status = 'inactive'
+        RETURNING id, name, exact_price_ars, color, interval_count, status,
+                  inactive_duration_minutes
+        """,
+        [persisted_id, owner_account_id]
       ).rows
 
     row_to_consultation_type(row)
