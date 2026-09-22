@@ -10,6 +10,7 @@ defmodule Origen.ConsultationTypesMigrationTest do
   alias Origen.ConsultationTypesMigrationTestRepo, as: MigrationRepo
 
   @foundational_version 20_260_919_235_000
+  @grapheme_version 20_260_920_030_000
 
   setup_all do
     Enum.each(migrations(), fn {_version, module} ->
@@ -36,6 +37,7 @@ defmodule Origen.ConsultationTypesMigrationTest do
   end
 
   test "foundational rollback refuses populated configuration and preserves its data" do
+    migrate!(:down, step: 1)
     account_id = insert_professional!()
 
     query!(
@@ -43,7 +45,7 @@ defmodule Origen.ConsultationTypesMigrationTest do
       [account_id]
     )
 
-    error = assert_raise Postgrex.Error, fn -> migrate!(:down, step: 1) end
+    error = assert_raise Postgrex.Error, fn -> migrate!(:down, step: 2) end
     assert error.postgres.code == :object_not_in_prerequisite_state
 
     assert query!("SELECT to_regclass('public.agenda_settings')::text").rows == [
@@ -52,10 +54,11 @@ defmodule Origen.ConsultationTypesMigrationTest do
 
     assert query!("SELECT interval_minutes FROM agenda_settings").rows == [[30]]
     assert @foundational_version in migrated_versions()
+    refute @grapheme_version in migrated_versions()
   end
 
   test "empty configuration rolls back completely and remigrates" do
-    migrate!(:down, step: 1)
+    migrate!(:down, step: 2)
 
     assert query!("SELECT to_regclass('public.consultation_types')::text").rows == [[nil]]
     assert query!("SELECT to_regclass('public.agenda_settings')::text").rows == [[nil]]
@@ -64,6 +67,7 @@ defmodule Origen.ConsultationTypesMigrationTest do
              [[nil]]
 
     refute @foundational_version in migrated_versions()
+    refute @grapheme_version in migrated_versions()
 
     migrate!(:up, all: true)
 
@@ -75,7 +79,55 @@ defmodule Origen.ConsultationTypesMigrationTest do
              ["agenda_settings"]
            ]
 
+    assert name_column_type() == ["text", nil]
     assert @foundational_version in migrated_versions()
+    assert @grapheme_version in migrated_versions()
+  end
+
+  test "grapheme-name migration rolls back and reapplies compatible persisted names" do
+    account_id = insert_professional!()
+    name = String.duplicate("é", 32)
+    consultation_type_id = insert_consultation_type!(account_id, name)
+
+    migrate!(:down, step: 1)
+
+    assert name_column_type() == ["character varying", 32]
+
+    assert query!("SELECT name FROM consultation_types WHERE id = $1", [consultation_type_id]).rows ==
+             [
+               [name]
+             ]
+
+    refute @grapheme_version in migrated_versions()
+
+    migrate!(:up, all: true)
+
+    assert name_column_type() == ["text", nil]
+
+    assert query!("SELECT name FROM consultation_types WHERE id = $1", [consultation_type_id]).rows ==
+             [
+               [name]
+             ]
+
+    assert @grapheme_version in migrated_versions()
+  end
+
+  test "grapheme-name rollback refuses narrowing names over 32 characters" do
+    account_id = insert_professional!()
+    name = String.duplicate("a", 33)
+    consultation_type_id = insert_consultation_type!(account_id, name)
+
+    error = assert_raise Postgrex.Error, fn -> migrate!(:down, step: 1) end
+    assert error.postgres.code == :string_data_right_truncation
+
+    assert name_column_type() == ["text", nil]
+
+    assert query!("SELECT name FROM consultation_types WHERE id = $1", [consultation_type_id]).rows ==
+             [
+               [name]
+             ]
+
+    assert @grapheme_version in migrated_versions()
   end
 
   defp migrate!(direction, options) do
@@ -89,7 +141,8 @@ defmodule Origen.ConsultationTypesMigrationTest do
       {20_260_918_120_000, Origen.Repo.Migrations.CreateInternalAccountSessions},
       {20_260_918_130_000, Origen.Repo.Migrations.AddEmailToInternalAccounts},
       {20_260_918_140_000, Origen.Repo.Migrations.ExpandInternalAccountsRoles},
-      {@foundational_version, Origen.Repo.Migrations.CreateConsultationConfiguration}
+      {@foundational_version, Origen.Repo.Migrations.CreateConsultationConfiguration},
+      {@grapheme_version, Origen.Repo.Migrations.SupportConsultationTypeGraphemeNames}
     ]
   end
 
@@ -172,6 +225,33 @@ defmodule Origen.ConsultationTypesMigrationTest do
     """).rows
     |> hd()
     |> hd()
+  end
+
+  defp insert_consultation_type!(account_id, name) do
+    consultation_type_id = Ecto.UUID.generate()
+
+    query!(
+      """
+      INSERT INTO consultation_types
+        (id, owner_account_id, name, exact_price_ars, color, interval_count)
+      VALUES
+        ($1, $2, $3, 18000.50, '#0A7C86', 2)
+      """,
+      [Ecto.UUID.dump!(consultation_type_id), account_id, name]
+    )
+
+    Ecto.UUID.dump!(consultation_type_id)
+  end
+
+  defp name_column_type do
+    query!("""
+    SELECT data_type, character_maximum_length
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'consultation_types'
+      AND column_name = 'name'
+    """).rows
+    |> List.first()
   end
 
   defp migrated_versions do
