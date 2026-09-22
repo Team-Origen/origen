@@ -119,6 +119,171 @@ defmodule Origen.ConsultationTypesTest do
     end
   end
 
+  describe "create_type/2" do
+    test "creates an active type with a server UUID and authoritative readback" do
+      principal = professional_principal!()
+
+      assert {:ok, created} =
+               ConsultationTypes.create_type(
+                 principal,
+                 valid_type_attrs(%{name: "  Follow  up  "})
+               )
+
+      assert %{
+               id: id,
+               name: "Follow  up",
+               exact_price_ars: price,
+               color: "#0A7C86",
+               interval_count: 2,
+               status: :active,
+               inactive_duration_minutes: nil
+             } = created
+
+      assert {:ok, ^id} = Ecto.UUID.cast(id)
+      assert Decimal.equal?(price, Decimal.new("18000.50"))
+
+      assert {:ok, %{consultation_types: [^created]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "allows duplicate names and exact nonnegative prices without a commercial maximum" do
+      principal = professional_principal!()
+
+      assert {:ok, first} =
+               ConsultationTypes.create_type(
+                 principal,
+                 valid_type_attrs(%{exact_price_ars: Decimal.new("0.00")})
+               )
+
+      assert {:ok, second} =
+               ConsultationTypes.create_type(
+                 principal,
+                 valid_type_attrs(%{exact_price_ars: "999999999999999999999999999999.99"})
+               )
+
+      assert first.name == second.name
+      assert first.id != second.id
+      assert Decimal.equal?(first.exact_price_ars, Decimal.new("0.00"))
+
+      assert Decimal.equal?(
+               second.exact_price_ars,
+               Decimal.new("999999999999999999999999999999.99")
+             )
+
+      assert {:ok, %{consultation_types: types}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert Enum.map(types, & &1.id) |> Enum.sort() == Enum.sort([first.id, second.id])
+    end
+
+    test "accepts a name containing exactly 32 graphemes regardless of codepoint count" do
+      principal = professional_principal!()
+      name = String.duplicate("é", 32)
+
+      assert String.length(name) == 32
+
+      assert {:ok, %{name: ^name}} =
+               ConsultationTypes.create_type(principal, valid_type_attrs(%{name: name}))
+    end
+
+    test "rejects invalid names, prices, and colors without changing the catalog" do
+      principal = professional_principal!()
+
+      invalid_cases = [
+        {%{name: "   "}, %{name: :required}},
+        {%{name: String.duplicate("á", 33)}, %{name: :too_long}},
+        {%{exact_price_ars: "-0.01"}, %{exact_price_ars: :nonnegative}},
+        {%{exact_price_ars: "1.001"}, %{exact_price_ars: :scale}},
+        {%{exact_price_ars: "not-a-price"}, %{exact_price_ars: :invalid}},
+        {%{color: "#0a7c86"}, %{color: :invalid}},
+        {%{color: "0A7C86"}, %{color: :invalid}}
+      ]
+
+      for {override, expected_errors} <- invalid_cases do
+        assert {:error, {:validation, errors}} =
+                 ConsultationTypes.create_type(principal, valid_type_attrs(override))
+
+        assert Map.take(errors, Map.keys(expected_errors)) == expected_errors
+
+        assert {:ok, %{consultation_types: []}} =
+                 ConsultationTypes.get_own_configuration(principal)
+      end
+    end
+
+    test "parses interval counts and enforces the default interval-dependent maximum" do
+      principal = professional_principal!()
+
+      assert {:ok, %{interval_count: 8}} =
+               ConsultationTypes.create_type(principal, valid_type_attrs(%{interval_count: "8"}))
+
+      for invalid_count <- [0, "9", "2.0", nil] do
+        assert {:error, {:validation, %{interval_count: :invalid}}} =
+                 ConsultationTypes.create_type(
+                   principal,
+                   valid_type_attrs(%{interval_count: invalid_count})
+                 )
+      end
+
+      assert {:ok, %{consultation_types: [_only_valid_type]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "uses the locked persisted Agenda Interval when validating the count" do
+      account_id = insert_active_account!(:professional)
+      principal = principal_for!(account_id)
+      insert_agenda_settings!(account_id, 60)
+
+      assert {:ok, %{interval_count: 4}} =
+               ConsultationTypes.create_type(principal, valid_type_attrs(%{interval_count: 4}))
+
+      assert {:error, {:validation, %{interval_count: :invalid}}} =
+               ConsultationTypes.create_type(principal, valid_type_attrs(%{interval_count: 5}))
+
+      assert {:ok, %{agenda_interval_minutes: 60, consultation_types: [_only_valid_type]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "rejects browser-supplied identity, ownership, and lifecycle fields" do
+      principal = professional_principal!()
+
+      protected_fields = [
+        %{id: Ecto.UUID.generate()},
+        %{owner_account_id: 123},
+        %{"owner_account_id" => 123},
+        %{status: :inactive},
+        %{inactive_duration_minutes: 30}
+      ]
+
+      for protected <- protected_fields do
+        assert {:error, {:validation, %{base: :protected_fields}}} =
+                 ConsultationTypes.create_type(
+                   principal,
+                   Map.merge(valid_type_attrs(), protected)
+                 )
+      end
+
+      assert {:ok, %{consultation_types: []}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "fails closed for invalid principals without creating owner configuration" do
+      professional_id = insert_active_account!(:professional)
+      administrator = :administrator |> insert_active_account!() |> principal_for!()
+
+      for invalid_principal <- [
+            nil,
+            %{account_id: professional_id, role: :professional},
+            administrator
+          ] do
+        assert {:error, :unauthorized} =
+                 ConsultationTypes.create_type(invalid_principal, valid_type_attrs())
+      end
+
+      assert Repo.query!("SELECT count(*) FROM agenda_settings").rows == [[0]]
+      assert Repo.query!("SELECT count(*) FROM consultation_types").rows == [[0]]
+    end
+  end
+
   defp professional_principal! do
     :professional
     |> insert_active_account!()
@@ -171,6 +336,18 @@ defmodule Origen.ConsultationTypesTest do
         "#0A7C86",
         2
       ]
+    )
+  end
+
+  defp valid_type_attrs(overrides \\ %{}) do
+    Map.merge(
+      %{
+        name: "General consultation",
+        exact_price_ars: "18000.50",
+        color: "#0A7C86",
+        interval_count: 2
+      },
+      overrides
     )
   end
 end
