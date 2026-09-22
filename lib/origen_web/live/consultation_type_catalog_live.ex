@@ -3,7 +3,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
 
-  alias Origen.ConsultationTypes.Catalog
+  alias Origen.ConsultationTypes
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
   @type_form_defaults %{
@@ -32,13 +32,13 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         reactivation_feedback: nil
       )
 
-    case Catalog.execute({:list, %{professional_reference: "PRO-DEMO-001"}}) do
-      {:ok, snapshot} ->
+    case consultation_types().get_own_configuration(socket.assigns.current_internal_session) do
+      {:ok, configuration} ->
         {:ok,
          assign(socket,
-           catalog: snapshot.consultation_types,
-           current_interval: snapshot.agenda_interval_minutes,
-           selected_interval: snapshot.agenda_interval_minutes,
+           catalog: configuration.consultation_types,
+           current_interval: configuration.agenda_interval_minutes,
+           selected_interval: configuration.agenda_interval_minutes,
            catalog_error: nil
          )}
 
@@ -70,27 +70,37 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def handle_event("apply_interval", %{"interval_minutes" => interval}, socket) do
-    with {:ok, selected_interval} <- parse_interval(interval),
-         [] <- incompatible_active_types(socket.assigns.catalog, selected_interval) do
-      {:noreply,
-       assign(socket,
-         current_interval: selected_interval,
-         selected_interval: selected_interval,
-         interval_feedback: :applied,
-         reactivation_feedback: nil
-       )}
-    else
-      :error ->
+    case consultation_types().apply_agenda_interval(
+           socket.assigns.current_internal_session,
+           interval
+         ) do
+      {:ok, configuration} ->
+        {:noreply,
+         socket
+         |> assign_configuration(configuration)
+         |> assign(interval_feedback: :applied, reactivation_feedback: nil)}
+
+      {:error, {:validation, _errors}} ->
         {:noreply, assign(socket, interval_feedback: :invalid)}
 
-      incompatible_types when is_list(incompatible_types) ->
+      {:error, {:incompatible, %{maximum_interval_count: maximum, blockers: incompatible_types}}} ->
         {:noreply,
          assign(socket,
-           selected_interval: String.to_integer(interval),
-           interval_feedback:
-             {:incompatible, effective_maximum(String.to_integer(interval)), incompatible_types}
+           selected_interval:
+             parsed_interval_or_current(interval, socket.assigns.current_interval),
+           interval_feedback: {:incompatible, maximum, incompatible_types}
          )}
+
+      {:error, reason} when reason in [:unauthorized, :unavailable] ->
+        {:noreply, assign(socket, catalog_error: :unavailable)}
+
+      _unexpected ->
+        {:noreply, assign(socket, catalog_error: :unavailable)}
     end
+  end
+
+  def handle_event("apply_interval", _params, socket) do
+    {:noreply, assign(socket, interval_feedback: :invalid)}
   end
 
   @impl true
@@ -160,22 +170,15 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def handle_event("deactivate_type", %{"id" => id}, socket) when is_binary(id) do
-    case Enum.find_index(socket.assigns.catalog, &(&1.id == id and &1.status == :active)) do
-      nil ->
+    case consultation_types().deactivate_type(socket.assigns.current_internal_session, id) do
+      {:ok, _consultation_type} ->
+        {:noreply, reload_configuration(socket)}
+
+      {:error, :not_found} ->
         {:noreply, socket}
 
-      index ->
-        catalog =
-          List.update_at(socket.assigns.catalog, index, fn type ->
-            type
-            |> Map.put(:status, :inactive)
-            |> Map.put(
-              :inactive_duration_minutes,
-              duration_minutes(type, socket.assigns.current_interval)
-            )
-          end)
-
-        {:noreply, assign(socket, catalog: catalog)}
+      {:error, _reason} ->
+        {:noreply, assign(socket, catalog_error: :unavailable)}
     end
   end
 
@@ -183,35 +186,21 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def handle_event("reactivate_type", %{"id" => id}, socket) when is_binary(id) do
-    case inactive_type(socket.assigns.catalog, id) do
-      nil ->
+    case consultation_types().reactivate_type(socket.assigns.current_internal_session, id) do
+      {:ok, _consultation_type} ->
+        {:noreply,
+         socket
+         |> reload_configuration()
+         |> assign(reactivation_feedback: nil)}
+
+      {:error, :not_found} ->
         {:noreply, socket}
 
-      {index, consultation_type} ->
-        if compatible_with_interval?(consultation_type, socket.assigns.current_interval) do
-          catalog =
-            List.update_at(socket.assigns.catalog, index, fn type ->
-              type
-              |> Map.put(:status, :active)
-              |> Map.delete(:inactive_duration_minutes)
-            end)
+      {:error, {:incompatible, %{name: name, prospective_duration_minutes: duration_minutes}}} ->
+        {:noreply, assign(socket, reactivation_feedback: {:incompatible, name, duration_minutes})}
 
-          {:noreply,
-           assign(socket,
-             catalog: catalog,
-             reactivation_feedback: nil
-           )}
-        else
-          {:noreply,
-           assign(socket,
-             reactivation_feedback:
-               {:incompatible, consultation_type.name,
-                prospective_duration_minutes(
-                  consultation_type,
-                  socket.assigns.current_interval
-                )}
-           )}
-        end
+      {:error, _reason} ->
+        {:noreply, assign(socket, catalog_error: :unavailable)}
     end
   end
 
@@ -906,32 +895,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     end
   end
 
-  defp incompatible_active_types(catalog, selected_interval) do
-    maximum = effective_maximum(selected_interval)
-
-    Enum.filter(catalog, fn type ->
-      type.status == :active and type.interval_count > maximum
-    end)
-  end
-
   defp visible_catalog(%{catalog: catalog, show_inactive: true}), do: catalog
 
   defp visible_catalog(%{catalog: catalog, show_inactive: false}) do
     Enum.filter(catalog, &(&1.status == :active))
   end
-
-  defp inactive_type(catalog, id) do
-    case Enum.find_index(catalog, &(&1.id == id and &1.status == :inactive)) do
-      nil -> nil
-      index -> {index, Enum.at(catalog, index)}
-    end
-  end
-
-  defp compatible_with_interval?(consultation_type, interval) do
-    consultation_type.interval_count <= effective_maximum(interval)
-  end
-
-  defp prospective_duration_minutes(type, interval), do: type.interval_count * interval
 
   defp effective_maximum(interval), do: min(10, div(240, interval))
 
@@ -976,34 +944,83 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   defp save_type(%{assigns: %{editing_type_id: nil}} = socket, attributes) do
-    consultation_type =
-      Map.merge(attributes, %{
-        id: Ecto.UUID.generate(),
-        status: :active
-      })
+    case consultation_types().create_type(socket.assigns.current_internal_session, attributes) do
+      {:ok, _consultation_type} ->
+        socket
+        |> reload_configuration()
+        |> reset_type_form()
 
-    socket
-    |> assign(catalog: socket.assigns.catalog ++ [consultation_type])
-    |> reset_type_form()
+      {:error, {:validation, errors}} ->
+        assign(socket, type_form_errors: backend_type_errors(errors))
+
+      {:error, _reason} ->
+        assign(socket, catalog_error: :unavailable)
+    end
   end
 
   defp save_type(socket, attributes) do
-    editing_type_id = socket.assigns.editing_type_id
-
-    case Enum.find_index(
-           socket.assigns.catalog,
-           &(&1.id == editing_type_id and &1.status == :active)
+    case consultation_types().update_type(
+           socket.assigns.current_internal_session,
+           socket.assigns.editing_type_id,
+           attributes
          ) do
-      nil ->
-        reset_type_form(socket)
-
-      index ->
-        catalog = List.update_at(socket.assigns.catalog, index, &Map.merge(&1, attributes))
-
+      {:ok, _consultation_type} ->
         socket
-        |> assign(catalog: catalog)
+        |> reload_configuration()
         |> reset_type_form()
+
+      {:error, {:validation, errors}} ->
+        assign(socket, type_form_errors: backend_type_errors(errors))
+
+      {:error, :not_found} ->
+        socket
+
+      {:error, _reason} ->
+        assign(socket, catalog_error: :unavailable)
     end
+  end
+
+  defp reload_configuration(socket) do
+    case consultation_types().get_own_configuration(socket.assigns.current_internal_session) do
+      {:ok, configuration} -> assign_configuration(socket, configuration)
+      {:error, _reason} -> assign(socket, catalog_error: :unavailable)
+    end
+  end
+
+  defp assign_configuration(socket, configuration) do
+    assign(socket,
+      catalog: configuration.consultation_types,
+      current_interval: configuration.agenda_interval_minutes,
+      selected_interval: configuration.agenda_interval_minutes,
+      catalog_error: nil
+    )
+  end
+
+  defp parsed_interval_or_current(interval, current_interval) do
+    case parse_interval(interval) do
+      {:ok, parsed_interval} -> parsed_interval
+      :error -> current_interval
+    end
+  end
+
+  defp backend_type_errors(errors) do
+    Map.new(errors, fn {field, reason} -> {field, [backend_type_error(field, reason)]} end)
+  end
+
+  defp backend_type_error(:name, :required), do: "Ingrese un nombre."
+  defp backend_type_error(:name, :too_long), do: "El nombre admite hasta 32 caracteres."
+  defp backend_type_error(:exact_price_ars, :nonnegative), do: "El precio no puede ser negativo."
+  defp backend_type_error(:exact_price_ars, :scale), do: "El precio admite hasta dos decimales."
+  defp backend_type_error(:exact_price_ars, _reason), do: "Ingrese un precio válido en ARS."
+  defp backend_type_error(:color, _reason), do: "Seleccione un color válido."
+
+  defp backend_type_error(:interval_count, _reason),
+    do: "La cantidad no es compatible con el intervalo de Agenda actual."
+
+  defp backend_type_error(_field, _reason), do: "No se pudieron guardar los cambios."
+
+  defp consultation_types do
+    Application.get_env(:origen, :consultation_types_context, ConsultationTypes)
   end
 
   defp reset_type_form(socket) do
