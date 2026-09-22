@@ -79,94 +79,35 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
   }
   @deactivation_warning "Los turnos ya reservados con este tipo de consulta se mantendrán sin cambios. Al desactivarlo, dejará de estar disponible únicamente para nuevas reservas."
 
-  defmodule IncompatibleCatalogAdapter do
-    def execute({:list, %{professional_reference: "PRO-DEMO-001"}}) do
-      {:ok,
-       %{
-         source: :demo,
-         professional_reference: "PRO-DEMO-001",
-         agenda_interval_minutes: 15,
-         consultation_types: [
-           %{
-             id: "018f4a5b-0d62-7a44-8e32-2f608bfcb008",
-             reference: "TC-008",
-             name: "Consulta prolongada",
-             interval_count: 8,
-             exact_price_ars: Decimal.new("30000.00"),
-             color: "#0A7C86",
-             status: :active
-           }
-         ]
-       }}
-    end
+  defmodule UnavailableConsultationTypes do
+    def get_own_configuration(_principal), do: {:error, :unavailable}
   end
 
-  defmodule UnavailableCatalogAdapter do
-    def execute({:list, %{professional_reference: "PRO-DEMO-001"}}) do
-      {:error, :unavailable}
+  defmodule RejectingConsultationTypes do
+    def get_own_configuration(principal) do
+      Origen.ConsultationTypes.get_own_configuration(principal)
     end
-  end
 
-  defmodule ReactivationCatalogAdapter do
-    def execute({:list, %{professional_reference: "PRO-DEMO-001"}}) do
-      {:ok,
-       %{
-         source: :demo,
-         professional_reference: "PRO-DEMO-001",
-         agenda_interval_minutes: 60,
-         consultation_types: [
-           %{
-             id: "018f4a5b-0d62-7a44-8e32-2f608bfcb007",
-             reference: "TC-007",
-             name: "Consulta inicial",
-             interval_count: 2,
-             exact_price_ars: Decimal.new("20000.00"),
-             color: "#0A7C86",
-             status: :active
-           },
-           %{
-             id: "018f4a5b-0d62-7a44-8e32-2f608bfcb008",
-             reference: "TC-008",
-             name: "Consulta prolongada",
-             interval_count: 6,
-             exact_price_ars: Decimal.new("30000.00"),
-             color: "#8B5CF6",
-             status: :inactive,
-             inactive_duration_minutes: 180
-           },
-           %{
-             id: "018f4a5b-0d62-7a44-8e32-2f608bfcb009",
-             reference: "TC-009",
-             name: "Control breve",
-             interval_count: 1,
-             exact_price_ars: Decimal.new("10000.00"),
-             color: "#4DB5E6",
-             status: :active
-           }
-         ]
-       }}
+    def create_type(_principal, _attributes) do
+      {:error, {:validation, %{interval_count: :invalid}}}
     end
   end
 
   setup %{conn: conn} do
-    previous_adapter = Application.get_env(:origen, :consultation_type_catalog_adapter)
-
-    Application.put_env(
-      :origen,
-      :consultation_type_catalog_adapter,
-      Origen.ConsultationTypes.MockCatalog
-    )
+    previous_context = Application.get_env(:origen, :consultation_types_context)
 
     on_exit(fn ->
-      if previous_adapter do
-        Application.put_env(:origen, :consultation_type_catalog_adapter, previous_adapter)
+      if previous_context do
+        Application.put_env(:origen, :consultation_types_context, previous_context)
       else
-        Application.delete_env(:origen, :consultation_type_catalog_adapter)
+        Application.delete_env(:origen, :consultation_types_context)
       end
     end)
 
     professional = insert_active_internal_account!(:professional)
-    {:ok, conn: log_in_internal_account(conn, professional)}
+    replace_catalog!(professional.id, 15, @expected_types)
+
+    {:ok, conn: log_in_internal_account(conn, professional), professional_account: professional}
   end
 
   test "rejects unauthenticated access on the server" do
@@ -357,12 +298,21 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, row, "Activo")
   end
 
-  test "an incompatible apply is rejected without inferring a replacement count", %{conn: conn} do
-    Application.put_env(
-      :origen,
-      :consultation_type_catalog_adapter,
-      IncompatibleCatalogAdapter
-    )
+  test "an incompatible apply is rejected without inferring a replacement count", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    replace_catalog!(professional.id, 15, [
+      %{
+        id: @incompatible_inactive_type.id,
+        name: @incompatible_inactive_type.name,
+        count: 8,
+        price: @incompatible_inactive_type.price,
+        color: "#0A7C86",
+        status: :active,
+        duration: 120
+      }
+    ])
 
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 
@@ -460,8 +410,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, row, @inactive_type.name)
   end
 
-  test "an incompatible reactivation is rejected unchanged without replacement UI", %{conn: conn} do
-    use_reactivation_catalog()
+  test "an incompatible reactivation is rejected unchanged without replacement UI", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    use_reactivation_catalog(professional.id)
     {:ok, view, _html} = live(conn, @professional_configuration_path)
     show_inactive(view)
 
@@ -495,9 +448,10 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
   test "a preserved inactive count can reactivate after the current interval becomes compatible",
        %{
-         conn: conn
+         conn: conn,
+         professional_account: professional
        } do
-    use_reactivation_catalog()
+    use_reactivation_catalog(professional.id)
     {:ok, view, _html} = live(conn, @professional_configuration_path)
     show_inactive(view)
 
@@ -1023,6 +977,133 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     end
   end
 
+  test "a created type remains visible after remounting the authenticated LiveView", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_new_type_modal(view)
+
+    view
+    |> form("#new-consultation-type-form",
+      consultation_type: valid_new_type(name: "Consulta persistida")
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#consultation-types-table-view", "Consulta persistida")
+
+    {:ok, remounted_view, _html} = live(conn, @professional_configuration_path)
+
+    assert has_element?(remounted_view, "#consultation-types-table-view", "Consulta persistida")
+  end
+
+  test "updates, lifecycle changes, and the Agenda Interval survive remount", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    edited_type = hd(@active_types)
+    deactivated_type = Enum.at(@active_types, 1)
+
+    open_edit_type_modal(view, edited_type)
+
+    view
+    |> form("#new-consultation-type-form",
+      consultation_type: edit_type_params(edited_type, name: "Consulta actualizada")
+    )
+    |> render_submit()
+
+    view
+    |> element("##{deactivation_dialog_id(deactivated_type)} [data-pc-alert-dialog-confirm]")
+    |> render_click()
+
+    show_inactive(view)
+
+    view
+    |> element(
+      ~s(#consultation-type-#{@inactive_type.id} button[phx-click="reactivate_type"]),
+      "Reactivar"
+    )
+    |> render_click()
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_submit()
+
+    {:ok, remounted_view, _html} = live(conn, @professional_configuration_path)
+    show_inactive(remounted_view)
+
+    assert has_element?(remounted_view, "#current-agenda-interval", "30 minutos")
+
+    assert has_element?(
+             remounted_view,
+             "#consultation-type-#{edited_type.id}",
+             "Consulta actualizada"
+           )
+
+    assert has_element?(remounted_view, "#consultation-type-#{deactivated_type.id}", "Inactivo")
+    assert has_element?(remounted_view, "#consultation-type-#{@inactive_type.id}", "Activo")
+  end
+
+  test "each Professional sees only their persisted configuration", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    other_professional = insert_active_internal_account!(:professional)
+
+    replace_catalog!(other_professional.id, 45, [
+      %{
+        id: Ecto.UUID.generate(),
+        name: "Consulta de otra cuenta",
+        count: 2,
+        price: "ARS 9.000,00",
+        color: "#123ABC",
+        status: :active,
+        duration: 90
+      }
+    ])
+
+    {:ok, own_view, _html} = live(conn, @professional_configuration_path)
+
+    other_conn =
+      build_conn()
+      |> log_in_internal_account(other_professional)
+
+    {:ok, other_view, _html} = live(other_conn, @professional_configuration_path)
+
+    assert professional.id != other_professional.id
+    assert has_element?(own_view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(own_view, "#consultation-types-table-view", "Consulta general")
+    refute has_element?(own_view, "#consultation-types-table-view", "Consulta de otra cuenta")
+
+    assert has_element?(other_view, "#current-agenda-interval", "45 minutos")
+    assert has_element?(other_view, "#consultation-types-table-view", "Consulta de otra cuenta")
+    refute has_element?(other_view, "#consultation-types-table-view", "Consulta general")
+  end
+
+  test "a backend-rejected creation keeps the form open and persisted state unchanged", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    initial_item_count = rendered_catalog_item_count(view)
+    Application.put_env(:origen, :consultation_types_context, RejectingConsultationTypes)
+    open_new_type_modal(view)
+
+    view
+    |> form("#new-consultation-type-form",
+      consultation_type: valid_new_type(name: "Consulta rechazada")
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#new-consultation-type-modal")
+
+    assert has_element?(
+             view,
+             ".pc-form-field-error",
+             "La cantidad no es compatible con el intervalo de Agenda actual"
+           )
+
+    assert rendered_catalog_item_count(view) == initial_item_count
+    refute has_element?(view, "#consultation-types-table-view", "Consulta rechazada")
+
+    {:ok, remounted_view, _html} = live(conn, @professional_configuration_path)
+    refute has_element?(remounted_view, "#consultation-types-table-view", "Consulta rechazada")
+  end
+
   test "rejects a tampered unsupported currency without mutating the catalog", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
     initial_item_count = rendered_catalog_item_count(view)
@@ -1270,8 +1351,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
   test "an unavailable catalog shows one complete failure state and no modules", %{conn: conn} do
     Application.put_env(
       :origen,
-      :consultation_type_catalog_adapter,
-      UnavailableCatalogAdapter
+      :consultation_types_context,
+      UnavailableConsultationTypes
     )
 
     {:ok, view, _html} = live(conn, @professional_configuration_path)
@@ -1303,12 +1384,36 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> render_click()
   end
 
-  defp use_reactivation_catalog do
-    Application.put_env(
-      :origen,
-      :consultation_type_catalog_adapter,
-      ReactivationCatalogAdapter
-    )
+  defp use_reactivation_catalog(account_id) do
+    replace_catalog!(account_id, 60, [
+      %{
+        id: "018f4a5b-0d62-7a44-8e32-2f608bfcb007",
+        name: "Consulta inicial",
+        count: 2,
+        price: "ARS 20.000,00",
+        color: "#0A7C86",
+        status: :active,
+        duration: 120
+      },
+      %{
+        id: @incompatible_inactive_type.id,
+        name: @incompatible_inactive_type.name,
+        count: @incompatible_inactive_type.count,
+        price: @incompatible_inactive_type.price,
+        color: @incompatible_inactive_type.color,
+        status: :inactive,
+        duration: @incompatible_inactive_type.duration
+      },
+      %{
+        id: "018f4a5b-0d62-7a44-8e32-2f608bfcb009",
+        name: "Control breve",
+        count: 1,
+        price: "ARS 10.000,00",
+        color: "#4DB5E6",
+        status: :active,
+        duration: 60
+      }
+    ])
   end
 
   defp show_inactive(view) do
@@ -1358,6 +1463,47 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
+  end
+
+  defp replace_catalog!(account_id, interval_minutes, consultation_types) do
+    Origen.Repo.query!("DELETE FROM consultation_types WHERE owner_account_id = $1", [account_id])
+    Origen.Repo.query!("DELETE FROM agenda_settings WHERE owner_account_id = $1", [account_id])
+
+    Origen.Repo.query!(
+      "INSERT INTO agenda_settings (owner_account_id, interval_minutes) VALUES ($1, $2)",
+      [account_id, interval_minutes]
+    )
+
+    Enum.each(consultation_types, fn type ->
+      inactive_duration = if type.status == :inactive, do: type.duration
+
+      Origen.Repo.query!(
+        """
+        INSERT INTO consultation_types
+          (id, owner_account_id, name, exact_price_ars, color, interval_count, status,
+           inactive_duration_minutes)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        """,
+        [
+          Ecto.UUID.dump!(type.id),
+          account_id,
+          type.name,
+          persisted_price(type.price),
+          type.color,
+          type.count,
+          Atom.to_string(type.status),
+          inactive_duration
+        ]
+      )
+    end)
+  end
+
+  defp persisted_price(formatted_price) do
+    formatted_price
+    |> String.replace_prefix("ARS ", "")
+    |> String.replace(".", "")
+    |> String.replace(",", ".")
+    |> Decimal.new()
   end
 
   defp insert_active_internal_account!(role) do
