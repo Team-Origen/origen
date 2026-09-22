@@ -448,6 +448,222 @@ defmodule Origen.ConsultationTypesTest do
     end
   end
 
+  describe "deactivate_type/2" do
+    test "deactivates without deletion and snapshots the current duration" do
+      account_id = insert_active_account!(:professional)
+      principal = principal_for!(account_id)
+      insert_agenda_settings!(account_id, 15)
+
+      original =
+        create_type!(principal, %{
+          name: "Preserved consultation",
+          exact_price_ars: Decimal.new("32000.75"),
+          color: "#4DB5E6",
+          interval_count: 3
+        })
+
+      assert {:ok, inactive} = ConsultationTypes.deactivate_type(principal, original.id)
+
+      assert inactive == %{
+               original
+               | status: :inactive,
+                 inactive_duration_minutes: 45
+             }
+
+      assert {:ok,
+              %{
+                agenda_interval_minutes: 15,
+                consultation_types: [^inactive]
+              }} = ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "keeps the historical inactive duration after a later Agenda Interval change" do
+      principal = professional_principal!()
+      original = create_type!(principal, %{interval_count: 4})
+
+      assert {:ok, %{inactive_duration_minutes: 120} = inactive} =
+               ConsultationTypes.deactivate_type(principal, original.id)
+
+      Repo.query!(
+        "UPDATE agenda_settings SET interval_minutes = 60 WHERE owner_account_id = $1",
+        [principal.account_id]
+      )
+
+      assert {:ok,
+              %{
+                agenda_interval_minutes: 60,
+                consultation_types: [^inactive]
+              }} = ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "treats repeated, malformed, missing, and cross-owner targets identically" do
+      owner_principal = professional_principal!()
+      other_principal = professional_principal!()
+      owner_type = create_type!(owner_principal)
+      foreign_type = create_type!(other_principal, %{name: "Foreign consultation"})
+
+      assert {:ok, inactive} =
+               ConsultationTypes.deactivate_type(owner_principal, owner_type.id)
+
+      targets = [
+        {owner_principal, owner_type.id},
+        {owner_principal, "not-a-uuid"},
+        {owner_principal, String.upcase(owner_type.id)},
+        {owner_principal, Ecto.UUID.generate()},
+        {owner_principal, foreign_type.id}
+      ]
+
+      for {principal, target_id} <- targets do
+        assert {:error, :not_found} =
+                 ConsultationTypes.deactivate_type(principal, target_id)
+
+        assert {:ok, %{consultation_types: [^inactive]}} =
+                 ConsultationTypes.get_own_configuration(owner_principal)
+
+        assert {:ok, %{consultation_types: [^foreign_type]}} =
+                 ConsultationTypes.get_own_configuration(other_principal)
+      end
+    end
+
+    test "fails closed for invalid principals and leaves the target active" do
+      principal = professional_principal!()
+      original = create_type!(principal)
+      administrator = :administrator |> insert_active_account!() |> principal_for!()
+
+      for invalid_principal <- [
+            nil,
+            %{account_id: principal.account_id, role: :professional},
+            administrator
+          ] do
+        assert {:error, :unauthorized} =
+                 ConsultationTypes.deactivate_type(invalid_principal, original.id)
+      end
+
+      assert {:ok, %{consultation_types: [^original]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+  end
+
+  describe "reactivate_type/2" do
+    test "reactivates a compatible inactive type and preserves its data and count" do
+      principal = professional_principal!()
+
+      original =
+        create_type!(principal, %{
+          name: "Preserved consultation",
+          exact_price_ars: Decimal.new("32000.75"),
+          color: "#4DB5E6",
+          interval_count: 3
+        })
+
+      inactive = deactivate_type!(principal, original.id)
+
+      Repo.query!(
+        "UPDATE agenda_settings SET interval_minutes = 60 WHERE owner_account_id = $1",
+        [principal.account_id]
+      )
+
+      assert {:ok, reactivated} =
+               ConsultationTypes.reactivate_type(principal, inactive.id)
+
+      assert reactivated == original
+
+      assert {:ok,
+              %{
+                agenda_interval_minutes: 60,
+                consultation_types: [^reactivated]
+              }} = ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "accepts an exact prospective duration of 240 minutes" do
+      principal = professional_principal!()
+      original = create_type!(principal, %{interval_count: 4})
+      inactive = deactivate_type!(principal, original.id)
+
+      Repo.query!(
+        "UPDATE agenda_settings SET interval_minutes = 60 WHERE owner_account_id = $1",
+        [principal.account_id]
+      )
+
+      assert {:ok, ^original} = ConsultationTypes.reactivate_type(principal, inactive.id)
+    end
+
+    test "rejects an incompatible duration without adapting the preserved count or history" do
+      principal = professional_principal!()
+      original = create_type!(principal, %{name: "Long consultation", interval_count: 5})
+      inactive = deactivate_type!(principal, original.id)
+
+      Repo.query!(
+        "UPDATE agenda_settings SET interval_minutes = 60 WHERE owner_account_id = $1",
+        [principal.account_id]
+      )
+
+      assert {:error,
+              {:incompatible,
+               %{
+                 name: "Long consultation",
+                 prospective_duration_minutes: 300
+               }}} = ConsultationTypes.reactivate_type(principal, inactive.id)
+
+      assert {:ok,
+              %{
+                agenda_interval_minutes: 60,
+                consultation_types: [^inactive]
+              }} = ConsultationTypes.get_own_configuration(principal)
+
+      assert inactive.interval_count == 5
+      assert inactive.inactive_duration_minutes == 150
+    end
+
+    test "treats active, malformed, missing, and cross-owner targets identically" do
+      owner_principal = professional_principal!()
+      other_principal = professional_principal!()
+      active = create_type!(owner_principal)
+
+      foreign_inactive =
+        other_principal
+        |> create_type!(%{name: "Foreign consultation"})
+        |> then(&deactivate_type!(other_principal, &1.id))
+
+      targets = [
+        active.id,
+        "not-a-uuid",
+        String.upcase(active.id),
+        Ecto.UUID.generate(),
+        foreign_inactive.id
+      ]
+
+      for target_id <- targets do
+        assert {:error, :not_found} =
+                 ConsultationTypes.reactivate_type(owner_principal, target_id)
+
+        assert {:ok, %{consultation_types: [^active]}} =
+                 ConsultationTypes.get_own_configuration(owner_principal)
+
+        assert {:ok, %{consultation_types: [^foreign_inactive]}} =
+                 ConsultationTypes.get_own_configuration(other_principal)
+      end
+    end
+
+    test "fails closed for invalid principals and leaves the target inactive" do
+      principal = professional_principal!()
+      inactive = principal |> create_type!() |> then(&deactivate_type!(principal, &1.id))
+      administrator = :administrator |> insert_active_account!() |> principal_for!()
+
+      for invalid_principal <- [
+            nil,
+            %{account_id: principal.account_id, role: :professional},
+            administrator
+          ] do
+        assert {:error, :unauthorized} =
+                 ConsultationTypes.reactivate_type(invalid_principal, inactive.id)
+      end
+
+      assert {:ok, %{consultation_types: [^inactive]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+  end
+
   defp professional_principal! do
     :professional
     |> insert_active_account!()
@@ -518,6 +734,13 @@ defmodule Origen.ConsultationTypesTest do
   defp create_type!(principal, overrides \\ %{}) do
     {:ok, consultation_type} =
       ConsultationTypes.create_type(principal, valid_type_attrs(overrides))
+
+    consultation_type
+  end
+
+  defp deactivate_type!(principal, consultation_type_id) do
+    {:ok, consultation_type} =
+      ConsultationTypes.deactivate_type(principal, consultation_type_id)
 
     consultation_type
   end
