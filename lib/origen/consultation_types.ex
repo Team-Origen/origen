@@ -77,6 +77,39 @@ defmodule Origen.ConsultationTypes do
 
   def create_type(_invalid_principal, _attrs), do: {:error, :unauthorized}
 
+  @spec update_type(map(), String.t(), map()) ::
+          {:ok, map()}
+          | {:error,
+             :unauthorized | :not_found | :unavailable | {:validation, validation_errors()}}
+  def update_type(%{session_id: session_id, account_id: account_id}, consultation_type_id, attrs)
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      interval_minutes = get_or_create_agenda_settings!(owner_account_id, :lock)
+      persisted_id = lock_active_owned_type!(owner_account_id, consultation_type_id)
+
+      case validate_type_attrs(attrs, interval_minutes) do
+        {:ok, validated_attrs} ->
+          update_consultation_type!(owner_account_id, persisted_id, validated_attrs)
+
+        {:error, errors} ->
+          Repo.rollback({:validation, errors})
+      end
+    end)
+    |> case do
+      {:ok, consultation_type} -> {:ok, consultation_type}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, :not_found} -> {:error, :not_found}
+      {:error, {:validation, errors}} -> {:error, {:validation, errors}}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def update_type(_invalid_principal, _consultation_type_id, _attrs),
+    do: {:error, :unauthorized}
+
   defp resolve_owner!(session_id, account_id) do
     query = """
     SELECT accounts.id
@@ -243,6 +276,49 @@ defmodule Origen.ConsultationTypes do
         """,
         [
           Ecto.UUID.dump!(id),
+          owner_account_id,
+          attrs.name,
+          attrs.exact_price_ars,
+          attrs.color,
+          attrs.interval_count
+        ]
+      ).rows
+
+    row_to_consultation_type(row)
+  end
+
+  defp lock_active_owned_type!(owner_account_id, consultation_type_id) do
+    with {:ok, ^consultation_type_id} <- Ecto.UUID.cast(consultation_type_id),
+         persisted_id <- Ecto.UUID.dump!(consultation_type_id),
+         [[^persisted_id]] <-
+           Repo.query!(
+             """
+             SELECT id
+             FROM consultation_types
+             WHERE id = $1 AND owner_account_id = $2 AND status = 'active'
+             FOR UPDATE
+             """,
+             [persisted_id, owner_account_id]
+           ).rows do
+      persisted_id
+    else
+      _missing_or_invalid -> Repo.rollback(:not_found)
+    end
+  end
+
+  defp update_consultation_type!(owner_account_id, persisted_id, attrs) do
+    [row] =
+      Repo.query!(
+        """
+        UPDATE consultation_types
+        SET name = $3, exact_price_ars = $4, color = $5, interval_count = $6,
+            updated_at = clock_timestamp()
+        WHERE id = $1 AND owner_account_id = $2 AND status = 'active'
+        RETURNING id, name, exact_price_ars, color, interval_count, status,
+                  inactive_duration_minutes
+        """,
+        [
+          persisted_id,
           owner_account_id,
           attrs.name,
           attrs.exact_price_ars,

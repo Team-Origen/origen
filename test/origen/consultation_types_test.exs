@@ -284,6 +284,170 @@ defmodule Origen.ConsultationTypesTest do
     end
   end
 
+  describe "update_type/3" do
+    test "updates an active owned type and preserves its immutable state" do
+      principal = professional_principal!()
+      original = create_type!(principal)
+
+      assert {:ok, updated} =
+               ConsultationTypes.update_type(
+                 principal,
+                 original.id,
+                 valid_type_attrs(%{
+                   name: "  Follow  up  ",
+                   exact_price_ars: Decimal.new("25000.25"),
+                   color: "#4DB5E6",
+                   interval_count: "3"
+                 })
+               )
+
+      assert updated == %{
+               id: original.id,
+               name: "Follow  up",
+               exact_price_ars: Decimal.new("25000.25"),
+               color: "#4DB5E6",
+               interval_count: 3,
+               status: :active,
+               inactive_duration_minutes: nil
+             }
+
+      assert {:ok, %{consultation_types: [^updated]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "aggregates validation errors and leaves the prior type unchanged" do
+      principal = professional_principal!()
+      original = create_type!(principal)
+
+      assert {:error,
+              {:validation,
+               %{
+                 name: :required,
+                 exact_price_ars: :nonnegative,
+                 color: :invalid,
+                 interval_count: :invalid
+               }}} =
+               ConsultationTypes.update_type(principal, original.id, %{
+                 name: " ",
+                 exact_price_ars: "-0.01",
+                 color: "#ffffff",
+                 interval_count: 0
+               })
+
+      assert {:ok, %{consultation_types: [^original]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "validates count against the current locked Agenda Interval" do
+      account_id = insert_active_account!(:professional)
+      principal = principal_for!(account_id)
+      insert_agenda_settings!(account_id, 60)
+      original = create_type!(principal, %{interval_count: 4})
+
+      assert {:error, {:validation, %{interval_count: :invalid}}} =
+               ConsultationTypes.update_type(
+                 principal,
+                 original.id,
+                 valid_type_attrs(%{interval_count: 5})
+               )
+
+      assert {:ok, %{agenda_interval_minutes: 60, consultation_types: [^original]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+
+    test "rejects protected fields and preserves identity and lifecycle state" do
+      principal = professional_principal!()
+      original = create_type!(principal)
+
+      for protected <- [
+            %{id: Ecto.UUID.generate()},
+            %{owner_account_id: 123},
+            %{"owner_account_id" => 123},
+            %{status: :inactive},
+            %{inactive_duration_minutes: 30}
+          ] do
+        assert {:error, {:validation, %{base: :protected_fields}}} =
+                 ConsultationTypes.update_type(
+                   principal,
+                   original.id,
+                   Map.merge(valid_type_attrs(%{name: "Changed"}), protected)
+                 )
+
+        assert {:ok, %{consultation_types: [^original]}} =
+                 ConsultationTypes.get_own_configuration(principal)
+      end
+    end
+
+    test "treats malformed, missing, inactive, and cross-owner targets identically" do
+      owner_principal = professional_principal!()
+      other_principal = professional_principal!()
+      active = create_type!(owner_principal)
+      inactive = create_type!(owner_principal, %{name: "Inactive consultation"})
+
+      Repo.query!(
+        """
+        UPDATE consultation_types
+        SET status = 'inactive', inactive_duration_minutes = 60
+        WHERE id = $1
+        """,
+        [Ecto.UUID.dump!(inactive.id)]
+      )
+
+      targets = [
+        {owner_principal, "not-a-uuid"},
+        {owner_principal, String.upcase(active.id)},
+        {owner_principal, Ecto.UUID.generate()},
+        {owner_principal, inactive.id},
+        {other_principal, active.id}
+      ]
+
+      for {principal, target_id} <- targets do
+        assert {:error, :not_found} =
+                 ConsultationTypes.update_type(
+                   principal,
+                   target_id,
+                   valid_type_attrs(%{name: "Must not change"})
+                 )
+      end
+
+      assert {:ok, %{consultation_types: owner_types}} =
+               ConsultationTypes.get_own_configuration(owner_principal)
+
+      assert Enum.find(owner_types, &(&1.id == active.id)) == active
+
+      assert Enum.find(owner_types, &(&1.id == inactive.id)) == %{
+               inactive
+               | status: :inactive,
+                 inactive_duration_minutes: 60
+             }
+
+      assert {:ok, %{consultation_types: []}} =
+               ConsultationTypes.get_own_configuration(other_principal)
+    end
+
+    test "fails closed for invalid principals and leaves the target unchanged" do
+      principal = professional_principal!()
+      original = create_type!(principal)
+      administrator = :administrator |> insert_active_account!() |> principal_for!()
+
+      for invalid_principal <- [
+            nil,
+            %{account_id: principal.account_id, role: :professional},
+            administrator
+          ] do
+        assert {:error, :unauthorized} =
+                 ConsultationTypes.update_type(
+                   invalid_principal,
+                   original.id,
+                   valid_type_attrs(%{name: "Must not change"})
+                 )
+      end
+
+      assert {:ok, %{consultation_types: [^original]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+  end
+
   defp professional_principal! do
     :professional
     |> insert_active_account!()
@@ -349,5 +513,12 @@ defmodule Origen.ConsultationTypesTest do
       },
       overrides
     )
+  end
+
+  defp create_type!(principal, overrides \\ %{}) do
+    {:ok, consultation_type} =
+      ConsultationTypes.create_type(principal, valid_type_attrs(overrides))
+
+    consultation_type
   end
 end
