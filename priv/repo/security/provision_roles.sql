@@ -69,3 +69,42 @@ SELECT format('GRANT USAGE ON SEQUENCE public.audit_events_id_seq TO %I', :'runt
 WHERE to_regclass('public.audit_events_id_seq') IS NOT NULL \gexec
 SELECT format('GRANT SELECT, UPDATE, DELETE, TRUNCATE ON public.audit_events TO %I', :'verifier_role')
 WHERE to_regclass('public.audit_events') IS NOT NULL \gexec
+
+SELECT format('GRANT SELECT, INSERT, UPDATE ON public.internal_accounts TO %I', :'runtime_role')
+WHERE to_regclass('public.internal_accounts') IS NOT NULL \gexec
+SELECT format('GRANT SELECT, UPDATE ON public.admin_bootstrap_controls TO %I', :'runtime_role')
+WHERE to_regclass('public.admin_bootstrap_controls') IS NOT NULL \gexec
+SELECT format(
+  'GRANT SELECT, INSERT, UPDATE ON public.internal_account_invitations TO %I',
+  :'runtime_role'
+) WHERE to_regclass('public.internal_account_invitations') IS NOT NULL \gexec
+SELECT format(
+  'GRANT USAGE ON SEQUENCE public.internal_accounts_id_seq, public.internal_account_invitations_id_seq TO %I',
+  :'runtime_role'
+) WHERE to_regclass('public.internal_accounts_id_seq') IS NOT NULL
+  AND to_regclass('public.internal_account_invitations_id_seq') IS NOT NULL \gexec
+
+SELECT format('REVOKE ALL ON public.internal_accounts FROM %I', :'verifier_role')
+WHERE to_regclass('public.internal_accounts') IS NOT NULL \gexec
+SELECT format(
+  'GRANT SELECT ON public.internal_account_verifier_projection, public.admin_bootstrap_controls, public.internal_account_invitations TO %I',
+  :'verifier_role'
+) WHERE to_regclass('public.internal_account_verifier_projection') IS NOT NULL
+  AND to_regclass('public.admin_bootstrap_controls') IS NOT NULL
+  AND to_regclass('public.internal_account_invitations') IS NOT NULL \gexec
+
+SELECT format('REVOKE ALL ON TABLE public.agenda_settings, public.consultation_types FROM %I, %I',
+              :'runtime_role', :'verifier_role')
+WHERE to_regclass('public.agenda_settings') IS NOT NULL
+  AND to_regclass('public.consultation_types') IS NOT NULL \gexec
+SELECT format('REVOKE ALL ON SEQUENCE public.agenda_settings_id_seq FROM %I, %I',
+              :'runtime_role', :'verifier_role')
+WHERE to_regclass('public.agenda_settings_id_seq') IS NOT NULL \gexec
+
+SELECT format(
+  'GRANT SELECT, INSERT, UPDATE ON public.agenda_settings, public.consultation_types TO %I',
+  :'runtime_role'
+) WHERE to_regclass('public.agenda_settings') IS NOT NULL
+  AND to_regclass('public.consultation_types') IS NOT NULL \gexec
+SELECT format('GRANT USAGE ON SEQUENCE public.agenda_settings_id_seq TO %I', :'runtime_role')
+WHERE to_regclass('public.agenda_settings_id_seq') IS NOT NULL \gexec

@@ -141,4 +141,4 @@ jobs:
           ORIGEN_MIGRATOR_ROLE: origen_migrator
           ORIGEN_RUNTIME_ROLE: origen_runtime
           ORIGEN_VERIFIER_ROLE: origen_verifier
-        run: mix test test/origen/audit/postgres_security_test.exs --include postgres_security
+        run: mix test --only postgres_security
