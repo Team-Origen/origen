@@ -41,6 +41,7 @@ defmodule OrigenWeb.Router do
     get "/access/verify", PatientAccessController, :verify
     live "/patient/profile/complete", PatientProfileCompletionLive, :index
     live "/patient/phone/verify", PatientPhoneVerificationLive, :index
+    live "/patient/calendar", PatientBookingCalendarLive, :index
   end
 
   if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
