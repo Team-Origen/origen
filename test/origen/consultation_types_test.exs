@@ -664,6 +664,109 @@ defmodule Origen.ConsultationTypesTest do
     end
   end
 
+  describe "apply_agenda_interval/2" do
+    test "accepts interval boundaries and canonical integer strings" do
+      principal = professional_principal!()
+
+      for interval <- [5, "240", "30"] do
+        expected = if is_binary(interval), do: String.to_integer(interval), else: interval
+
+        assert {:ok, %{agenda_interval_minutes: ^expected, consultation_types: []}} =
+                 ConsultationTypes.apply_agenda_interval(principal, interval)
+      end
+
+      for invalid <- [0, 7, 245, "05", "+30", " 30", "30.0", nil] do
+        assert {:error, {:validation, %{agenda_interval_minutes: :invalid}}} =
+                 ConsultationTypes.apply_agenda_interval(principal, invalid)
+
+        assert {:ok, %{agenda_interval_minutes: 30, consultation_types: []}} =
+                 ConsultationTypes.get_own_configuration(principal)
+      end
+    end
+
+    test "applies a compatible interval and preserves all type identity and history" do
+      principal = professional_principal!()
+      other_principal = professional_principal!()
+      active = create_type!(principal, %{name: "Exact boundary", interval_count: 4})
+      inactive = create_type!(principal, %{name: "Historical", interval_count: 2})
+      inactive = deactivate_type!(principal, inactive.id)
+      foreign = create_type!(other_principal, %{name: "Foreign consultation"})
+
+      assert {:ok, applied} = ConsultationTypes.apply_agenda_interval(principal, 60)
+
+      assert applied == %{
+               agenda_interval_minutes: 60,
+               consultation_types: [active, inactive]
+             }
+
+      assert active.interval_count * applied.agenda_interval_minutes == 240
+      assert inactive.inactive_duration_minutes == 60
+      assert {:ok, ^applied} = ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, %{agenda_interval_minutes: 30, consultation_types: [^foreign]}} =
+               ConsultationTypes.get_own_configuration(other_principal)
+
+      assert {:ok, ^applied} = ConsultationTypes.apply_agenda_interval(principal, "60")
+    end
+
+    test "returns every blocker deterministically and rejects without mutation" do
+      principal = professional_principal!()
+      compatible = create_type!(principal, %{name: "Compatible", interval_count: 4})
+      first_blocker = create_type!(principal, %{name: "Long follow-up", interval_count: 5})
+      second_blocker = create_type!(principal, %{name: "Extended intake", interval_count: 7})
+      inactive = create_type!(principal, %{name: "Inactive history", interval_count: 8})
+      inactive = deactivate_type!(principal, inactive.id)
+
+      assert {:ok, before_configuration} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      expected_blockers =
+        before_configuration.consultation_types
+        |> Enum.filter(&(&1.id in [first_blocker.id, second_blocker.id]))
+        |> Enum.map(fn type ->
+          %{
+            id: type.id,
+            name: type.name,
+            interval_count: type.interval_count,
+            prospective_duration_minutes: type.interval_count * 60
+          }
+        end)
+
+      assert {:error,
+              {:incompatible,
+               %{
+                 maximum_interval_count: 4,
+                 blockers: ^expected_blockers
+               }}} = ConsultationTypes.apply_agenda_interval(principal, 60)
+
+      assert length(expected_blockers) == 2
+      assert {:ok, ^before_configuration} = ConsultationTypes.get_own_configuration(principal)
+
+      assert Enum.find(before_configuration.consultation_types, &(&1.id == compatible.id)) ==
+               compatible
+
+      assert Enum.find(before_configuration.consultation_types, &(&1.id == inactive.id)) ==
+               inactive
+    end
+
+    test "fails closed for invalid principals without changing the interval" do
+      principal = professional_principal!()
+      administrator = :administrator |> insert_active_account!() |> principal_for!()
+
+      for invalid_principal <- [
+            nil,
+            %{account_id: principal.account_id, role: :professional},
+            administrator
+          ] do
+        assert {:error, :unauthorized} =
+                 ConsultationTypes.apply_agenda_interval(invalid_principal, 60)
+      end
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+  end
+
   defp professional_principal! do
     :professional
     |> insert_active_account!()

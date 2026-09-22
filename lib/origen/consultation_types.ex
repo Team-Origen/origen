@@ -181,6 +181,73 @@ defmodule Origen.ConsultationTypes do
   def reactivate_type(_invalid_principal, _consultation_type_id),
     do: {:error, :unauthorized}
 
+  @spec apply_agenda_interval(map(), integer() | String.t()) ::
+          {:ok, configuration()}
+          | {:error,
+             :unauthorized
+             | :unavailable
+             | {:validation, %{agenda_interval_minutes: :invalid}}
+             | {:incompatible,
+                %{
+                  maximum_interval_count: pos_integer(),
+                  blockers: [
+                    %{
+                      id: String.t(),
+                      name: String.t(),
+                      interval_count: pos_integer(),
+                      prospective_duration_minutes: pos_integer()
+                    }
+                  ]
+                }}}
+  def apply_agenda_interval(
+        %{session_id: session_id, account_id: account_id},
+        proposed_interval
+      )
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      current_interval = get_or_create_agenda_settings!(owner_account_id, :lock)
+
+      case validate_agenda_interval(proposed_interval) do
+        {:ok, interval_minutes} ->
+          active_types = lock_active_owned_types!(owner_account_id)
+          blockers = interval_blockers(active_types, interval_minutes)
+
+          if blockers == [] do
+            apply_interval_if_changed!(owner_account_id, current_interval, interval_minutes)
+
+            %{
+              agenda_interval_minutes: interval_minutes,
+              consultation_types: list_consultation_types!(owner_account_id)
+            }
+          else
+            Repo.rollback(
+              {:incompatible,
+               %{
+                 maximum_interval_count: min(10, div(240, interval_minutes)),
+                 blockers: blockers
+               }}
+            )
+          end
+
+        :error ->
+          Repo.rollback({:validation, %{agenda_interval_minutes: :invalid}})
+      end
+    end)
+    |> case do
+      {:ok, configuration} -> {:ok, configuration}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, {:validation, errors}} -> {:error, {:validation, errors}}
+      {:error, {:incompatible, evidence}} -> {:error, {:incompatible, evidence}}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def apply_agenda_interval(_invalid_principal, _proposed_interval),
+    do: {:error, :unauthorized}
+
   defp resolve_owner!(session_id, account_id) do
     query = """
     SELECT accounts.id
@@ -325,6 +392,30 @@ defmodule Origen.ConsultationTypes do
 
   defp parse_integer(_value), do: :error
 
+  defp validate_agenda_interval(value) do
+    with {:ok, interval_minutes} <- parse_canonical_integer(value),
+         true <- interval_minutes in 5..240,
+         true <- rem(interval_minutes, 5) == 0 do
+      {:ok, interval_minutes}
+    else
+      _invalid -> :error
+    end
+  end
+
+  defp parse_canonical_integer(value) when is_integer(value), do: {:ok, value}
+
+  defp parse_canonical_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} ->
+        if value == Integer.to_string(integer), do: {:ok, integer}, else: :error
+
+      _invalid ->
+        :error
+    end
+  end
+
+  defp parse_canonical_integer(_value), do: :error
+
   defp fetch_attr(attrs, field) do
     case Map.fetch(attrs, field) do
       {:ok, value} -> value
@@ -394,6 +485,45 @@ defmodule Origen.ConsultationTypes do
     else
       _missing_or_invalid -> Repo.rollback(:not_found)
     end
+  end
+
+  defp lock_active_owned_types!(owner_account_id) do
+    Repo.query!(
+      """
+      SELECT id, name, interval_count
+      FROM consultation_types
+      WHERE owner_account_id = $1 AND status = 'active'
+      ORDER BY created_at, id
+      FOR UPDATE
+      """,
+      [owner_account_id]
+    ).rows
+    |> Enum.map(fn [id, name, interval_count] ->
+      %{id: Ecto.UUID.load!(id), name: name, interval_count: interval_count}
+    end)
+  end
+
+  defp interval_blockers(active_types, interval_minutes) do
+    active_types
+    |> Enum.map(fn type ->
+      Map.put(type, :prospective_duration_minutes, type.interval_count * interval_minutes)
+    end)
+    |> Enum.filter(&(&1.prospective_duration_minutes > 240))
+  end
+
+  defp apply_interval_if_changed!(_owner_account_id, interval_minutes, interval_minutes), do: :ok
+
+  defp apply_interval_if_changed!(owner_account_id, _current_interval, interval_minutes) do
+    Repo.query!(
+      """
+      UPDATE agenda_settings
+      SET interval_minutes = $2, updated_at = clock_timestamp()
+      WHERE owner_account_id = $1
+      """,
+      [owner_account_id, interval_minutes]
+    )
+
+    :ok
   end
 
   defp update_consultation_type!(owner_account_id, persisted_id, attrs) do
