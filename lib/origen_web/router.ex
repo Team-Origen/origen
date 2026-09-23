@@ -37,6 +37,7 @@ defmodule OrigenWeb.Router do
     post "/admin/activate", AdminActivationController, :create
 
     live "/admin/internal", AdminInternalLive, :index
+    live "/secretaria/pacientes", SecretaryPatientLive, :index
     live "/access", PatientAccessLive, :index
     get "/access/verify", PatientAccessController, :verify
     live "/patient/profile/complete", PatientProfileCompletionLive, :index

@@ -9,6 +9,8 @@ defmodule Origen.Booking.Appointment do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @type t :: %__MODULE__{}
+
   @statuses ~w(requested reserved confirmed attended cancelled no_show)
 
   @primary_key {:id, :id, autogenerate: true}
