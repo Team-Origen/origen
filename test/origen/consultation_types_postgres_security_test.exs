@@ -54,11 +54,12 @@ defmodule Origen.ConsultationTypesPostgresSecurityTest do
              [roles.runtime]
            )
 
-    assert %{rows: [[_settings_id]]} =
+    assert %{rows: [[_settings_id, 30, 30, []]]} =
              query!(runtime, """
              INSERT INTO agenda_settings (owner_account_id, interval_minutes)
              VALUES (#{account_id}, 30)
-             RETURNING id
+             RETURNING id, booking_horizon_days, minimum_lead_minutes,
+                       weekly_availability->'saturday'
              """)
 
     assert %{num_rows: 1} =
@@ -73,7 +74,8 @@ defmodule Origen.ConsultationTypesPostgresSecurityTest do
 
     assert %{num_rows: 1} =
              query!(runtime, """
-             UPDATE agenda_settings SET interval_minutes = 20
+             UPDATE agenda_settings
+             SET interval_minutes = 20, booking_horizon_days = 90, minimum_lead_minutes = 0
              WHERE owner_account_id = #{account_id}
              """)
 
@@ -84,12 +86,13 @@ defmodule Origen.ConsultationTypesPostgresSecurityTest do
              """)
 
     assert query!(runtime, """
-           SELECT settings.interval_minutes, types.name, types.interval_count
+           SELECT settings.interval_minutes, settings.booking_horizon_days,
+                  settings.minimum_lead_minutes, types.name, types.interval_count
            FROM agenda_settings AS settings
            JOIN consultation_types AS types
              ON types.owner_account_id = settings.owner_account_id
            WHERE settings.owner_account_id = #{account_id}
-           """).rows == [[20, "Updated by runtime", 3]]
+           """).rows == [[20, 90, 0, "Updated by runtime", 3]]
   end
 
   test "runtime cannot change ownership, destroy data, perform DDL, or mutate audit history",
