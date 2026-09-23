@@ -5,14 +5,16 @@ defmodule Origen.Booking do
   Implementa la validación sintáctica de contratos (Issue #62), la persistencia
   transaccional de turnos con snapshots históricos inmutables (Issue #63), las
   reglas de autorización por actor Paciente / Secretaría / Profesional (Issue #64),
-  la prevención de solapamientos y concurrencia de turnos (Issue #65) y la
+  la prevención de solapamientos y concurrencia de turnos (Issue #65), la
   operación única y transaccional de reserva con relación Profesional-Paciente
-  y auditoría append-only (Issue #66).
+  y auditoría append-only (Issue #66), y la consulta de agenda propia del
+  Profesional autenticado con proyección no clínica (Issue #79 / PLN-10).
   """
 
   import Ecto.Query, only: [from: 2]
 
   alias Ecto.Multi
+  alias Origen.Booking.Agenda
   alias Origen.Booking.Appointment
   alias Origen.Booking.Authorization
   alias Origen.Booking.Overlap
@@ -71,6 +73,25 @@ defmodule Origen.Booking do
   """
   @spec check_overlaps(map()) :: {:ok, :no_conflict} | {:error, atom()}
   defdelegate check_overlaps(attrs), to: Overlap
+
+  @doc """
+  Consulta la agenda diaria de turnos propios del Profesional autenticado
+  (Issue #79 / PLN-10).
+
+  Deriva la identidad del Profesional exclusivamente de la sesión activa
+  revalidada en el servidor (`Origen.Sessions.revalidate_principal/2`) y la
+  autoriza con `Origen.Authorization.decide/1`; ningún parámetro del cliente
+  puede ampliar el alcance hacia agendas ajenas. Proyecta únicamente horario,
+  estado, tipo de consulta y datos de Paciente no clínicos.
+
+  Delega en `Origen.Booking.Agenda.get_professional_agenda/2`: retorna
+  `{:ok, %{date: date, professional_account_id: id, appointments: list}}` o
+  falla cerrado con `{:error, :unauthorized}` / `{:error, :invalid_date}`.
+  """
+  @spec get_professional_agenda(map() | Origen.Sessions.InternalSession.t(), map()) ::
+          {:ok, %{date: Date.t(), professional_account_id: integer(), appointments: [map()]}}
+          | {:error, :unauthorized | :invalid_date}
+  defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
 
   @doc """
   Persiste un turno en la base de datos copiando nombre, duración y precio del tipo

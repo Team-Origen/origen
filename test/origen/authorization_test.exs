@@ -35,6 +35,8 @@ defmodule Origen.AuthorizationTest do
         {:read_own_availability, {:role, :professional}, {:known, :active},
          %{owner_matches_actor: true}, %{authenticated: true}, :own_02},
         {:replace_own_availability, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}, :own_02},
+        {:read_own_agenda, {:role, :professional}, {:known, :active},
          %{owner_matches_actor: true}, %{authenticated: true}, :own_02}
       ]
 
@@ -44,8 +46,8 @@ defmodule Origen.AuthorizationTest do
       end
     end
 
-    test "availability operations require an active Professional acting on their own configuration" do
-      for operation <- [:read_own_availability, :replace_own_availability],
+    test "availability and agenda operations require an active Professional acting on their own configuration" do
+      for operation <- [:read_own_availability, :replace_own_availability, :read_own_agenda],
           {subject, state, owner_matches, authenticated} <- [
             {{:role, :administrator}, {:known, :active}, true, true},
             {{:role, :professional}, {:known, :pending_activation}, true, true},
