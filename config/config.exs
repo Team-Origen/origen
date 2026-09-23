@@ -15,6 +15,7 @@ config :origen,
   bootstrap_admin_local_enabled: false,
   bootstrap_admin_local: %{enabled: false},
   env: config_env(),
+  organization_timezone: "America/Argentina/Buenos_Aires",
   consultation_catalog_demo_enabled: false,
   internal_invitation_ttl_seconds: 24 * 60 * 60,
   internal_activation_session_ttl_seconds: 10 * 60

@@ -31,12 +31,35 @@ defmodule Origen.AuthorizationTest do
         {:verify_patient_phone, {:channel, :public_possession}, :not_applicable,
          %{phone_verified: false},
          %{account_and_phone_match: true, challenge_valid: true, rate_limit_satisfied: true},
-         :tel_02}
+         :tel_02},
+        {:read_own_availability, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}, :own_02}
       ]
 
       for {operation, subject, state, target, scope, rule_id} <- cases do
         request = request(operation, subject, state, fact(target), fact(scope))
         assert Authorization.decide(request) == {:allow, rule_id}
+      end
+    end
+
+    test "availability reads require an active Professional acting on their own configuration" do
+      for {subject, state, owner_matches, authenticated} <- [
+            {{:role, :administrator}, {:known, :active}, true, true},
+            {{:role, :professional}, {:known, :pending_activation}, true, true},
+            {{:role, :professional}, {:known, :active}, false, true},
+            {{:role, :professional}, {:known, :active}, true, false}
+          ] do
+        decision =
+          request(
+            :read_own_availability,
+            subject,
+            state,
+            fact(%{owner_matches_actor: owner_matches}),
+            fact(%{authenticated: authenticated})
+          )
+          |> Authorization.decide()
+
+        assert decision == {:deny, :no_matching_rule}
       end
     end
 
