@@ -50,7 +50,8 @@ proyectoOrigen/
 │   └── pull_request_template.md
 ├── Origen_Documentacion.md       # fuente funcional existente
 ├── CONTEXT.md                    # glosario canónico existente
-└── PLAN_DE_SPRINTS.md            # roadmap, flujo y DoD canónicos existentes
+└── sprints/
+    └── PLAN_TENTATIVO_11_SPRINTS.md  # roadmap, flujo y DoD canónicos existentes
 ```
 
 No se requiere un `opencode.json` para una skill de proyecto en la ruta estándar propuesta. Una skill versionada del proyecto se comparte al clonar o actualizar el repositorio; después de activarla, cada integrante debe reiniciar OpenCode para que cargue el cambio.
@@ -65,7 +66,7 @@ No se requiere un `opencode.json` para una skill de proyecto en la ruta estánda
 ## Reglas obligatorias
 
 - Consulta `Origen_Documentacion.md` como fuente funcional y `CONTEXT.md` para términos y estados canónicos. No los contradigas ni los reinterpretes.
-- Sigue `PLAN_DE_SPRINTS.md` como fuente canónica del flujo y la DoD: `Backlog -> Ready -> In Progress -> Review -> Validation -> Done`.
+- Sigue `sprints/PLAN_TENTATIVO_11_SPRINTS.md` como fuente canónica del flujo y la DoD: `Backlog -> Ready -> In Progress -> Review -> Validation -> Done`.
 - Toma una issue solo desde `Ready`: debe ser una slice vertical con resultado, criterios de aceptación, dependencias, permisos, auditoría, privacidad y prueba enfocada definidos.
 - Mantén el checklist dentro de la issue. No crees trabajo separado por modelo, backend, interfaz o pruebas.
 - Respeta el WIP inicial: una issue activa por integrante. Ayuda a vaciar `Review` o `Validation` antes de iniciar otra.
@@ -125,7 +126,7 @@ Return the proposed or completed state, checklist progress, tests/evidence, bloc
 
 - `../../../Origen_Documentacion.md`
 - `../../../CONTEXT.md`
-- `../../../PLAN_DE_SPRINTS.md`
+- `../../../sprints/PLAN_TENTATIVO_11_SPRINTS.md`
 ```
 
 ### 4.3 Futuro template `.github/ISSUE_TEMPLATE/vertical-slice.md`
@@ -282,7 +283,7 @@ La IA no publica issues, no cierra issues, no hace merge ni modifica la fuente f
 | -------------------------------------------------------------------------------- | --------------------------- |
 | Requisitos, reglas funcionales y restricciones detalladas                        | `Origen_Documentacion.md`   |
 | Definiciones y términos del dominio                                              | `CONTEXT.md`                |
-| Roadmap, capacidad, dependencias, riesgos, flujo y Definition of Done por Sprint | `PLAN_DE_SPRINTS.md`        |
+| Roadmap, capacidad, dependencias, riesgos, flujo y Definition of Done por Sprint | `sprints/PLAN_TENTATIVO_11_SPRINTS.md` |
 
 Los futuros artefactos de operación deben referenciar estas fuentes, no copiarlas ni redefinirlas.
 
