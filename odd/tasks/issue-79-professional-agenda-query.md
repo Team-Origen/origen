@@ -18,7 +18,8 @@ Garantizar la privacidad estricta de las agendas profesionales, impidiendo la ex
 - Autorización formal en `lib/origen/authorization/rules.ex` para operación `:read_own_agenda`.
 - Integración con `Origen.Sessions.revalidate_principal/2` para derivar identidad del profesional desde sesión activa.
 - Suite de pruebas unitarias y de integración en `test/origen/booking/professional_agenda_test.exs`.
-- Rama local: `feature/79-professional-agenda-query`.
+- Local branch: `feature/79-professional-agenda-query`.
+- Pull Request: [PR #175](https://github.com/Team-Origen/origen/pull/175).
 
 ## Checklist
 
@@ -43,7 +44,8 @@ Garantizar la privacidad estricta de las agendas profesionales, impidiendo la ex
 
 ## Progress and evidence
 
-- Commit: `b65bd5f` (`Closes #79`).
+- Commit: `cf23c0d` (`Closes #79`).
+- Pull Request: [PR #175](https://github.com/Team-Origen/origen/pull/175).
 - Regla `{:own_02, :read_own_agenda, {:role, :professional}, :active, %{owner_matches_actor: true}, %{authenticated: true}}` agregada en `lib/origen/authorization/rules.ex`.
 - `Origen.Booking.Agenda.get_professional_agenda/2` implementado en `lib/origen/booking/agenda.ex` (revalidación `Origen.Sessions.revalidate_principal/2` + `Origen.Authorization.decide/1`, filtro `[day_start, day_end)` UTC, `start_time ASC`, join `patient_profiles` con left join `personas`, proyección no clínica con `name` resuelto como nombre completo o email) y expuesto vía delegación desde `Origen.Booking.get_professional_agenda/2`.
 - Suite `test/origen/booking/professional_agenda_test.exs`: 15 pruebas cubriendo orden cronológico, aislamiento entre profesionales, inyección de identidad ignorada, fail closed (sesión revocada/expirada/alterada, cuenta inactiva, roles `administrator`/`secretary`, principals malformados), fecha vacía/malformada y ausencia de campos clínicos.

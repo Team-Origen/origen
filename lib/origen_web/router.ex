@@ -45,6 +45,15 @@ defmodule OrigenWeb.Router do
     live "/patient/calendar", PatientBookingCalendarLive, :index
   end
 
+  scope "/profesional", OrigenWeb do
+    pipe_through [:browser, :require_internal_session, :require_professional]
+
+    live_session :professional_agenda,
+      on_mount: [{OrigenWeb.InternalAuthLive, :ensure_professional}] do
+      live "/agenda", ProfessionalAgendaLive, :index
+    end
+  end
+
   if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
        Mix.env() != :prod do
     scope "/configuracion", OrigenWeb do
