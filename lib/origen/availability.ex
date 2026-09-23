@@ -92,7 +92,7 @@ defmodule Origen.Availability do
     Repo.query!(
       """
       SELECT weekly_availability, booking_horizon_days, minimum_lead_minutes, interval_minutes
-       FROM agenda_settings WHERE owner_account_id = $1
+      FROM agenda_settings WHERE owner_account_id = $1 FOR UPDATE
       """,
       [owner_id]
     ).rows
