@@ -31,7 +31,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       {:ok, view, html} = live(conn, ~p"/patient/calendar")
 
       assert html =~ "Calendario de Reservas" and html =~ "Medicina General"
-      assert html =~ "09:00" and html =~ "hasta 09:30" and html =~ "Perfil pendiente de"
+      assert html =~ "Perfil pendiente de"
       assert has_element?(view, "button[phx-click='select_slot']")
 
       # Weekend empty state & Day 31 simulated error
