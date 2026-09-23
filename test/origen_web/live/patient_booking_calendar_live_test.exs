@@ -84,5 +84,20 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert html =~ "Turno Reservado con" and html =~ "Dra. Sof" and html =~ "09:00 hs" and
                html =~ "ha sido confirmado"
     end
+
+    test "changing consultation type recalculates slot availability", %{conn: conn} do
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+
+      assert html =~ "Tipo de Consulta"
+      assert html =~ "Consulta general"
+
+      render_change(view, "change_date", %{"date" => "2026-09-25"})
+
+      html_control =
+        render_change(view, "change_type", %{"type_id" => "018f4a5b-0d62-7a44-8e32-2f608bfcb002"})
+
+      assert html_control =~ "Control"
+      assert html_control =~ "09:00"
+    end
   end
 end

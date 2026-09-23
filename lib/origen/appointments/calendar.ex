@@ -38,18 +38,30 @@ defmodule Origen.Appointments.Calendar do
   @callback get_daily_schedule(professional_id :: String.t(), date :: Date.t()) ::
               {:ok, daily_schedule()} | {:error, :unavailable | :invalid_professional | term()}
 
+  @callback get_daily_schedule(professional_id :: String.t(), date :: Date.t(), opts :: keyword()) ::
+              {:ok, daily_schedule()} | {:error, :unavailable | :invalid_professional | term()}
+
   @callback list_professionals() :: {:ok, [professional_summary()]} | {:error, term()}
 
-  @spec get_daily_schedule(String.t(), Date.t()) ::
+  @optional_callbacks [get_daily_schedule: 3]
+
+  @spec get_daily_schedule(String.t(), Date.t(), keyword()) ::
           {:ok, daily_schedule()} | {:error, :unavailable | term()}
-  def get_daily_schedule(professional_id, date) do
+  def get_daily_schedule(professional_id, date, opts \\ []) do
     case adapter() do
-      nil -> {:error, :unavailable}
-      mod -> mod.get_daily_schedule(professional_id, date)
+      nil ->
+        {:error, :unavailable}
+
+      mod ->
+        if function_exported?(mod, :get_daily_schedule, 3) do
+          mod.get_daily_schedule(professional_id, date, opts)
+        else
+          mod.get_daily_schedule(professional_id, date)
+        end
     end
   end
 
-  @spec list_professionals() :: {:ok, [professional_summary()]} | {:error, :unavailable | term()}
+  @spec list_professionals() :: {:ok, [professional_summary()]} | {:error, term()}
   def list_professionals do
     case adapter() do
       nil -> {:error, :unavailable}
