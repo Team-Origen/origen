@@ -16,5 +16,5 @@ Enable verified patients to submit autonomous appointment reservations directly 
 - [x] 5. Branch setup 2: create `feature/93-booking-calendar-submission` from PR 1 branch.
 - [x] 6. Frontend integration: connect `PatientBookingCalendarLive` submit action to `BookingService`, display real appointment ID, price, and status in outcome view.
 - [x] 7. LiveView tests: test end-to-end booking submission, flash feedback, and success view rendering.
-- [ ] 8. PR 2/2: open stacked PR 2/2 against PR 1 branch (<= 400 lines) and verify CI checks.
+- [x] 8. PR 2/2: open stacked PR 2/2 against PR 1 branch (<= 400 lines) and verify CI checks.
 - [ ] 9. Verification & manual testing flow: provide step-by-step interactive testing guide.
