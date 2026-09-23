@@ -84,6 +84,9 @@ config :origen, :bootstrap_admin_local, %{enabled: false}
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
 
+# Bootstrap admin verifier key for development invitation issuance
+config :origen, bootstrap_admin_verifier_key: String.duplicate("d", 32)
+
 if File.exists?(Path.expand("dev.local.exs", __DIR__)) do
   import_config "dev.local.exs"
 end

@@ -122,8 +122,9 @@ defmodule OrigenWeb.AdminInternalLiveTest do
   end
 
   describe "save event" do
-    test "shows success result on valid submission", %{conn: conn} do
-      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
+    test "shows success result when administrator creates professional account", %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -132,13 +133,30 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> form("#admin-internal-form", form: %{role: "professional", email: "demo@example.com"})
         |> render_submit()
 
-      assert html =~ "Cuenta creada exitosamente"
+      assert html =~ "Invitación creada para"
       assert html =~ "demo@example.com"
       assert html =~ "Profesional"
     end
 
+    test "shows success result when administrator creates secretary account", %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      html =
+        view
+        |> form("#admin-internal-form", form: %{role: "secretary", email: "secre@example.com"})
+        |> render_submit()
+
+      assert html =~ "Invitación creada para"
+      assert html =~ "secre@example.com"
+      assert html =~ "Secretaria"
+    end
+
     test "shows validation errors on invalid submission", %{conn: conn} do
-      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -151,7 +169,8 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     end
 
     test "shows validation error for invalid email on submission", %{conn: conn} do
-      conn = put_user_in_session(conn, %{id: 1, role: :administrator})
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
 
       {:ok, view, _html} = live(conn, ~p"/admin/internal")
 
@@ -161,6 +180,55 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> render_submit()
 
       assert html =~ "must be a valid email address without spaces"
+    end
+
+    test "shows error when email already exists", %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      view
+      |> form("#admin-internal-form",
+        form: %{role: "professional", email: "duplicated@example.com"}
+      )
+      |> render_submit()
+
+      html =
+        view
+        |> form("#admin-internal-form",
+          form: %{role: "professional", email: "duplicated@example.com"}
+        )
+        |> render_submit()
+
+      assert html =~ "Ya existe una cuenta con este correo electrónico"
+    end
+
+    test "secretary cannot create accounts and is rejected with unauthorized", %{conn: conn} do
+      secretary = insert_active_account("secretary")
+      conn = put_user_in_session(conn, secretary)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      html =
+        view
+        |> form("#admin-internal-form",
+          form: %{role: "secretary", email: "secretary@example.com"}
+        )
+        |> render_submit()
+
+      assert html =~ "No tiene permiso para realizar esta acción"
+    end
+
+    test "secretary cannot create professional account", %{conn: conn} do
+      secretary = insert_active_account("secretary")
+      conn = put_user_in_session(conn, secretary)
+
+      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+
+      # The form should not have professional as an option for secretaries
+      refute html =~ "Profesional"
+      assert html =~ "Secretaria"
     end
   end
 
@@ -241,6 +309,22 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       assert html =~ "px-6"
       assert html =~ "rounded-md"
     end
+  end
+
+  defp insert_active_account(role) do
+    email = "#{role}_#{System.unique_integer([:positive])}@clinicaorigen.com"
+
+    %{rows: [[id]]} =
+      Origen.Repo.query!(
+        """
+        INSERT INTO internal_accounts (email, role, state, password_hash, totp_secret, activated_at)
+        VALUES ($1, $2, 'active', 'test_password_hash', 'test_totp_secret', clock_timestamp())
+        RETURNING id
+        """,
+        [email, role]
+      )
+
+    %{id: id, role: String.to_atom(role), email: email}
   end
 
   defp put_user_in_session(conn, user) do
