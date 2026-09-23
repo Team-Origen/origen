@@ -1,0 +1,139 @@
+defmodule Origen.Appointments.BookingService do
+  @moduledoc """
+  Application service for submitting autonomous patient appointment reservations (PLN-09 / Issue #93).
+  Enforces:
+  - Patient profile completion and phone verification (RF-02 ter, PLN-15)
+  - Date & slot conversion to UTC DateTime
+  - RF-10 initial status resolution based on date proximity
+  - Atomic persistence with historical consultation type snapshots via Origen.Booking
+  """
+
+  alias Origen.Booking
+  alias Origen.Booking.Appointment
+  alias Origen.Patients
+  alias Origen.Patients.PatientProfile
+
+  @type reservation_params :: %{
+          required(:professional_id) => integer() | String.t(),
+          required(:consultation_type_id) => String.t(),
+          required(:date) => Date.t(),
+          required(:slot) => map(),
+          optional(:snapshot_override) => map(),
+          optional(:now) => DateTime.t()
+        }
+
+  @type reservation_result :: %{
+          appointment: Appointment.t(),
+          appointment_id: integer(),
+          status: String.t(),
+          consultation_type_name: String.t(),
+          duration_minutes: integer(),
+          exact_price_ars: Decimal.t(),
+          start_time: DateTime.t(),
+          end_time: DateTime.t()
+        }
+
+  @doc """
+  Executes an autonomous appointment reservation for an authenticated patient.
+  """
+  @spec reserve(PatientProfile.t() | nil, reservation_params()) ::
+          {:ok, reservation_result()} | {:error, term()}
+  def reserve(nil, _params), do: {:error, :unauthenticated}
+
+  def reserve(%PatientProfile{} = profile, params) do
+    if Patients.ready_for_booking?(profile) do
+      do_reserve(profile, params)
+    else
+      {:error, :patient_not_ready_for_booking}
+    end
+  end
+
+  defp do_reserve(profile, params) do
+    now = Map.get(params, :now, DateTime.utc_now())
+    date = Map.fetch!(params, :date)
+    slot = Map.fetch!(params, :slot)
+
+    with {:ok, start_datetime} <- build_start_datetime(date, slot),
+         {:ok, prof_id} <- parse_professional_id(Map.fetch!(params, :professional_id)) do
+      status = determine_initial_status(date, now)
+      type_id = Map.fetch!(params, :consultation_type_id)
+      snapshot = Map.get(params, :snapshot_override)
+
+      attrs = %{
+        patient_profile_id: profile.id,
+        professional_account_id: prof_id,
+        consultation_type_id: type_id,
+        start_time: start_datetime,
+        status: status
+      }
+
+      case Booking.persist_appointment(attrs, snapshot) do
+        {:ok, appointment} ->
+          {:ok,
+           %{
+             appointment: appointment,
+             appointment_id: appointment.id,
+             status: appointment.status,
+             consultation_type_name: appointment.snapshot_consultation_type_name,
+             duration_minutes: appointment.snapshot_duration_minutes,
+             exact_price_ars: appointment.snapshot_exact_price_ars,
+             start_time: appointment.start_time,
+             end_time: appointment.end_time
+           }}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  @doc """
+  Determines the initial appointment status according to RF-10 rules.
+  - Reservations created before D-1 start in 'reserved'.
+  - Reservations created on D-1 or day D start in 'confirmed' (automatic approval).
+  """
+  @spec determine_initial_status(Date.t(), DateTime.t()) :: String.t()
+  def determine_initial_status(appointment_date, now) do
+    today = DateTime.to_date(now)
+    days_ahead = Date.diff(appointment_date, today)
+
+    if days_ahead <= 1 do
+      "confirmed"
+    else
+      "reserved"
+    end
+  end
+
+  defp build_start_datetime(%Date{} = date, %{start_time: %Time{} = time}) do
+    {:ok, DateTime.new!(date, time, "Etc/UTC")}
+  end
+
+  defp build_start_datetime(%Date{} = date, %{"start_time" => %Time{} = time}) do
+    {:ok, DateTime.new!(date, time, "Etc/UTC")}
+  end
+
+  defp build_start_datetime(%Date{} = date, %{start_formatted: formatted}) do
+    time_str = if String.length(formatted) == 5, do: formatted <> ":00", else: formatted
+    time = Time.from_iso8601!(time_str)
+    {:ok, DateTime.new!(date, time, "Etc/UTC")}
+  end
+
+  defp build_start_datetime(%Date{} = date, %{"start_formatted" => formatted}) do
+    time_str = if String.length(formatted) == 5, do: formatted <> ":00", else: formatted
+    time = Time.from_iso8601!(time_str)
+    {:ok, DateTime.new!(date, time, "Etc/UTC")}
+  end
+
+  defp build_start_datetime(_date, _slot), do: {:error, :invalid_slot_time}
+
+  defp parse_professional_id(id) when is_integer(id), do: {:ok, id}
+
+  defp parse_professional_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {num, ""} -> {:ok, num}
+      _ -> {:error, :invalid_professional_id}
+    end
+  end
+
+  defp parse_professional_id(_), do: {:error, :invalid_professional_id}
+end
