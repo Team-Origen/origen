@@ -2,6 +2,7 @@ defmodule Origen.ConsultationTypesTest do
   use Origen.DataCase, async: false
 
   alias Origen.ConsultationTypes
+  alias Origen.Availability
   alias Origen.Repo
   alias Origen.Sessions
 
@@ -668,6 +669,16 @@ defmodule Origen.ConsultationTypesTest do
     test "accepts interval boundaries and canonical integer strings" do
       principal = professional_principal!()
 
+      empty_week =
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []})
+
+      assert {:ok, _configuration} =
+               Availability.replace_own_configuration(principal, %{
+                 weekly_availability: empty_week,
+                 booking_horizon_days: 30,
+                 minimum_lead_minutes: 30
+               })
+
       for interval <- [5, "240", "30"] do
         expected = if is_binary(interval), do: String.to_integer(interval), else: interval
 
@@ -747,6 +758,30 @@ defmodule Origen.ConsultationTypesTest do
 
       assert Enum.find(before_configuration.consultation_types, &(&1.id == inactive.id)) ==
                inactive
+    end
+
+    test "rejects an interval that would misalign persisted availability" do
+      principal = professional_principal!()
+
+      empty_week =
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []})
+
+      week = Map.put(empty_week, "monday", [%{"start" => "08:30", "end" => "10:00"}])
+
+      assert {:ok, availability} =
+               Availability.replace_own_configuration(principal, %{
+                 weekly_availability: week,
+                 booking_horizon_days: 30,
+                 minimum_lead_minutes: 30
+               })
+
+      assert {:error, {:incompatible, %{availability_boundaries: ["monday 08:30"]}}} =
+               ConsultationTypes.apply_agenda_interval(principal, 60)
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, ^availability} = Availability.get_own_configuration(principal)
     end
 
     test "fails closed for invalid principals without changing the interval" do
