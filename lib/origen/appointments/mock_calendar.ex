@@ -64,7 +64,7 @@ defmodule Origen.Appointments.MockCalendar do
 
           true ->
             duration = Keyword.get(opts, :duration_minutes, 30)
-            interval = Keyword.get(opts, :agenda_interval_minutes, 30)
+            interval = Keyword.get(opts, :agenda_interval_minutes, duration)
 
             slots =
               Availability.calculate_slots(

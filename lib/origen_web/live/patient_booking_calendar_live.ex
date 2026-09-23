@@ -112,7 +112,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
       (socket.assigns[:selected_type] && socket.assigns.selected_type.interval_count * 15) || 30
 
     case Calendar.get_daily_schedule(socket.assigns.prof_id, socket.assigns.date,
-           duration_minutes: duration
+           duration_minutes: duration,
+           agenda_interval_minutes: duration
          ) do
       {:ok, s} -> assign(socket, schedule: s, error: nil)
       {:error, r} -> assign(socket, schedule: nil, error: r)
@@ -164,12 +165,12 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 class="text-2xl font-bold text-[#0A3847]">Calendario de Reservas</h1>
-
+            
             <p class="text-sm text-stone-600">
               Seleccioná un profesional, tipo de consulta y horario disponible.
             </p>
           </div>
-
+          
           <%= if @profile && @profile.persona do %>
             <div class="text-right">
               <span class="text-xs text-stone-500 block">Paciente</span>
@@ -177,7 +178,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             </div>
           <% end %>
         </div>
-
+        
         <div
           :if={Phoenix.Flash.get(@flash, :error)}
           class="p-4 rounded-xl bg-red-50 text-red-800 text-sm flex items-center gap-2 border border-red-200"
@@ -185,7 +186,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
           <.icon name="hero-exclamation-circle" class="w-5 h-5 text-red-600 shrink-0" />
           <span>{Phoenix.Flash.get(@flash, :error)}</span>
         </div>
-
+        
         <div
           :if={not @ready?}
           class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm flex items-start gap-3 border border-amber-200"
@@ -193,12 +194,12 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
           <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
           <div class="flex-1">
             <p class="font-semibold">Perfil pendiente de verificación</p>
-
+            
             <p class="mt-0.5">
               Para confirmar turnos de manera autónoma, tu teléfono debe estar verificado.
             </p>
           </div>
-
+          
           <.link
             navigate={~p"/patient/phone/verify"}
             class="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shrink-0 hover:bg-amber-700"
@@ -206,7 +207,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             Verificar Teléfono
           </.link>
         </div>
-
+        
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
@@ -224,7 +225,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 </select>
               </form>
             </div>
-
+            
             <div>
               <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">Tipo de Consulta</label>
               <form id="type-form" phx-change="change_type">
@@ -244,7 +245,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 </select>
               </form>
             </div>
-
+            
             <div>
               <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">Fecha</label>
               <div class="flex items-center gap-2">
@@ -256,7 +257,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 >
                   <.icon name="hero-chevron-left" class="w-4 h-4" />
                 </button>
-
+                
                 <form id="date-form" phx-change="change_date" class="flex-1">
                   <input
                     type="date"
@@ -265,7 +266,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                     class="w-full rounded-lg border-stone-300 bg-white text-stone-900 text-sm text-center font-medium focus:ring-[#0A3847] focus:border-[#0A3847]"
                   />
                 </form>
-
+                
                 <button
                   phx-click="nav_date"
                   phx-value-step="1"
@@ -278,16 +279,16 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             </div>
           </div>
         </div>
-
+        
         <%= cond do %>
           <% @confirmed? and @selected_slot -> %>
             <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-8 text-center space-y-4">
               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto font-bold text-xl">
                 ✓
               </div>
-
+              
               <h2 class="text-xl font-bold text-stone-900">¡Turno Reservado con Éxito!</h2>
-
+              
               <p class="text-sm text-stone-600 max-w-md mx-auto">
                 Tu turno con <strong>{@schedule.professional_name}</strong>
                 ({get_in(@selected_type, [:name]) || "Consulta general"}) para el día
@@ -295,7 +296,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 a las <strong>{@selected_slot.start_formatted} hs</strong>
                 ha sido confirmado.
               </p>
-
+              
               <div class="pt-4">
                 <.link
                   navigate={~p"/patient/profile/complete"}
@@ -309,13 +310,13 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             <div class="bg-white rounded-xl shadow-sm border border-[#0A3847]/30 p-6 space-y-5">
               <div class="flex items-center justify-between border-b border-stone-100 pb-4">
                 <h3 class="text-lg font-bold text-[#0A3847]">Confirmar Reserva</h3>
-
+                
                 <button
                   phx-click="clear_slot"
                   class="text-xs text-stone-500 hover:text-stone-800 underline"
                 >Cambiar horario</button>
               </div>
-
+              
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-stone-50 rounded-lg p-4 text-sm">
                 <div>
                   <span class="text-xs text-stone-500 block">Profesional y Consulta</span>
@@ -324,27 +325,27 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                     [:name]
                   ) || "Consulta general"}</span>
                 </div>
-
+                
                 <div>
                   <span class="text-xs text-stone-500 block">Fecha y Horario</span>
                   <span class="font-semibold text-stone-800">{Date.to_iso8601(@date)} de {@selected_slot.start_formatted} a {@selected_slot.end_formatted} hs</span>
                 </div>
               </div>
-
+              
               <div class="space-y-2 border-t pt-3 text-xs text-[#0A3847]">
                 <h4 class="font-semibold uppercase tracking-wider text-stone-700">
                   Políticas de Cancelación y Asistencia
                 </h4>
-
+                
                 <p>
                   <strong>Límite sin cargo:</strong> {@schedule.cancellation_policy.cutoff_description}
                 </p>
-
+                
                 <p>
                   <strong>Política de multa ({@schedule.cancellation_policy.penalty_percentage}%):</strong> {@schedule.cancellation_policy.penalty_description}
                 </p>
               </div>
-
+              
               <div class="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   phx-click="confirm_booking"
@@ -353,7 +354,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 >
                   {if @ready?, do: "Confirmar Turno", else: "Verificación de Teléfono Requerida"}
                 </button>
-
+                
                 <button
                   phx-click="clear_slot"
                   class="p-2.5 border border-stone-300 rounded-lg text-sm text-stone-700 hover:bg-stone-50"
@@ -365,7 +366,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
               <h3 class="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-4">
                 Horarios Disponibles para {Date.to_iso8601(@date)}
               </h3>
-
+              
               <%= cond do %>
                 <% @error != nil -> %>
                   <p class="p-4 bg-red-50 text-red-800 text-sm text-center rounded-lg border border-red-200">
