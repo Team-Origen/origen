@@ -43,8 +43,8 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 ### Phase 2: Engine Integration (Issues #64, #65, #66)
 - [x] ODD-08-12 — Implement actor authorization (`Origen.Booking.Authorization`): Patient profile completion & phone verification, Secretary assisted flow, Professional permitted patient check (Issue #64).
 - [x] ODD-08-13 — Implement overlap and concurrency prevention: non-overlapping agenda validation and database-level exclusion / atomic locking (Issue #65).
-- [ ] ODD-08-14 — Implement atomic multi-step reservation orchestration: Appointment + ProfessionalPatientRelationship + AuditEvent with complete rollback guarantee (Issue #66).
-- [ ] ODD-08-15 — Technical audit and verification by subagent.
+- [x] ODD-08-14 — Implement atomic multi-step reservation orchestration: Appointment + ProfessionalPatientRelationship + AuditEvent with complete rollback guarantee (Issue #66).
+- [x] ODD-08-15 — Technical audit and verification by subagent (Report: PASSED).
 - [ ] ODD-08-16 — Open chained Pull Requests for #64, #65, and #66 without merging.
 
 ## Acceptance criteria
@@ -60,18 +60,25 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 - `mix test test/origen/booking/reservation_cases_test.exs` (0 failures, 29 skipped skeletons).
 - `mix test test/origen/booking/reservation_request_test.exs` (15 passed).
 - `mix test test/origen/booking/persistence_test.exs` (8 passed).
-- `mix test` (459 passed, 29 skipped, 8 excluded).
+- `mix test test/origen/booking/authorization_test.exs` (20 passed).
+- `mix test test/origen/booking/overlap_test.exs` (19 passed, including 8-process barrier concurrency race).
+- `mix test test/origen/booking/atomic_reservation_test.exs` (12 passed).
+- `mix test` (517 passed, 29 skipped, 8 excluded).
 - `mix format --check-formatted` (clean).
-- Independent verification subagent audit (`gentle-ai-verify`).
+- Independent verification subagent audit (`gentle-ai-verify` PASSED).
 
 ## Progress and evidence
 
-- Commits and Pull Requests:
+- Commits and Pull Requests (Phase 1):
   - `73bd027` / [PR #161](https://github.com/Team-Origen/origen/pull/161): `docs(booking): define durable reservation scenario matrix for PLN-08` (Closes #61)
   - `cd195ad` / [PR #162](https://github.com/Team-Origen/origen/pull/162): `feat(booking): define reservation data contracts and input validation for PLN-08` (Closes #62)
   - `ba9a0b1` / [PR #163](https://github.com/Team-Origen/origen/pull/163): `feat(booking): implement appointment persistence with historical snapshots for PLN-08` (Closes #63)
+- Commits (Phase 2):
+  - `09b76d1`: `feat(booking): implement actor authorization for reservation operations for PLN-08` (Closes #64)
+  - `e821159`: `feat(booking): implement overlap and concurrency prevention for PLN-08` (Closes #65)
+  - `f48e2f0`: `feat(booking): implement atomic reservation of appointment, relationship, and audit for PLN-08` (Closes #66)
 - Subagent verification by `gentle-ai-verify` confirmed full compliance with all acceptance criteria.
 
 ## Next step
 
-Publish the 3 chained branches and open Pull Requests for review (without merging). Downstream subissues #64 (authorization), #65 (overlap resolution & database exclusion constraint), and #66 (full ACID transaction integration) will build upon this foundation.
+Publish the 3 chained branches and open Pull Requests for review (without merging).

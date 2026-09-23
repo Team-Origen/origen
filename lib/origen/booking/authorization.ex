@@ -14,16 +14,17 @@ defmodule Origen.Booking.Authorization do
   - **Profesional**: identidad propia (`actor.id == professional_id`), cuenta interna
     activa con rol `professional` y paciente dentro de su lista permitida (RF-05).
 
-  La relación Profesional-Paciente aún no posee tabla propia (se introduce en #66);
-  la lista permitida se deriva de turnos previos válidos en estados que establecen
-  relación (`reserved`, `confirmed`, `attended`, `no_show`). Se excluyen `requested`
-  (nunca crea relación, §2.4) y `cancelled` (reserva deshecha; la tabla durable de
-  #66 arbitrará definitivamente).
+  La lista permitida del profesional (RF-05) se resuelve primero contra la tabla
+  durable `professional_patient_relationships` (Issue #66) y, como fallback de
+  compatibilidad, contra turnos previos válidos en estados que establecen
+  relación (`reserved`, `confirmed`, `attended`, `no_show`). Se excluyen
+  `requested` (nunca crea relación, §2.4) y `cancelled` (reserva deshecha).
   """
 
   import Ecto.Query, only: [from: 2]
 
   alias Origen.Booking.Appointment
+  alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Booking.ReservationRequest
   alias Origen.Patients.PatientProfile
   alias Origen.Repo
@@ -143,6 +144,29 @@ defmodule Origen.Booking.Authorization do
   defp ensure_schedule_agreement(_missing_agreement), do: {:error, :acuerdo_horario_requerido}
 
   defp ensure_patient_permitted(patient_id, professional_id) do
+    if permitted_by_relationship_table?(patient_id, professional_id) or
+         permitted_by_prior_appointments?(patient_id, professional_id) do
+      :ok
+    else
+      {:error, :paciente_no_permitido}
+    end
+  end
+
+  # La tabla durable (#66) arbitra primero la lista permitida (RF-05).
+  defp permitted_by_relationship_table?(patient_id, professional_id) do
+    query =
+      from(r in ProfessionalPatientRelationship,
+        where: r.patient_profile_id == ^patient_id,
+        where: r.professional_account_id == ^professional_id,
+        select: 1,
+        limit: 1
+      )
+
+    Repo.one(query) == 1
+  end
+
+  # Fallback de compatibilidad: turnos previos válidos que establecen relación.
+  defp permitted_by_prior_appointments?(patient_id, professional_id) do
     query =
       from(a in Appointment,
         where: a.patient_profile_id == ^patient_id,
@@ -152,10 +176,7 @@ defmodule Origen.Booking.Authorization do
         limit: 1
       )
 
-    case Repo.one(query) do
-      1 -> :ok
-      nil -> {:error, :paciente_no_permitido}
-    end
+    Repo.one(query) == 1
   end
 
   # Acceso a persistencia
