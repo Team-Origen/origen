@@ -1,10 +1,12 @@
 defmodule Origen.Appointments.MockCalendar do
   @moduledoc """
-  Deterministic mock calendar adapter used for reviewing the patient booking UI (#91)
+  Deterministic mock calendar adapter used for reviewing the patient booking UI (#91, #92)
   without requiring a production database or external schedule dependencies.
   """
 
   @behaviour Origen.Appointments.Calendar
+
+  alias Origen.Appointments.Availability
 
   @professionals [
     %{
@@ -27,13 +29,19 @@ defmodule Origen.Appointments.MockCalendar do
       "Cancelaciones posteriores a las 18:00 de D-1 o inasistencias aplican una política de multa del 50% según RF-16."
   }
 
+  @demo_windows [{~T[09:00:00], ~T[12:00:00]}, {~T[14:00:00], ~T[17:00:00]}]
+  @demo_occupancies []
+
   @impl true
   def list_professionals do
     {:ok, @professionals}
   end
 
   @impl true
-  def get_daily_schedule(professional_id, %Date{} = date) do
+  def get_daily_schedule(professional_id, date), do: get_daily_schedule(professional_id, date, [])
+
+  @impl true
+  def get_daily_schedule(professional_id, %Date{} = date, opts) do
     case Enum.find(@professionals, &(&1.id == professional_id)) do
       nil ->
         {:error, :invalid_professional}
@@ -55,48 +63,30 @@ defmodule Origen.Appointments.MockCalendar do
              }}
 
           true ->
+            duration = Keyword.get(opts, :duration_minutes, 30)
+            interval = Keyword.get(opts, :agenda_interval_minutes, duration)
+
+            slots =
+              Availability.calculate_slots(
+                date,
+                @demo_windows,
+                @demo_occupancies,
+                agenda_interval_minutes: interval,
+                duration_minutes: duration,
+                min_lead_time_minutes: Keyword.get(opts, :min_lead_time_minutes, 30),
+                now: Keyword.get(opts, :now, DateTime.utc_now())
+              )
+
             {:ok,
              %{
                date: date,
                professional_id: professional.id,
                professional_name: professional.name,
                specialty: professional.specialty,
-               slots: generate_weekday_slots(date),
+               slots: slots,
                cancellation_policy: @default_policy
              }}
         end
     end
-  end
-
-  defp generate_weekday_slots(date) do
-    times = [
-      {~T[09:00:00], ~T[09:30:00], "09:00", "09:30"},
-      {~T[09:30:00], ~T[10:00:00], "09:30", "10:00"},
-      {~T[10:00:00], ~T[10:30:00], "10:00", "10:30"},
-      {~T[10:30:00], ~T[11:00:00], "10:30", "11:00"},
-      {~T[11:00:00], ~T[11:30:00], "11:00", "11:30"},
-      {~T[11:30:00], ~T[12:00:00], "11:30", "12:00"},
-      {~T[14:00:00], ~T[14:30:00], "14:00", "14:30"},
-      {~T[14:30:00], ~T[15:00:00], "14:30", "15:00"},
-      {~T[15:00:00], ~T[15:30:00], "15:00", "15:30"},
-      {~T[15:30:00], ~T[16:00:00], "15:30", "16:00"},
-      {~T[16:00:00], ~T[16:30:00], "16:00", "16:30"},
-      {~T[16:30:00], ~T[17:00:00], "16:30", "17:00"}
-    ]
-
-    date_str = Date.to_iso8601(date)
-
-    Enum.map(times, fn {start_t, end_t, start_f, end_f} ->
-      slot_id = "SLOT-" <> date_str <> "-" <> String.replace(start_f, ":", "")
-
-      %{
-        id: slot_id,
-        start_time: start_t,
-        end_time: end_t,
-        start_formatted: start_f,
-        end_formatted: end_f,
-        status: :available
-      }
-    end)
   end
 end
