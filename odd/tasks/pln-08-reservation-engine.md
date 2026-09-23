@@ -45,7 +45,7 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 - [x] ODD-08-13 — Implement overlap and concurrency prevention: non-overlapping agenda validation and database-level exclusion / atomic locking (Issue #65).
 - [x] ODD-08-14 — Implement atomic multi-step reservation orchestration: Appointment + ProfessionalPatientRelationship + AuditEvent with complete rollback guarantee (Issue #66).
 - [x] ODD-08-15 — Technical audit and verification by subagent (Report: PASSED).
-- [ ] ODD-08-16 — Open chained Pull Requests for #64, #65, and #66 without merging.
+- [x] ODD-08-16 — Open chained Pull Requests for #64, #65, and #66 without merging.
 
 ## Acceptance criteria
 
@@ -73,10 +73,10 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
   - `73bd027` / [PR #161](https://github.com/Team-Origen/origen/pull/161): `docs(booking): define durable reservation scenario matrix for PLN-08` (Closes #61)
   - `cd195ad` / [PR #162](https://github.com/Team-Origen/origen/pull/162): `feat(booking): define reservation data contracts and input validation for PLN-08` (Closes #62)
   - `ba9a0b1` / [PR #163](https://github.com/Team-Origen/origen/pull/163): `feat(booking): implement appointment persistence with historical snapshots for PLN-08` (Closes #63)
-- Commits (Phase 2):
-  - `09b76d1`: `feat(booking): implement actor authorization for reservation operations for PLN-08` (Closes #64)
-  - `e821159`: `feat(booking): implement overlap and concurrency prevention for PLN-08` (Closes #65)
-  - `f48e2f0`: `feat(booking): implement atomic reservation of appointment, relationship, and audit for PLN-08` (Closes #66)
+- Commits and Pull Requests (Phase 2):
+  - `09b76d1` / [PR #167](https://github.com/Team-Origen/origen/pull/167): `feat(booking): implement actor authorization for reservation operations for PLN-08` (Closes #64)
+  - `e821159` / [PR #168](https://github.com/Team-Origen/origen/pull/168): `feat(booking): implement overlap and concurrency prevention for PLN-08` (Closes #65)
+  - `0fff281` / [PR #169](https://github.com/Team-Origen/origen/pull/169): `feat(booking): implement atomic reservation of appointment, relationship, and audit for PLN-08` (Closes #66)
 - Subagent verification by `gentle-ai-verify` confirmed full compliance with all acceptance criteria.
 
 ## Next step
