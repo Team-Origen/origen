@@ -2,11 +2,13 @@ defmodule Origen.Booking do
   @moduledoc """
   Contexto de dominio para la gestión y operación de reservas de turnos (PLN-08).
 
-  Implementa la validación sintáctica de contratos (Issue #62) y la persistencia
-  transaccional de turnos con snapshots históricos inmutables (Issue #63).
+  Implementa la validación sintáctica de contratos (Issue #62), la persistencia
+  transaccional de turnos con snapshots históricos inmutables (Issue #63) y las
+  reglas de autorización por actor Paciente / Secretaría / Profesional (Issue #64).
   """
 
   alias Origen.Booking.Appointment
+  alias Origen.Booking.Authorization
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
   alias Origen.Repo
@@ -22,6 +24,16 @@ defmodule Origen.Booking do
   def validate_request(attrs) do
     ReservationRequest.cast_and_validate(attrs)
   end
+
+  @doc """
+  Autoriza una solicitud de reserva evaluando los permisos del actor solicitante
+  (Issue #64): paciente autónomo, secretaría asistida o profesional.
+
+  Delega en `Origen.Booking.Authorization.authorize_reservation/1`.
+  """
+  @spec authorize_reservation(ReservationRequest.t() | map()) ::
+          {:ok, map()} | {:error, atom()}
+  defdelegate authorize_reservation(request_or_params), to: Authorization
 
   @doc """
   Persiste un turno en la base de datos copiando nombre, duración y precio del tipo

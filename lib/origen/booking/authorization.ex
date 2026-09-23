@@ -1,0 +1,209 @@
+defmodule Origen.Booking.Authorization do
+  @moduledoc """
+  Reglas de autorización por actor para la operación de reserva (Issue #64 / PLN-08).
+
+  Evalúa elegibilidad y permisos de los tres actores del motor de reservas conforme
+  a `docs/booking/RESERVATION_CASES.md` §2.1:
+
+  - **Paciente autónomo**: identidad propia (`actor.id == patient_id`), perfil en
+    estado `completed` (R01) y teléfono verificado (R02). Puede reservar con cualquier
+    profesional activo; la relación Profesional-Paciente se establece al reservar (RF-05).
+  - **Secretaría asistida**: cuenta interna activa con rol `secretary`. Puede operar
+    perfiles incompletos o completos (RF-02) y el flujo asistido exige declaración
+    de horario acordado con el paciente (`patient_agreed_schedule`).
+  - **Profesional**: identidad propia (`actor.id == professional_id`), cuenta interna
+    activa con rol `professional` y paciente dentro de su lista permitida (RF-05).
+
+  La relación Profesional-Paciente aún no posee tabla propia (se introduce en #66);
+  la lista permitida se deriva de turnos previos válidos en estados que establecen
+  relación (`reserved`, `confirmed`, `attended`, `no_show`). Se excluyen `requested`
+  (nunca crea relación, §2.4) y `cancelled` (reserva deshecha; la tabla durable de
+  #66 arbitrará definitivamente).
+  """
+
+  import Ecto.Query, only: [from: 2]
+
+  alias Origen.Booking.Appointment
+  alias Origen.Booking.ReservationRequest
+  alias Origen.Patients.PatientProfile
+  alias Origen.Repo
+
+  @actor_roles [:patient, :secretary, :professional]
+
+  @relationship_establishing_statuses ~w(reserved confirmed attended no_show)
+
+  @type actor :: %{role: :patient | :secretary | :professional, id: integer()}
+
+  @type internal_account :: %{
+          id: integer(),
+          email: String.t() | nil,
+          role: String.t(),
+          state: String.t()
+        }
+
+  @type authorization :: %{
+          actor: actor(),
+          patient_profile: PatientProfile.t(),
+          professional_account: internal_account()
+        }
+
+  @doc """
+  Autoriza una solicitud de reserva según el rol del actor solicitante.
+
+  Acepta un `%ReservationRequest{}` validado o un mapa de parámetros con la forma
+  `%{actor: %{role: ..., id: ...}, patient_id: ..., professional_id: ...}` y el
+  booleano opcional `patient_agreed_schedule`.
+
+  Retorna `{:ok, %{actor: actor, patient_profile: profile, professional_account: account}}`
+  cuando el actor está habilitado, o `{:error, reason}` con denegación por defecto.
+  """
+  @spec authorize_reservation(ReservationRequest.t() | map()) ::
+          {:ok, authorization()} | {:error, atom()}
+  def authorize_reservation(%ReservationRequest{actor: actor} = request)
+      when not is_nil(actor) do
+    authorize(
+      %{role: actor.role, id: actor.id},
+      request.patient_id,
+      request.professional_id,
+      request.patient_agreed_schedule == true
+    )
+  end
+
+  def authorize_reservation(%{} = params) do
+    with {:ok, actor} <- normalize_actor(params[:actor] || params["actor"]),
+         {:ok, patient_id} <- fetch_positive_integer(params, :patient_id),
+         {:ok, professional_id} <- fetch_positive_integer(params, :professional_id) do
+      agreed? = params[:patient_agreed_schedule] || params["patient_agreed_schedule"]
+      authorize(actor, patient_id, professional_id, agreed? == true)
+    end
+  end
+
+  def authorize_reservation(_invalid_payload), do: {:error, :unauthorized}
+
+  defp authorize(%{role: :patient, id: actor_id} = actor, patient_id, professional_id, _agreed?) do
+    with :ok <- ensure_patient_identity(actor_id, patient_id),
+         {:ok, profile} <- fetch_patient_profile(patient_id),
+         :ok <- ensure_completed_profile(profile),
+         :ok <- ensure_verified_phone(profile),
+         {:ok, professional} <- fetch_professional_account(professional_id) do
+      {:ok, %{actor: actor, patient_profile: profile, professional_account: professional}}
+    end
+  end
+
+  defp authorize(%{role: :secretary, id: actor_id} = actor, patient_id, professional_id, agreed?) do
+    with {:ok, _secretary} <-
+           fetch_internal_account(actor_id, "secretary", :invalid_secretary_account),
+         {:ok, profile} <- fetch_patient_profile(patient_id),
+         :ok <- ensure_schedule_agreement(agreed?),
+         {:ok, professional} <- fetch_professional_account(professional_id) do
+      {:ok, %{actor: actor, patient_profile: profile, professional_account: professional}}
+    end
+  end
+
+  defp authorize(
+         %{role: :professional, id: actor_id} = actor,
+         patient_id,
+         professional_id,
+         _agreed?
+       ) do
+    with :ok <- ensure_professional_identity(actor_id, professional_id),
+         {:ok, professional} <- fetch_professional_account(professional_id),
+         {:ok, profile} <- fetch_patient_profile(patient_id),
+         :ok <- ensure_patient_permitted(patient_id, professional_id) do
+      {:ok, %{actor: actor, patient_profile: profile, professional_account: professional}}
+    end
+  end
+
+  defp authorize(_unknown_actor, _patient_id, _professional_id, _agreed?),
+    do: {:error, :unauthorized}
+
+  # Identidad y reglas por actor
+
+  defp ensure_patient_identity(actor_id, patient_id) when actor_id == patient_id, do: :ok
+
+  defp ensure_patient_identity(_actor_id, _patient_id),
+    do: {:error, :forbidden_patient_identity}
+
+  defp ensure_professional_identity(actor_id, professional_id)
+       when actor_id == professional_id,
+       do: :ok
+
+  defp ensure_professional_identity(_actor_id, _professional_id),
+    do: {:error, :forbidden_professional_identity}
+
+  defp ensure_completed_profile(%PatientProfile{state: "completed"}), do: :ok
+
+  defp ensure_completed_profile(_incomplete_profile), do: {:error, :perfil_incompleto}
+
+  defp ensure_verified_phone(%PatientProfile{phone_verified: true}), do: :ok
+
+  defp ensure_verified_phone(_profile), do: {:error, :telefono_no_verificado}
+
+  defp ensure_schedule_agreement(true), do: :ok
+  defp ensure_schedule_agreement(_missing_agreement), do: {:error, :acuerdo_horario_requerido}
+
+  defp ensure_patient_permitted(patient_id, professional_id) do
+    query =
+      from(a in Appointment,
+        where: a.patient_profile_id == ^patient_id,
+        where: a.professional_account_id == ^professional_id,
+        where: a.status in ^@relationship_establishing_statuses,
+        select: 1,
+        limit: 1
+      )
+
+    case Repo.one(query) do
+      1 -> :ok
+      nil -> {:error, :paciente_no_permitido}
+    end
+  end
+
+  # Acceso a persistencia
+
+  defp fetch_patient_profile(patient_id) do
+    case Repo.get(PatientProfile, patient_id) do
+      %PatientProfile{} = profile -> {:ok, profile}
+      nil -> {:error, :patient_profile_not_found}
+    end
+  end
+
+  defp fetch_professional_account(account_id),
+    do: fetch_internal_account(account_id, "professional", :invalid_professional_account)
+
+  defp fetch_internal_account(account_id, expected_role, error_reason) do
+    case Repo.query("SELECT id, email, role, state FROM internal_accounts WHERE id = $1", [
+           account_id
+         ]) do
+      {:ok, %{rows: [[id, email, role, state]]}}
+      when role == expected_role and state == "active" ->
+        {:ok, %{id: id, email: email, role: role, state: state}}
+
+      _invalid_or_missing_account ->
+        {:error, error_reason}
+    end
+  end
+
+  # Normalización del contrato de entrada
+
+  defp normalize_actor(%{role: role, id: id}) when role in @actor_roles and is_integer(id),
+    do: {:ok, %{role: role, id: id}}
+
+  defp normalize_actor(%{"role" => role, "id" => id}) when is_integer(id),
+    do: normalize_actor(%{role: role, id: id})
+
+  defp normalize_actor(%{role: role, id: id}) when is_binary(role) and is_integer(id) do
+    case Enum.find(@actor_roles, &(Atom.to_string(&1) == role)) do
+      nil -> {:error, :unauthorized}
+      normalized_role -> {:ok, %{role: normalized_role, id: id}}
+    end
+  end
+
+  defp normalize_actor(_invalid_actor), do: {:error, :unauthorized}
+
+  defp fetch_positive_integer(params, key) do
+    case params[key] || params["#{key}"] do
+      id when is_integer(id) and id > 0 -> {:ok, id}
+      _invalid_id -> {:error, :unauthorized}
+    end
+  end
+end

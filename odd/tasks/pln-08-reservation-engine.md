@@ -20,10 +20,14 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 - Subissue #61: Durable scenario matrix (`docs/booking/RESERVATION_CASES.md`) and non-breaking ExUnit test skeletons (`test/origen/booking/reservation_cases_test.exs`).
 - Subissue #62: In-memory request contract (`ReservationRequest`), response struct (`ReservationResponse`), and fail-fast validation in `Origen.Booking`.
 - Subissue #63: Migration `20260926100000_create_appointments_table.exs` with immutable snapshot trigger, Ecto schema `Appointment`, and transactional persistence `Origen.Booking.persist_appointment/2`.
-- Chained local branches: `feature/61-reservation-cases`, `feature/62-reservation-contracts`, `feature/63-appointment-persistence-snapshots`.
+- Subissue #64: Actor authorization rules for Patient (completed profile + verified phone), Secretary (assisted mode + schedule agreement), and Professional (permitted patient list).
+- Subissue #65: Overlap prevention (professional agenda and patient schedule) and race condition exclusion in concurrency.
+- Subissue #66: Atomic transactional orchestration (`Ecto.Multi`) of appointment, professional-patient relationship creation, and append-only audit event.
+- Chained branches: `feature/61-reservation-scenarios`, `feature/62-reservation-contracts`, `feature/63-appointment-persistence-snapshots`, `feature/64-reservation-authorization`, `feature/65-overlap-concurrency`, `feature/66-atomic-reservation`.
 
 ## Checklist
 
+### Phase 1: Foundation (Completed in PRs #161, #162, #163)
 - [x] ODD-08-01 — Document reservation scenarios for Patient, Secretary, and Professional with eligibility, overlaps, and ACID rollback (Issue #61).
 - [x] ODD-08-02 — Define non-breaking test skeletons for valid, rejected, concurrent, and rollback cases (Issue #61).
 - [x] ODD-08-03 — Define `ReservationRequest` embedded schema with fail-fast syntactic validation (Issue #62).
@@ -34,7 +38,14 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 - [x] ODD-08-08 — Implement `Origen.Booking.persist_appointment/2` with consultation type catalog resolution and simulated snapshot fallback (Issue #63).
 - [x] ODD-08-09 — Implement integration test suite verifying snapshot copy, PostgreSQL trigger immutability, exact decimal precision, and atomic rollback (Issue #63).
 - [x] ODD-08-10 — Independent read-only technical audit by `gentle-ai-verify` subagent (Report: PASSED).
-- [ ] ODD-08-11 — Push feature branches and open GitHub Pull Requests for #61, #62, and #63 without merging.
+- [x] ODD-08-11 — Push feature branches and open GitHub Pull Requests for #61, #62, and #63 without merging.
+
+### Phase 2: Engine Integration (Issues #64, #65, #66)
+- [x] ODD-08-12 — Implement actor authorization (`Origen.Booking.Authorization`): Patient profile completion & phone verification, Secretary assisted flow, Professional permitted patient check (Issue #64).
+- [ ] ODD-08-13 — Implement overlap and concurrency prevention: non-overlapping agenda validation and database-level exclusion / atomic locking (Issue #65).
+- [ ] ODD-08-14 — Implement atomic multi-step reservation orchestration: Appointment + ProfessionalPatientRelationship + AuditEvent with complete rollback guarantee (Issue #66).
+- [ ] ODD-08-15 — Technical audit and verification by subagent.
+- [ ] ODD-08-16 — Open chained Pull Requests for #64, #65, and #66 without merging.
 
 ## Acceptance criteria
 
@@ -55,10 +66,10 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 
 ## Progress and evidence
 
-- Commits generated:
-  - `73bd027`: `docs(booking): define durable reservation scenario matrix for PLN-08` (Closes #61)
-  - `cd195ad`: `feat(booking): define reservation data contracts and input validation for PLN-08` (Closes #62)
-  - `ba9a0b1`: `feat(booking): implement appointment persistence with historical snapshots for PLN-08` (Closes #63)
+- Commits and Pull Requests:
+  - `73bd027` / [PR #161](https://github.com/Team-Origen/origen/pull/161): `docs(booking): define durable reservation scenario matrix for PLN-08` (Closes #61)
+  - `cd195ad` / [PR #162](https://github.com/Team-Origen/origen/pull/162): `feat(booking): define reservation data contracts and input validation for PLN-08` (Closes #62)
+  - `ba9a0b1` / [PR #163](https://github.com/Team-Origen/origen/pull/163): `feat(booking): implement appointment persistence with historical snapshots for PLN-08` (Closes #63)
 - Subagent verification by `gentle-ai-verify` confirmed full compliance with all acceptance criteria.
 
 ## Next step
