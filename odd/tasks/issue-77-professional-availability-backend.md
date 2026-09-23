@@ -59,12 +59,12 @@ A canonical backend contract is required before Issue #78 can build the editor. 
 
 ## Checklist
 
-- [ ] ODD-77-01 — Add canonical owner-bound availability storage, scalar constraints, safe rollback behavior, and focused migration/capability tests.
+- [x] ODD-77-01 — Add canonical owner-bound availability storage, scalar constraints, safe rollback behavior, and focused migration/capability tests.
 - [x] ODD-77-02 — Implement own-configuration reads with defaults, revalidated identity, default-deny authorization, and cross-Professional isolation tests.
 - [x] ODD-77-03 — Implement complete replacement with accumulated validation, overlap rejection, touching-window normalization, atomic preservation on error, and focused public-seam tests.
 - [x] ODD-77-04 — Append the minimized success audit event in the configuration transaction and prove rollback plus absence of success audit on rejection.
 - [x] ODD-77-05 — Prevent agenda-interval changes that would misalign persisted availability and prove serialized state preservation.
-- [ ] ODD-77-06 — Run focused security/migration/context checks, compile with warnings as errors, run the full suite, and record the backend contract for Issue #78 without modifying frontend code.
+- [x] ODD-77-06 — Run focused security/migration/context checks, compile with warnings as errors, run the full suite, and record the backend contract for Issue #78 without modifying frontend code.
 
 ## Acceptance criteria
 
@@ -96,13 +96,13 @@ A canonical backend contract is required before Issue #78 can build the editor. 
 - [x] Strict TDD and the public test seam were explicitly confirmed.
 - [x] Overlap, touching-window, audit, and timezone contracts were resolved with the user.
 - [x] Interrupted work was reconciled without touching this tracker or unrelated work: restored `test/origen/consultation_types_postgres_security_test.exs` to `HEAD`, deleted the interrupted untracked migration and migration test, then recreated each changed path from a clean baseline.
-- [ ] ODD-77-01 migration/storage behavior is GREEN (`3 passed`), including backfill, scalar constraints, empty-week persistence, and guarded rollback. The item remains unchecked because the required PostgreSQL capability test cannot start without the repository's security database and role URLs.
+- [x] ODD-77-01 completed after WSL supplied the separated PostgreSQL roles and URLs: migration/storage behavior is GREEN (`3 passed`), including backfill, scalar constraints, empty-week persistence, and guarded rollback; the restricted-role capability suite is also GREEN (`2 passed`).
 - [x] ODD-77-02 completed after a second bounded correction: unauthorized resolution now returns a value from the locked Availability transaction instead of rolling it back, so canonical future/expiry revocation commits while no availability business effects run. Future-issued, future-activity, absolute-expiry, idle-expiry, revoked, inactive, wrong-role, and altered-principal behavior is GREEN. Concurrency-test resources now have failure-safe cleanup registered before creation.
 - [x] ODD-77-03 completed: withheld replacement behavior, observed the public replacement seam reject valid and invalid cases as unauthorized, restored the transactional replacement, fixed the test fixture to send all seven required weekdays, and observed focused normalization/empty-week, accumulated-validation, malformed-window, preservation, and complete availability checks pass.
 - [x] ODD-77-04 completed: withheld the audit append while preserving replacement, observed successful replacement produce no required event, restored only the in-transaction append, corrected an order-sensitive test assertion, and observed focused success, forced audit-failure rollback, event-schema, writer, and transaction checks pass.
 - [x] ODD-77-05 completed: withheld persisted-availability blocker discovery, observed an incompatible interval succeed incorrectly, restored blocker discovery, corrected the legacy interval-boundary fixture to use an empty schedule where 240 minutes is valid, and observed the complete authorization/consultation suite pass.
-- [ ] ODD-77-06 final verification ran after source-mutating formatting. Changed-file format, warnings-as-errors compilation, and all Issue #77 non-security focused tests pass. The item remains unchecked because repository-wide format detects pre-existing unrelated CRLF formatting drift, PostgreSQL security tests lack their required environment URLs, and the full suite has four reproducible unrelated bootstrap failures.
-- [x] The user explicitly deferred PostgreSQL capability verification to the WSL environment that hosts the Administrator bootstrap setup. No security credentials or replacement roles will be created or probed in the current Windows environment.
+- [x] ODD-77-06 completed in WSL after source-mutating formatting: warnings-as-errors compilation, migration tests (`3 passed`), the complete Issue #77 non-security focused suite (`85 passed`), restricted-role capability tests (`2 passed`), and the full suite (`427 passed, 8 excluded`) all pass. Repository-wide format still detects unrelated pre-existing CRLF drift; changed-file formatting remains GREEN.
+- [x] The deferred PostgreSQL capability verification was completed in the authorized WSL bootstrap environment without exposing credentials.
 
 ### Attempted RED/GREEN receipts
 
@@ -172,6 +172,15 @@ All commands used this verified Windows prefix:
 - Post-format Availability/Sessions/Authorization verification observed `32 passed`; complete Issue #77 non-security focused verification observed `85 passed`.
 - `mix compile --warnings-as-errors` succeeded with only the known non-fatal Phoenix LiveView Windows symlink warning.
 
+### WSL PostgreSQL verification
+
+- Recreated only `origen_test`, provisioned the repository's separated PostgreSQL roles, ran the security migration as the migrator, and reapplied permissions without exposing credentials.
+- `mix test test/origen/availability_migration_test.exs` observed `3 passed` using the PostgreSQL administrator test identity required by the migration harness.
+- The complete Issue #77 non-security focused command observed `85 passed`.
+- `mix test --only postgres_security test/origen/consultation_types_postgres_security_test.exs` observed `2 passed` with the restricted runtime, migrator, and verifier identities.
+- `MIX_ENV=test mix compile --warnings-as-errors` succeeded.
+- The first full-suite run observed `426/427 passed, 8 excluded`; one professional-configuration LiveView test received a transient HTTP 401 before exercising its scenario. The test passed in isolation (`1 passed, 36 excluded`), and the complete suite rerun with the original seed `277947` observed `427 passed, 8 excluded`. The failure was not reproducible and no Issue #77 behavior failed.
+
 ## Next step
 
-In the explicitly authorized WSL bootstrap environment, provide the existing separated PostgreSQL security-test URLs/roles and rerun the capability check without exposing credentials. Separately resolve the pre-existing repository-wide CRLF formatting drift and four bootstrap baseline failures outside Issue #77; only then rerun repository-wide format and the full suite before checking ODD-77-01 and ODD-77-06.
+Commit and publish this final verification evidence when explicitly authorized. Repository-wide CRLF formatting drift remains a separate pre-existing follow-up outside Issue #77.
