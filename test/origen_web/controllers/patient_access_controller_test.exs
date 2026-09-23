@@ -59,4 +59,18 @@ defmodule OrigenWeb.PatientAccessControllerTest do
       assert Phoenix.Flash.get(conn2.assigns.flash, :error) =~ "inválido o ha expirado"
     end
   end
+
+  describe "DELETE /patient/session" do
+    test "clears only the patient identity and redirects to access", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(patient_email: @valid_email, unrelated: "kept")
+        |> delete(~p"/patient/session")
+
+      assert redirected_to(conn) == ~p"/access"
+      assert get_session(conn, :patient_email) == nil
+      assert get_session(conn, :unrelated) == "kept"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Sesión de paciente cerrada"
+    end
+  end
 end

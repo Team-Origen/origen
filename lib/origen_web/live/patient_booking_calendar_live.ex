@@ -6,29 +6,39 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
   @impl true
   def mount(_params, session, socket) do
     email = session["patient_email"]
-    profile = if email, do: resolve_profile(email)
-    ready? = profile != nil and Patients.ready_for_booking?(profile)
-    {:ok, profs} = Calendar.list_professionals()
-    default_prof = hd(profs)
-    types = fetch_types(default_prof.id)
-    default_type = hd(types)
 
-    {:ok,
-     assign(socket,
-       email: email,
-       profile: profile,
-       ready?: ready?,
-       professionals: profs,
-       prof_id: default_prof.id,
-       consultation_types: types,
-       selected_type_id: default_type.id,
-       selected_type: default_type,
-       date: next_weekday(Date.utc_today()),
-       selected_slot: nil,
-       confirmed?: false,
-       booking_result: nil
-     )
-     |> load_schedule()}
+    if is_nil(email) do
+      {:ok, push_navigate(socket, to: ~p"/access")}
+    else
+      profile = resolve_profile(email)
+
+      if is_nil(profile) do
+        {:ok, push_navigate(socket, to: ~p"/access")}
+      else
+        ready? = Patients.ready_for_booking?(profile)
+        {:ok, profs} = Calendar.list_professionals()
+        default_prof = hd(profs)
+        types = fetch_types(default_prof.id)
+        default_type = hd(types)
+
+        {:ok,
+         assign(socket,
+           email: email,
+           profile: profile,
+           ready?: ready?,
+           professionals: profs,
+           prof_id: default_prof.id,
+           consultation_types: types,
+           selected_type_id: default_type.id,
+           selected_type: default_type,
+           date: next_weekday(Date.utc_today()),
+           selected_slot: nil,
+           confirmed?: false,
+           booking_result: nil
+         )
+         |> load_schedule()}
+      end
+    end
   end
 
   @impl true
@@ -43,7 +53,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        selected_type_id: type.id,
        selected_type: type,
        selected_slot: nil,
-       confirmed?: false
+       confirmed?: false,
+       booking_result: nil
      )
      |> load_schedule()}
   end
@@ -57,7 +68,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        selected_type_id: id,
        selected_type: type,
        selected_slot: nil,
-       confirmed?: false
+       confirmed?: false,
+       booking_result: nil
      )
      |> load_schedule()}
   end
@@ -66,34 +78,49 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     case Date.from_iso8601(str) do
       {:ok, d} ->
         {:noreply,
-         assign(socket, date: d, selected_slot: nil, confirmed?: false) |> load_schedule()}
+         assign(socket,
+           date: d,
+           selected_slot: nil,
+           confirmed?: false,
+           booking_result: nil
+         )
+         |> load_schedule()}
 
       _ ->
         {:noreply, socket}
     end
   end
 
-  def handle_event("nav_date", %{"step" => s}, socket),
-    do:
-      {:noreply,
-       assign(socket,
-         date: Date.add(socket.assigns.date, String.to_integer(s)),
-         selected_slot: nil,
-         confirmed?: false
-       )
-       |> load_schedule()}
+  def handle_event("nav_date", %{"step" => s}, socket) do
+    {:noreply,
+     assign(socket,
+       date: Date.add(socket.assigns.date, String.to_integer(s)),
+       selected_slot: nil,
+       confirmed?: false,
+       booking_result: nil
+     )
+     |> load_schedule()}
+  end
 
-  def handle_event("select_slot", %{"slot_id" => id}, socket),
-    do:
-      {:noreply,
-       assign(
-         socket,
-         :selected_slot,
-         Enum.find(socket.assigns.schedule[:slots] || [], &(&1.id == id))
-       )}
+  def handle_event("select_slot", %{"slot_id" => id}, socket) do
+    slot = Enum.find(socket.assigns.schedule[:slots] || [], &(&1.id == id))
 
-  def handle_event("clear_slot", _params, socket),
-    do: {:noreply, assign(socket, selected_slot: nil)}
+    {:noreply,
+     assign(socket,
+       selected_slot: slot,
+       confirmed?: false,
+       booking_result: nil
+     )}
+  end
+
+  def handle_event("clear_slot", _params, socket) do
+    {:noreply,
+     assign(socket,
+       selected_slot: nil,
+       confirmed?: false,
+       booking_result: nil
+     )}
+  end
 
   def handle_event("confirm_booking", _params, socket) do
     if socket.assigns.ready? and socket.assigns.selected_slot do
@@ -118,7 +145,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            put_flash(
              socket,
              :error,
-             "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
+             "Debés completar tu perfil y verificar tu teléfono antes de reservar."
            )}
 
         {:error, reason} ->
@@ -130,7 +157,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        put_flash(
          socket,
          :error,
-         "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
+         "Debés completar tu perfil y verificar tu teléfono antes de reservar."
        )}
     end
   end
@@ -170,20 +197,20 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     ]
   end
 
-  defp resolve_profile(email),
-    do:
-      (case Patients.get_or_create_profile(email) do
-         {:ok, p} -> p
-         _ -> nil
-       end)
+  defp resolve_profile(email) do
+    case Patients.get_or_create_profile(email) do
+      {:ok, p} -> p
+      _ -> nil
+    end
+  end
 
-  defp next_weekday(d),
-    do:
-      (case Date.day_of_week(d) do
-         6 -> Date.add(d, 2)
-         7 -> Date.add(d, 1)
-         _ -> d
-       end)
+  defp next_weekday(d) do
+    case Date.day_of_week(d) do
+      6 -> Date.add(d, 2)
+      7 -> Date.add(d, 1)
+      _ -> d
+    end
+  end
 
   @impl true
   def render(assigns) do
@@ -202,7 +229,16 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
           <%= if @profile && @profile.persona do %>
             <div class="text-right">
               <span class="text-xs text-stone-500 block">Paciente</span>
-              <span class="text-sm font-medium text-stone-800">{@profile.persona.first_name} {@profile.persona.last_name}</span>
+              <span class="text-sm font-medium text-stone-800 block">
+                {@profile.persona.first_name} {@profile.persona.last_name}
+              </span>
+              <.link
+                href={~p"/patient/session"}
+                method="delete"
+                class="text-xs text-[#0A3847] underline hover:text-[#35545A]"
+              >
+                Cambiar paciente
+              </.link>
             </div>
           <% end %>
         </div>
@@ -239,7 +275,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">Profesional</label>
+              <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">
+                Profesional
+              </label>
+
               <form id="professional-form" phx-change="change_prof">
                 <select
                   name="prof_id"
@@ -255,8 +294,11 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">Tipo de Consulta</label>
-              <form id="type-form" phx-change="change_type">
+              <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">
+                Tipo de Consulta
+              </label>
+
+              <form id={"type-form-#{@prof_id}"} phx-change="change_type">
                 <select
                   name="type_id"
                   class="w-full rounded-lg border-stone-300 bg-white text-stone-900 text-sm font-medium focus:ring-[#0A3847] focus:border-[#0A3847]"
@@ -275,7 +317,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">Fecha</label>
+              <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">
+                Fecha
+              </label>
+
               <div class="flex items-center gap-2">
                 <button
                   phx-click="nav_date"
@@ -309,26 +354,24 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         </div>
 
         <%= cond do %>
-          <% @confirmed? and @selected_slot -> %>
+          <% @confirmed? and @booking_result != nil -> %>
             <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-8 text-center space-y-4">
               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                 <.icon name="hero-check" class="w-6 h-6 stroke-[2.5]" />
               </div>
 
-              <h2 class="text-xl font-bold text-stone-900">Â¡Turno Reservado con Ã‰xito!</h2>
+              <h2 class="text-xl font-bold text-stone-900">¡Turno Reservado con Éxito!</h2>
 
               <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-emerald-900 max-w-md mx-auto space-y-1.5 text-left">
                 <p>
-                  <strong>Turno ID:</strong>
-                  #{get_in(@booking_result || %{}, [:appointment_id]) || "â€”"}
+                  <strong>Turno ID:</strong> #{@booking_result.appointment_id}
                 </p>
 
                 <p><strong>Profesional:</strong> {@schedule.professional_name}</p>
 
                 <p>
-                  <strong>Tipo de Consulta:</strong> {get_in(@booking_result || %{}, [
-                    :consultation_type_name
-                  ]) || get_in(@selected_type, [:name])}
+                  <strong>Tipo de Consulta:</strong> {@booking_result.consultation_type_name ||
+                    @selected_type.name}
                 </p>
 
                 <p>
@@ -336,22 +379,25 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 </p>
 
                 <p>
-                  <strong>Importe:</strong>
-                  ${get_in(@booking_result || %{}, [:exact_price_ars]) ||
-                    @selected_type.exact_price_ars}
+                  <strong>Importe:</strong> ${@booking_result.exact_price_ars}
                 </p>
 
                 <p>
                   <strong>Estado inicial (RF-10):</strong>
                   <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-emerald-200 text-emerald-800">
-                    {String.capitalize(
-                      to_string(get_in(@booking_result || %{}, [:status]) || "reserved")
-                    )}
+                    {String.capitalize(to_string(@booking_result.status))}
                   </span>
                 </p>
               </div>
 
-              <div class="pt-4">
+              <div class="pt-4 flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  phx-click="clear_slot"
+                  class="px-5 py-2.5 rounded-lg border border-[#0A3847] text-[#0A3847] text-sm font-semibold hover:bg-[#0A3847]/5 inline-flex"
+                >
+                  Reservar otro turno
+                </button>
+
                 <.link
                   navigate={~p"/patient/profile/complete"}
                   class="px-5 py-2.5 rounded-lg bg-[#0A3847] text-white text-sm font-semibold hover:bg-[#35545A] inline-flex"
@@ -368,21 +414,25 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 <button
                   phx-click="clear_slot"
                   class="text-xs text-stone-500 hover:text-stone-800 underline"
-                >Cambiar horario</button>
+                >
+                  Cambiar horario
+                </button>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-stone-50 rounded-lg p-4 text-sm">
                 <div>
                   <span class="text-xs text-stone-500 block">Profesional y Consulta</span>
-                  <span class="font-semibold text-stone-800">{@schedule.professional_name} — {get_in(
-                    @selected_type,
-                    [:name]
-                  ) || "Consulta general"}</span>
+                  <span class="font-semibold text-stone-800">
+                    {@schedule.professional_name} — {get_in(@selected_type, [:name]) ||
+                      "Consulta general"}
+                  </span>
                 </div>
 
                 <div>
                   <span class="text-xs text-stone-500 block">Fecha y Horario</span>
-                  <span class="font-semibold text-stone-800">{Date.to_iso8601(@date)} de {@selected_slot.start_formatted} a {@selected_slot.end_formatted} hs</span>
+                  <span class="font-semibold text-stone-800">
+                    {Date.to_iso8601(@date)} de {@selected_slot.start_formatted} a {@selected_slot.end_formatted} hs
+                  </span>
                 </div>
               </div>
 
@@ -404,7 +454,12 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 <button
                   phx-click="confirm_booking"
                   disabled={not @ready?}
-                  class={"w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm " <> if @ready?, do: "bg-[#0A3847] hover:bg-[#35545A] text-white", else: "bg-stone-300 text-stone-500 cursor-not-allowed"}
+                  class={
+                    "w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm " <>
+                      if @ready?,
+                        do: "bg-[#0A3847] hover:bg-[#35545A] text-white",
+                        else: "bg-stone-300 text-stone-500 cursor-not-allowed"
+                  }
                 >
                   {if @ready?, do: "Confirmar Turno", else: "Verificación de Teléfono Requerida"}
                 </button>
@@ -412,7 +467,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 <button
                   phx-click="clear_slot"
                   class="p-2.5 border border-stone-300 rounded-lg text-sm text-stone-700 hover:bg-stone-50"
-                >Cancelar</button>
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           <% true -> %>
@@ -438,7 +495,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                         phx-value-slot_id={slot.id}
                         class="p-3 border border-stone-200 rounded-lg hover:border-[#0A3847] hover:bg-[#DDE6DB]/20 text-center transition-all group focus:outline-none focus:ring-2 focus:ring-[#0A3847]"
                       >
-                        <span class="block text-base font-bold text-[#0A3847] group-hover:scale-105 transition-transform">{slot.start_formatted}</span>
+                        <span class="block text-base font-bold text-[#0A3847] group-hover:scale-105 transition-transform">
+                          {slot.start_formatted}
+                        </span>
                         <span class="block text-xs text-stone-500">hasta {slot.end_formatted}</span>
                       </button>
                     <% end %>

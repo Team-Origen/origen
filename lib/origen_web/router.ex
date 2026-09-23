@@ -39,6 +39,7 @@ defmodule OrigenWeb.Router do
     live "/admin/internal", AdminInternalLive, :index
     live "/access", PatientAccessLive, :index
     get "/access/verify", PatientAccessController, :verify
+    delete "/patient/session", PatientAccessController, :delete
     live "/patient/profile/complete", PatientProfileCompletionLive, :index
     live "/patient/phone/verify", PatientPhoneVerificationLive, :index
     live "/patient/calendar", PatientBookingCalendarLive, :index
