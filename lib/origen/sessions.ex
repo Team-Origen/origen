@@ -132,64 +132,45 @@ defmodule Origen.Sessions do
     WHERE s.token_digest = $1
     """
 
-    case Repo.query(query, [token_digest]) do
-      {:ok,
-       %{
-         rows: [
-           [
-             session_id,
-             account_id,
-             issued_at,
-             last_activity_at,
-             idle_timeout,
-             max_duration,
-             revoked_at,
-             role,
-             "active"
-           ]
-         ]
-       }} ->
-        elapsed_idle = DateTime.diff(now, last_activity_at, :second)
-        elapsed_total = DateTime.diff(now, issued_at, :second)
-
-        cond do
-          not is_nil(revoked_at) ->
-            {:error, :unauthenticated}
-
-          # Clock skew / negative elapsed time fails closed
-          elapsed_total < 0 or elapsed_idle < 0 ->
-            revoke_by_digest(token_digest, now)
-            {:error, :unauthenticated}
-
-          # Check maximum absolute duration
-          elapsed_total > max_duration ->
-            revoke_by_digest(token_digest, now)
-            {:error, :unauthenticated}
-
-          # Check inactivity (idle timeout)
-          elapsed_idle > idle_timeout ->
-            revoke_by_digest(token_digest, now)
-            {:error, :unauthenticated}
-
-          true ->
-            {:ok,
-             %{
-               session_id: session_id,
-               account_id: account_id,
-               role: String.to_atom(role),
-               issued_at: issued_at,
-               last_activity_at: last_activity_at,
-               idle_timeout_seconds: idle_timeout,
-               max_duration_seconds: max_duration
-             }}
-        end
-
-      _ ->
-        {:error, :unauthenticated}
+    with {:ok, %{rows: [row]}} <- Repo.query(query, [token_digest]) do
+      validate_persisted_session(row, now, fn -> revoke_by_digest(token_digest, now) end)
+    else
+      _ -> {:error, :unauthenticated}
     end
   end
 
   def fetch_session(_invalid, _opts), do: {:error, :unauthenticated}
+
+  @doc """
+  Revalidates a server-created session principal from persistence using the same temporal semantics
+  as token validation. Intended for authenticated backend contexts that receive no raw token.
+  """
+  @spec revalidate_principal(integer(), integer(), keyword()) ::
+          {:ok, session_data()} | {:error, :unauthenticated}
+  def revalidate_principal(session_id, account_id, opts \\ [])
+
+  def revalidate_principal(session_id, account_id, opts)
+      when is_integer(session_id) and is_integer(account_id) do
+    now = Keyword.get(opts, :now, DateTime.utc_now())
+
+    query = """
+    SELECT s.id, s.account_id, s.issued_at, s.last_activity_at,
+           s.idle_timeout_seconds, s.max_duration_seconds, s.revoked_at,
+           a.role, a.state
+    FROM internal_account_sessions s
+    JOIN internal_accounts a ON a.id = s.account_id
+    WHERE s.id = $1 AND s.account_id = $2
+    FOR SHARE OF s, a
+    """
+
+    with {:ok, %{rows: [row]}} <- Repo.query(query, [session_id, account_id]) do
+      validate_persisted_session(row, now, fn -> revoke_by_id(session_id, now) end)
+    else
+      _ -> {:error, :unauthenticated}
+    end
+  end
+
+  def revalidate_principal(_session_id, _account_id, _opts), do: {:error, :unauthenticated}
 
   @doc """
   Updates `last_activity_at` for an active session to prevent idle timeout.
@@ -267,6 +248,52 @@ defmodule Origen.Sessions do
     end
   end
 
+  defp validate_persisted_session(
+         [
+           session_id,
+           account_id,
+           issued_at,
+           last_activity_at,
+           idle_timeout,
+           max_duration,
+           revoked_at,
+           role,
+           "active"
+         ],
+         now,
+         revoke
+       ) do
+    elapsed_idle = DateTime.diff(now, last_activity_at, :second)
+    elapsed_total = DateTime.diff(now, issued_at, :second)
+
+    cond do
+      not is_nil(revoked_at) ->
+        {:error, :unauthenticated}
+
+      elapsed_total < 0 or elapsed_idle < 0 ->
+        revoke.()
+        {:error, :unauthenticated}
+
+      elapsed_total > max_duration or elapsed_idle > idle_timeout ->
+        revoke.()
+        {:error, :unauthenticated}
+
+      true ->
+        {:ok,
+         %{
+           session_id: session_id,
+           account_id: account_id,
+           role: String.to_atom(role),
+           issued_at: issued_at,
+           last_activity_at: last_activity_at,
+           idle_timeout_seconds: idle_timeout,
+           max_duration_seconds: max_duration
+         }}
+    end
+  end
+
+  defp validate_persisted_session(_row, _now, _revoke), do: {:error, :unauthenticated}
+
   defp revoke_by_digest(token_digest, now) do
     Repo.query(
       """
@@ -275,6 +302,17 @@ defmodule Origen.Sessions do
       WHERE token_digest = $2 AND revoked_at IS NULL
       """,
       [now, token_digest]
+    )
+  end
+
+  defp revoke_by_id(session_id, now) do
+    Repo.query(
+      """
+      UPDATE internal_account_sessions
+      SET revoked_at = $1, updated_at = clock_timestamp()
+      WHERE id = $2 AND revoked_at IS NULL
+      """,
+      [now, session_id]
     )
   end
 end
