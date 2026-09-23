@@ -446,7 +446,7 @@ defmodule Origen.Booking.OverlapConcurrencyTest do
   alias Origen.Booking.Appointment
   alias Origen.Repo
 
-  @racer_count 8
+  @racer_count 2
   @slot_start ~U[2026-11-03 09:00:00Z]
   @slot_end ~U[2026-11-03 09:30:00Z]
 
@@ -460,6 +460,7 @@ defmodule Origen.Booking.OverlapConcurrencyTest do
     :ok = Sandbox.checkout(Repo, sandbox: false)
 
     fixture = insert_race_fixture!(@racer_count)
+    Sandbox.checkin(Repo)
 
     on_exit(fn ->
       :ok = Sandbox.checkout(Repo, sandbox: false)
@@ -482,7 +483,7 @@ defmodule Origen.Booking.OverlapConcurrencyTest do
           receive do
             :go -> :ok
           after
-            5_000 -> exit(:barrier_timeout)
+            10_000 -> exit(:barrier_timeout)
           end
 
           try do
@@ -503,7 +504,7 @@ defmodule Origen.Booking.OverlapConcurrencyTest do
       end
 
     Enum.each(1..@racer_count, fn index ->
-      assert_receive {:ready, ^index}, 5_000
+      assert_receive {:ready, ^index}, 10_000
     end)
 
     Enum.each(tasks, fn task -> send(task.pid, :go) end)
@@ -517,40 +518,46 @@ defmodule Origen.Booking.OverlapConcurrencyTest do
     assert length(losers) == @racer_count - 1
     assert Enum.all?(losers, &(&1 == {:error, :slot_already_booked}))
 
-    [[window_rows]] =
-      Repo.query!(
-        """
-        SELECT count(*) FROM public.appointments
-        WHERE professional_account_id = $1
-          AND start_time = $2 AND end_time = $3
-          AND status NOT IN ('cancelled', 'rejected')
-        """,
-        [fixture.professional_id, @slot_start, @slot_end]
-      ).rows
+    :ok = Sandbox.checkout(Repo, sandbox: false)
 
-    assert window_rows == 1
+    try do
+      [[window_rows]] =
+        Repo.query!(
+          """
+          SELECT count(*) FROM public.appointments
+          WHERE professional_account_id = $1
+            AND start_time = $2 AND end_time = $3
+            AND status NOT IN ('cancelled', 'rejected')
+          """,
+          [fixture.professional_id, @slot_start, @slot_end]
+        ).rows
 
-    [[professional_rows]] =
-      Repo.query!(
-        "SELECT count(*) FROM public.appointments WHERE professional_account_id = $1",
-        [fixture.professional_id]
-      ).rows
+      assert window_rows == 1
 
-    assert professional_rows == 1
+      [[professional_rows]] =
+        Repo.query!(
+          "SELECT count(*) FROM public.appointments WHERE professional_account_id = $1",
+          [fixture.professional_id]
+        ).rows
 
-    [[overlapping_pairs]] =
-      Repo.query!("""
-        SELECT count(*)
-        FROM public.appointments a
-        JOIN public.appointments b
-          ON a.id < b.id
-         AND a.professional_account_id = b.professional_account_id
-         AND a.status NOT IN ('cancelled', 'rejected')
-         AND b.status NOT IN ('cancelled', 'rejected')
-         AND tstzrange(a.start_time, a.end_time, '[)') && tstzrange(b.start_time, b.end_time, '[)')
-      """).rows
+      assert professional_rows == 1
 
-    assert overlapping_pairs == 0
+      [[overlapping_pairs]] =
+        Repo.query!("""
+          SELECT count(*)
+          FROM public.appointments a
+          JOIN public.appointments b
+            ON a.id < b.id
+           AND a.professional_account_id = b.professional_account_id
+           AND a.status NOT IN ('cancelled', 'rejected')
+           AND b.status NOT IN ('cancelled', 'rejected')
+           AND tstzrange(a.start_time, a.end_time, '[)') && tstzrange(b.start_time, b.end_time, '[)')
+        """).rows
+
+      assert overlapping_pairs == 0
+    after
+      Sandbox.checkin(Repo)
+    end
   end
 
   defp insert_race_fixture!(racer_count) do

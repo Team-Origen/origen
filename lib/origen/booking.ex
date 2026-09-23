@@ -76,77 +76,97 @@ defmodule Origen.Booking do
   @spec persist_appointment(map(), map() | nil) ::
           {:ok, Appointment.t()} | {:error, term()}
   def persist_appointment(attrs, snapshot_override \\ nil) do
-    Repo.transaction(fn ->
-      patient_id =
-        attrs[:patient_profile_id] || attrs["patient_profile_id"] || attrs[:patient_id] ||
-          attrs["patient_id"]
+    try do
+      Repo.transaction(fn ->
+        patient_id =
+          attrs[:patient_profile_id] || attrs["patient_profile_id"] || attrs[:patient_id] ||
+            attrs["patient_id"]
 
-      professional_id =
-        attrs[:professional_account_id] || attrs["professional_account_id"] ||
-          attrs[:professional_id] || attrs["professional_id"]
+        professional_id =
+          attrs[:professional_account_id] || attrs["professional_account_id"] ||
+            attrs[:professional_id] || attrs["professional_id"]
 
-      consultation_type_id = attrs[:consultation_type_id] || attrs["consultation_type_id"]
-      start_time = attrs[:start_time] || attrs["start_time"]
-      status = attrs[:status] || attrs["status"] || "reserved"
+        consultation_type_id = attrs[:consultation_type_id] || attrs["consultation_type_id"]
+        start_time = attrs[:start_time] || attrs["start_time"]
+        status = attrs[:status] || attrs["status"] || "reserved"
 
-      snapshot =
-        case snapshot_override do
-          %{name: _, duration_minutes: _, exact_price_ars: _} = s ->
-            {:ok, s}
+        snapshot =
+          case snapshot_override do
+            %{name: _, duration_minutes: _, exact_price_ars: _} = s ->
+              {:ok, s}
 
-          _ ->
-            resolve_consultation_type_snapshot(consultation_type_id, professional_id)
-        end
-
-      case snapshot do
-        {:ok, %{name: name, duration_minutes: duration, exact_price_ars: price}} ->
-          case start_time do
-            %DateTime{} ->
-              end_time = DateTime.add(start_time, duration, :minute)
-
-              appointment_params = %{
-                patient_profile_id: patient_id,
-                professional_account_id: professional_id,
-                consultation_type_id: consultation_type_id,
-                start_time: start_time,
-                end_time: end_time,
-                status: to_string(status),
-                snapshot_consultation_type_name: name,
-                snapshot_duration_minutes: duration,
-                snapshot_exact_price_ars: price
-              }
-
-              case Overlap.validate_no_overlap(appointment_params) do
-                {:ok, :no_conflict} ->
-                  %Appointment{}
-                  |> Appointment.changeset(appointment_params)
-                  |> Repo.insert()
-                  |> case do
-                    {:ok, appointment} ->
-                      appointment
-
-                    {:error, changeset} ->
-                      rollback_exclusion_or_validation(changeset)
-                  end
-
-                {:error, :professional_schedule_conflict} ->
-                  Repo.rollback(:slot_already_booked)
-
-                {:error, :patient_schedule_conflict} ->
-                  Repo.rollback(:patient_schedule_conflict)
-
-                {:error, reason} ->
-                  Repo.rollback(reason)
-              end
-
-            _invalid_start_time ->
-              Repo.rollback({:validation_error, :invalid_or_missing_start_time})
+            _ ->
+              resolve_consultation_type_snapshot(consultation_type_id, professional_id)
           end
 
-        {:error, reason} ->
-          Repo.rollback(reason)
-      end
-    end)
+        case snapshot do
+          {:ok, %{name: name, duration_minutes: duration, exact_price_ars: price}} ->
+            case start_time do
+              %DateTime{} ->
+                end_time = DateTime.add(start_time, duration, :minute)
+
+                appointment_params = %{
+                  patient_profile_id: patient_id,
+                  professional_account_id: professional_id,
+                  consultation_type_id: consultation_type_id,
+                  start_time: start_time,
+                  end_time: end_time,
+                  status: to_string(status),
+                  snapshot_consultation_type_name: name,
+                  snapshot_duration_minutes: duration,
+                  snapshot_exact_price_ars: price
+                }
+
+                case Overlap.validate_no_overlap(appointment_params) do
+                  {:ok, :no_conflict} ->
+                    %Appointment{}
+                    |> Appointment.changeset(appointment_params)
+                    |> Repo.insert()
+                    |> case do
+                      {:ok, appointment} ->
+                        appointment
+
+                      {:error, changeset} ->
+                        rollback_exclusion_or_validation(changeset)
+                    end
+
+                  {:error, :professional_schedule_conflict} ->
+                    Repo.rollback(:slot_already_booked)
+
+                  {:error, :patient_schedule_conflict} ->
+                    Repo.rollback(:patient_schedule_conflict)
+
+                  {:error, reason} ->
+                    Repo.rollback(reason)
+                end
+
+              _invalid_start_time ->
+                Repo.rollback({:validation_error, :invalid_or_missing_start_time})
+            end
+
+          {:error, reason} ->
+            Repo.rollback(reason)
+        end
+      end)
+    rescue
+      e in Postgrex.Error ->
+        case e.postgres do
+          %{pg_code: "40P01"} ->
+            {:error, :slot_already_booked}
+
+          %{pg_code: "40001"} ->
+            {:error, :slot_already_booked}
+
+          %{pg_code: "23P01", constraint: "appointments_no_patient_overlap"} ->
+            {:error, :patient_schedule_conflict}
+
+          %{pg_code: "23P01"} ->
+            {:error, :slot_already_booked}
+
+          _ ->
+            reraise e, __STACKTRACE__
+        end
+    end
   end
 
   @doc """
