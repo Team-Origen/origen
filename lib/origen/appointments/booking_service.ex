@@ -128,6 +128,13 @@ defmodule Origen.Appointments.BookingService do
 
   defp parse_professional_id(id) when is_integer(id), do: {:ok, id}
 
+  defp parse_professional_id("PRO-DEMO-" <> _rest) do
+    case Origen.Repo.query("SELECT id FROM internal_accounts WHERE role = 'professional' LIMIT 1") do
+      {:ok, %{rows: [[acc_id]]}} -> {:ok, acc_id}
+      _ -> {:ok, 1}
+    end
+  end
+
   defp parse_professional_id(id) when is_binary(id) do
     case Integer.parse(id) do
       {num, ""} -> {:ok, num}
