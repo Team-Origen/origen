@@ -141,7 +141,11 @@ results = [r1, r2]
 [{:error, :slot_already_booked}] = losers
 
 IO.puts("   ✔ Concurrencia resuelta deterministamente:")
-IO.puts("     - Ganador: Turno ##{winner.appointment_id} para Paciente ID: #{winner.appointment.patient_profile_id}")
+
+IO.puts(
+  "     - Ganador: Turno ##{winner.appointment_id} para Paciente ID: #{winner.appointment.patient_profile_id}"
+)
+
 IO.puts("     - Perdedor: Rechazado limpiamente con :slot_already_booked")
 
 slot_count =
@@ -154,7 +158,9 @@ slot_count =
     )
   )
 
-IO.puts("   ✔ Verificación forense en BD: Exactamente #{slot_count} turno registrado en el slot (OK)")
+IO.puts(
+  "   ✔ Verificación forense en BD: Exactamente #{slot_count} turno registrado en el slot (OK)"
+)
 
 # ==============================================================================
 # ESCENARIO 2: PERFILES INCOMPLETOS, TELÉFONO NO VERIFICADO Y COLISIÓN
@@ -198,7 +204,9 @@ dni_unverified = "49333#{suffix |> rem(1000)}"
 
 case BookingService.reserve(profile_unverified, params_base) do
   {:error, :patient_not_ready_for_booking} ->
-    IO.puts("   ✔ Perfil 'completed' sin teléfono verificado: Rechazado con :patient_not_ready_for_booking")
+    IO.puts(
+      "   ✔ Perfil 'completed' sin teléfono verificado: Rechazado con :patient_not_ready_for_booking"
+    )
 
   other ->
     raise "Falla: teléfono no verificado retornó #{inspect(other)}"
@@ -289,7 +297,9 @@ orphan_rels =
   )
 
 if orphan_appts == [] and orphan_rels == [] do
-  IO.puts("   ✔ Integridad referencial forense: 0 turnos huérfanos y 0 relaciones huérfanas en el sistema.")
+  IO.puts(
+    "   ✔ Integridad referencial forense: 0 turnos huérfanos y 0 relaciones huérfanas en el sistema."
+  )
 else
   raise "Registros huérfanos detectados en BD."
 end
@@ -306,7 +316,9 @@ error_dump = inspect(slot_booked_result)
 if slot_booked_result == {:error, :slot_already_booked} and
      not String.contains?(error_dump, p1.email) and
      not String.contains?(error_dump, "49111") do
-  IO.puts("   ✔ Mensaje de conflicto opaco: No expone email, nombre ni documento del titular del turno.")
+  IO.puts(
+    "   ✔ Mensaje de conflicto opaco: No expone email, nombre ni documento del titular del turno."
+  )
 else
   raise "Fuga de privacidad en mensaje de solapamiento: #{error_dump}"
 end
@@ -321,7 +333,9 @@ idor_params = %{
 {:ok, agenda_own} = Agenda.get_professional_agenda(prof_principal, idor_params)
 
 if agenda_own.professional_account_id == prof_account_id do
-  IO.puts("   ✔ Inmunidad contra IDOR: Parámetros del cliente ignorados; agenda filtrada por sesión revalidada.")
+  IO.puts(
+    "   ✔ Inmunidad contra IDOR: Parámetros del cliente ignorados; agenda filtrada por sesión revalidada."
+  )
 else
   raise "Vulnerabilidad IDOR detectada en get_professional_agenda."
 end
