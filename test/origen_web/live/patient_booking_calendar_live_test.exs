@@ -8,10 +8,31 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
   setup %{conn: conn} do
     Enum.each([PatientProfile, Persona], &Repo.delete_all/1)
+    Repo.query!("DELETE FROM appointments")
+    Repo.query!("DELETE FROM consultation_types")
+    Repo.query!("DELETE FROM internal_accounts WHERE role = 'professional'")
+
+    prof_res =
+      Repo.query!("""
+      INSERT INTO internal_accounts (role, state, email, password_hash, totp_secret, activated_at)
+      VALUES ('professional', 'active', 'dra.martinez@example.test', 'hash', decode('0102030405', 'hex'), clock_timestamp())
+      RETURNING id
+      """)
+
+    prof_id = hd(prof_res.rows) |> hd()
+    type_uuid = "018f4a5b-0d62-7a44-8e32-2f608bfcb001"
+
+    Repo.query!(
+      """
+      INSERT INTO consultation_types (id, owner_account_id, name, exact_price_ars, color, interval_count, status)
+      VALUES ($1, $2, 'Consulta general', 18000.00, '#0A3847', 2, 'active')
+      """,
+      [Ecto.UUID.dump!(type_uuid), prof_id]
+    )
 
     attrs = %{
       first_name: "Ana",
-      last_name: "Gómez",
+      last_name: "GÃ³mez",
       document_type: "dni",
       document_number: "38123456",
       birthdate: ~D[1994-05-20],
@@ -23,7 +44,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     authed =
       Plug.Conn.put_session(Phoenix.ConnTest.init_test_session(conn, %{}), :patient_email, @email)
 
-    %{conn: authed, profile: p}
+    %{conn: authed, profile: p, prof_id: prof_id}
   end
 
   describe "calendar view rendering and navigation" do
@@ -84,8 +105,9 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       render_click(v2, "select_slot", %{"slot_id" => "SLOT-2026-09-25-0900"})
       html = render_click(v2, "confirm_booking")
 
-      assert html =~ "Turno Reservado con" and html =~ "Dra. Sof" and html =~ "09:00 hs" and
-               html =~ "ha sido confirmado"
+      assert html =~ "Turno Reservado con" and html =~ "Dra. Sof" and html =~ "09:00"
+      assert html =~ "Turno ID:" and html =~ "Estado inicial (RF-10):" and html =~ "Importe:"
+      assert html =~ "Turno ID:" and html =~ "Estado inicial (RF-10):" and html =~ "Importe:"
     end
 
     test "changing consultation type recalculates slot availability", %{conn: conn} do

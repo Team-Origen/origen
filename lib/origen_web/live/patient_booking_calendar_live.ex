@@ -25,7 +25,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        selected_type: default_type,
        date: next_weekday(Date.utc_today()),
        selected_slot: nil,
-       confirmed?: false
+       confirmed?: false,
+       booking_result: nil
      )
      |> load_schedule()}
   end
@@ -96,13 +97,40 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   def handle_event("confirm_booking", _params, socket) do
     if socket.assigns.ready? and socket.assigns.selected_slot do
-      {:noreply, assign(socket, confirmed?: true)}
+      params = %{
+        professional_id: socket.assigns.prof_id,
+        consultation_type_id: socket.assigns.selected_type.id,
+        date: socket.assigns.date,
+        slot: socket.assigns.selected_slot,
+        snapshot_override: %{
+          name: socket.assigns.selected_type.name,
+          duration_minutes: socket.assigns.selected_type.interval_count * 15,
+          exact_price_ars: socket.assigns.selected_type.exact_price_ars
+        }
+      }
+
+      case Origen.Appointments.BookingService.reserve(socket.assigns.profile, params) do
+        {:ok, result} ->
+          {:noreply, assign(socket, confirmed?: true, booking_result: result)}
+
+        {:error, :patient_not_ready_for_booking} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
+           )}
+
+        {:error, reason} ->
+          {:noreply,
+           put_flash(socket, :error, "No se pudo realizar la reserva: #{inspect(reason)}")}
+      end
     else
       {:noreply,
        put_flash(
          socket,
          :error,
-         "Debés completar tu perfil y verificar tu teléfono antes de reservar."
+         "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
        )}
     end
   end
@@ -283,19 +311,45 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         <%= cond do %>
           <% @confirmed? and @selected_slot -> %>
             <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-8 text-center space-y-4">
-              <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto font-bold text-xl">
-                ✓
+              <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                <.icon name="hero-check" class="w-6 h-6 stroke-[2.5]" />
               </div>
 
-              <h2 class="text-xl font-bold text-stone-900">¡Turno Reservado con Éxito!</h2>
+              <h2 class="text-xl font-bold text-stone-900">Â¡Turno Reservado con Ã‰xito!</h2>
 
-              <p class="text-sm text-stone-600 max-w-md mx-auto">
-                Tu turno con <strong>{@schedule.professional_name}</strong>
-                ({get_in(@selected_type, [:name]) || "Consulta general"}) para el día
-                <strong>{Date.to_iso8601(@date)}</strong>
-                a las <strong>{@selected_slot.start_formatted} hs</strong>
-                ha sido confirmado.
-              </p>
+              <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-emerald-900 max-w-md mx-auto space-y-1.5 text-left">
+                <p>
+                  <strong>Turno ID:</strong>
+                  #{get_in(@booking_result || %{}, [:appointment_id]) || "â€”"}
+                </p>
+
+                <p><strong>Profesional:</strong> {@schedule.professional_name}</p>
+
+                <p>
+                  <strong>Tipo de Consulta:</strong> {get_in(@booking_result || %{}, [
+                    :consultation_type_name
+                  ]) || get_in(@selected_type, [:name])}
+                </p>
+
+                <p>
+                  <strong>Fecha y Horario:</strong> {Date.to_iso8601(@date)} de {@selected_slot.start_formatted} a {@selected_slot.end_formatted} hs
+                </p>
+
+                <p>
+                  <strong>Importe:</strong>
+                  ${get_in(@booking_result || %{}, [:exact_price_ars]) ||
+                    @selected_type.exact_price_ars}
+                </p>
+
+                <p>
+                  <strong>Estado inicial (RF-10):</strong>
+                  <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-emerald-200 text-emerald-800">
+                    {String.capitalize(
+                      to_string(get_in(@booking_result || %{}, [:status]) || "reserved")
+                    )}
+                  </span>
+                </p>
+              </div>
 
               <div class="pt-4">
                 <.link
