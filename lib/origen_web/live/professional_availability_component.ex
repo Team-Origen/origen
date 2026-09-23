@@ -284,18 +284,20 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   <article
                     :for={{day, label} <- @days}
                     id={"availability-summary-#{day}"}
-                    class="w-[85%] shrink-0 snap-start rounded-lg border border-border bg-surface-muted p-4 sm:w-[55%] lg:w-auto"
+                    class="w-[85%] shrink-0 snap-start rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800 sm:w-[55%] lg:w-auto"
                     role="listitem"
                   >
                     <h3 class="font-semibold">{label}</h3>
-                    <p class="mt-2 text-sm text-text-muted">
+                    <p class="mt-2 text-sm text-text-muted dark:text-gray-300">
                       {windows_summary(Map.fetch!(@configuration.weekly_availability, day))}
                     </p>
                   </article>
                 </.day_carousel>
               </div>
               <div class="mt-6 border-t border-border pt-6">
-                <h3 id="booking-rules-heading" class="font-semibold text-text">Período de reserva</h3>
+                <h3 id="booking-rules-heading" class="font-semibold text-text dark:text-gray-100">
+                  Período de reserva
+                </h3>
                 <dl id="booking-rules-summary" class="mt-4 grid gap-4 sm:grid-cols-2">
                   <div>
                     <dt class="font-medium">Anticipación máxima</dt>
@@ -365,7 +367,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                     <fieldset
                       :for={{day, label} <- @days}
                       id={"availability-day-#{day}"}
-                      class="w-[90%] shrink-0 snap-start rounded-lg border border-border bg-surface-muted p-4 sm:w-[60%] lg:w-auto"
+                      class="w-[90%] shrink-0 snap-start rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800 sm:w-[60%] lg:w-auto"
                       role="listitem"
                     >
                       <legend class="px-1 font-semibold">{label}</legend>
@@ -376,7 +378,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                       />
                       <p
                         :if={Map.fetch!(@draft.weekly_availability, day) == []}
-                        class="mb-3 text-sm text-text-muted"
+                        class="mb-3 text-sm text-text-muted dark:text-gray-300"
                       >
                         Sin disponibilidad
                       </p>
@@ -386,7 +388,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                             {window, index} <-
                               Enum.with_index(Map.fetch!(@draft.weekly_availability, day))
                           }
-                          class="grid grid-cols-2 gap-3 rounded-md border border-border bg-surface p-3"
+                          class="grid grid-cols-2 gap-3 rounded-md border border-border bg-surface p-3 dark:border-gray-700 dark:bg-gray-900"
                         >
                           <label
                             class="text-sm font-medium"
@@ -427,7 +429,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                             <p
                               :if={message = local_time_error(@local_errors, day, index, :start)}
                               id={"availability-#{day}-#{index}-start-error"}
-                              class="mt-1 text-sm text-danger-600"
+                              class="mt-1 text-sm text-danger-600 dark:text-danger-400"
                             >
                               {message}
                             </p>
@@ -468,7 +470,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                             <p
                               :if={message = local_time_error(@local_errors, day, index, :end)}
                               id={"availability-#{day}-#{index}-end-error"}
-                              class="mt-1 text-sm text-danger-600"
+                              class="mt-1 text-sm text-danger-600 dark:text-danger-400"
                             >
                               {message}
                             </p>
@@ -519,10 +521,10 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
                   <fieldset
                     id="availability-copy-action"
-                    class="mt-6 rounded-lg border border-border bg-surface-muted p-4"
+                    class="mt-6 rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800"
                   >
                     <legend class="px-1 font-semibold">Copiar horarios</legend>
-                    <p class="mb-4 text-sm text-text-muted">
+                    <p class="mb-4 text-sm text-text-muted dark:text-gray-300">
                       Copia todos los horarios de un día a los días seleccionados. Esta selección no se guarda como grupo.
                     </p>
                     <div class="grid gap-4 md:grid-cols-[minmax(12rem,16rem)_1fr]">
@@ -578,7 +580,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   </fieldset>
 
                   <div id="booking-rules-editor" class="mt-6 border-t border-border pt-6">
-                    <h3 class="font-semibold text-text">Período de reserva</h3>
+                    <h3 class="font-semibold text-text dark:text-gray-100">Período de reserva</h3>
                     <div class="mt-4 grid gap-5 sm:grid-cols-2">
                       <label class="font-medium" for="booking-horizon-days">
                         Anticipación máxima en días
@@ -713,7 +715,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
       <div class="mb-3 flex justify-end gap-2 lg:hidden" aria-label="Navegación por días">
         <button
           type="button"
-          class="inline-flex size-10 items-center justify-center rounded-md border border-border bg-surface text-lg font-semibold text-text-muted"
+          class="inline-flex size-10 items-center justify-center rounded-md border border-border bg-surface text-lg font-semibold text-text-muted dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
           data-carousel-direction="previous"
           aria-label="Ver día anterior"
           aria-controls={@viewport_id}
@@ -722,7 +724,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
         </button>
         <button
           type="button"
-          class="inline-flex size-10 items-center justify-center rounded-md border border-border bg-surface text-lg font-semibold text-text-muted"
+          class="inline-flex size-10 items-center justify-center rounded-md border border-border bg-surface text-lg font-semibold text-text-muted dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
           data-carousel-direction="next"
           aria-label="Ver día siguiente"
           aria-controls={@viewport_id}

@@ -211,15 +211,32 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
-    <main class="min-h-screen bg-page py-6 text-gray-900 sm:py-10">
+    <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
-        <div class="flex flex-col gap-6 sm:gap-8">
-          <header class="space-y-2">
-            <.h1 no_margin>Configuración</.h1>
+        <div id="professional-settings-content" class="flex flex-col gap-6 sm:gap-8">
+          <header
+            id="professional-settings-header"
+            class="flex items-start justify-between gap-4"
+          >
+            <div class="space-y-2">
+              <.h1 no_margin>Ajustes</.h1>
 
-            <.text_muted>
-              Preferencias operativas de la práctica profesional.
-            </.text_muted>
+              <.text_muted>
+                Preferencias operativas de la práctica profesional.
+              </.text_muted>
+            </div>
+
+            <.button
+              id="back-to-agenda-button"
+              type="button"
+              icon="hero-arrow-left"
+              color="gray"
+              variant="outline"
+              disabled
+              aria-disabled="true"
+            >
+              Volver a Agenda
+            </.button>
           </header>
 
           <.alert
@@ -596,7 +613,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                 <output
                   id="new-consultation-type-duration"
                   for="new-consultation-type-count"
-                  class="block rounded-md bg-gray-50 p-4 text-sm font-semibold text-gray-700"
+                  class="block rounded-md bg-surface-muted p-4 text-sm font-semibold text-text-muted dark:bg-gray-800 dark:text-gray-200"
                   aria-live="polite"
                 >
                   <%= if duration = duration_preview(@type_form_params, @current_interval) do %>
@@ -714,7 +731,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       role="img"
       aria-label={"Color asignado a #{@name}"}
       title={"Color asignado a #{@name}"}
-      class="inline-block size-4 shrink-0 rounded-sm border border-gray-500"
+      class="inline-block size-4 shrink-0 rounded-sm border border-border dark:border-gray-600"
       style={"background-color: #{@color}"}
     />
     """

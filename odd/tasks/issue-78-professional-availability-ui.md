@@ -19,7 +19,7 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - Real integration with `Origen.Availability.get_own_configuration/1` and `replace_own_configuration/2`.
 - Focused LiveView tests and applicable functional verification.
 - No backend behavior changes, database changes, or GitHub Issue mutations.
-- The user authorized one commit and one push only to the current `feature/78-professional-availability-ui` branch, with no pull request. This bounded writer must leave both operations to the parent after verification.
+- The prior one-commit/one-push authorization was consumed by commit `bac38ca`. This corrective batch authorizes local implementation only: no commit, push, pull request, GitHub mutation, WSL, or remote operation.
 
 ## Confirmed contract
 
@@ -71,6 +71,8 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [ ] ODD-78-06 — Run focused integration checks, compilation/format checks, the applicable full suite, and record honest final evidence.
 - [x] ODD-78-07 — Correct the availability palette using established Professional configuration/catalog tokens, unify weekly and booking controls in one visual section, and place Save/Cancel in that section's form footer.
 - [x] ODD-78-08 — Prevent confirmation for manually typed off-interval or otherwise locally invalid boundaries, with field-specific red invalid styling, accessible associated warnings, and recovery when corrected.
+- [x] ODD-78-09 — Characterize the public dynamic agenda-interval contract and ensure Desde/Hasta guidance, HTML step, and misalignment feedback visibly use the configured interval without changing the five-minute minimum-lead rule.
+- [x] ODD-78-10 — Add the top Professional settings navbar with a disabled Back-to-Agenda visual action, then audit and correct this screen to use institutional semantic color tokens legibly in light and dark mode.
 
 ## Acceptance criteria
 
@@ -87,6 +89,10 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - A manually typed boundary that is not aligned to the current agenda interval marks that specific input with `aria-invalid`, red-border semantics, and a clearly associated warning; Save is disabled and submission is prevented until all boundaries are aligned and otherwise locally valid.
 - Correcting the affected boundary clears its field-level invalid state and re-enables confirmation when no other local error remains.
 - UI prevention does not alter backend rejection of true overlap, backend merging of touching windows, complete atomic replacement, editable booking controls, authorization, preview safety, or carousel behavior.
+- A non-five-minute configured agenda interval is displayed in schedule-window guidance, drives the Desde/Hasta HTML `step`, and appears in the field-specific misalignment warning; the minimum-lead input keeps its independent five-minute step.
+- The Professional settings content begins with a horizontal navbar/header containing `Ajustes` on the left and a visually button-like `Volver a Agenda` action with back-arrow semantics on the right.
+- `Volver a Agenda` is honestly non-navigating: it renders as a disabled `type="button"` control with disabled and `aria-disabled` semantics, not as a link or dead clickable control.
+- This screen uses the project's institutional semantic surface, border, text, action, and danger tokens in both light and dark schemes, with no new hard-coded institutional colors or unconditional light-only surfaces.
 
 ## Applicable checks
 
@@ -99,6 +105,9 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - `git diff --check`.
 - Focused LiveView assertions for the unified section/footer and palette contract through stable public semantics/classes.
 - Focused LiveView assertions that an off-interval typed boundary receives field-specific invalid semantics and warning, disables Save, performs no replacement/persistence, and recovers after correction when practical.
+- Public rendered characterization with a non-five-minute agenda interval covering visible interval copy, Desde/Hasta `step`, dynamic misalignment feedback, and the unchanged five-minute minimum-lead step.
+- Focused rendered assertions for the top-level settings header, `Ajustes`, and disabled non-navigating `Volver a Agenda` button with back-arrow semantics.
+- Stable screen-local assertions for semantic design tokens and the absence of newly introduced hard-coded institutional colors or unconditional light-only surfaces; avoid duplicating complete class lists.
 
 ## Progress and verification evidence
 
@@ -164,6 +173,19 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] `mix phx.routes` passed and listed both `GET /configuracion/profesional` and the dev-only `GET /dev/professional-availability` route.
 - [x] `git diff --check` passed with only line-ending conversion warnings for the three intentionally changed tracked files.
 - [x] No backend domain file, migration, schema, unrelated source, commit, push, pull request, GitHub artifact, WSL, or remote operation was changed or performed.
+- [x] ODD-78-09 characterization passed on its first run: the focused LiveView command passed 16/16 (seed 628219). With the existing 30-minute configuration, public rendered behavior displayed `30 minutos`, rendered Desde/Hasta with `step="1800"`, produced the dynamic 30-minute misalignment warning, and preserved `step="5"` for minimum lead time. No fabricated RED or implementation change was needed.
+- [x] ODD-78-10 navbar RED observed after correcting a test-only selector delimiter: focused tests passed 16/17 (seed 138724) because the settings content had no top `#professional-settings-header` with `Ajustes` and the disabled agenda action.
+- [x] ODD-78-10 navbar GREEN observed: focused tests passed 17/17 (seed 114929). The first settings-content child is now a horizontal header with `Ajustes` and a Petal outline button carrying the back-arrow icon, `type="button"`, `disabled`, and `aria-disabled="true"`, with no link or click behavior.
+- [x] ODD-78-10 semantic-color RED observed: focused tests passed 16/17 (seed 948988) because the screen root still used unconditional `text-gray-900` and did not expose dark-scheme page semantics.
+- [x] ODD-78-10 semantic-color GREEN observed: focused tests passed 17/17 (seed 337340). The authenticated page, preview harness, schedule cards, window surfaces, copy panel, carousel controls, danger messages, duration preview, and color-swatch border now retain the established semantic roles with explicit dark-mode counterparts. No global token or palette change was made.
+- [x] Final focused verification passed 17/17 (seed 253396): `mix test test/origen_web/professional_availability_live_test.exs`.
+- [x] The first catalog/backend verification run passed 45/46 (seed 738331); the sole failure was the superseded heading expectation `Configuración`. After updating that existing public-copy assertion to `Ajustes`, the exact command passed 46/46 (seed 925198).
+- [x] `mix compile --warnings-as-errors` passed with no output on the final run.
+- [x] Source-mutating `mix format` and exact `mix format --check-formatted` passed for `professional_availability_component.ex`, `professional_availability_preview_live.ex`, `professional_availability_live_test.exs`, and `consultation_type_catalog_live_test.exs`. The known baseline formatting drift in `consultation_type_catalog_live.ex` was preserved.
+- [x] `mix assets.build` passed (Tailwind v4.3.0 and esbuild completed successfully).
+- [x] `mix phx.routes` passed and listed both `GET /configuracion/profesional` and the dev-only preview route.
+- [x] `git diff --check` passed with only expected LF-to-CRLF working-copy warnings.
+- [x] This corrective batch performed no full-suite run, WSL/manual browser check, commit, push, pull request, GitHub mutation, remote operation, backend behavior change, database change, or global style change.
 
 ## Pending WSL manual checklist
 

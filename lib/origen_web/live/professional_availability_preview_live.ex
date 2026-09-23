@@ -9,7 +9,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityPreviewLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <main class="min-h-screen bg-page py-6 text-gray-900 sm:py-10">
+    <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
         <div class="flex flex-col gap-6 sm:gap-8">
           <div id="availability-development-preview" role="note">

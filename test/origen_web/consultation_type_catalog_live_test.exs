@@ -130,7 +130,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
   test "renders the requested catalog without demo copy or technical references", %{conn: conn} do
     {:ok, view, html} = live(conn, @professional_configuration_path)
 
-    assert has_element?(view, "h1", "Configuración")
+    assert has_element?(view, "h1", "Ajustes")
     assert has_element?(view, "#agenda-interval-heading", "Intervalo de Agenda")
     assert has_element?(view, "#consultation-types-heading", "Tipos de consulta")
     assert has_element?(view, "#current-agenda-interval", "15 minutos")

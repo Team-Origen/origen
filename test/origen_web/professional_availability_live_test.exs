@@ -72,6 +72,24 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     end
   end
 
+  test "renders the settings navbar first with an honestly disabled agenda action", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(
+             view,
+             "#professional-settings-content > #professional-settings-header:first-child",
+             "Ajustes"
+           )
+
+    assert has_element?(
+             view,
+             ~s|#back-to-agenda-button[type="button"][disabled][aria-disabled="true"]:not([href]):not([phx-click])|,
+             "Volver a Agenda"
+           )
+
+    assert has_element?(view, "#back-to-agenda-button .hero-arrow-left")
+  end
+
   test "opens a complete seven-day interval-aware editor with booking controls", %{conn: conn} do
     {:ok, view, _html} = live(conn, @path)
 
@@ -118,15 +136,49 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, ~s(button[type="submit"]), "Guardar disponibilidad")
   end
 
+  test "presents the configured agenda interval across schedule-window guidance", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    assert has_element?(
+             view,
+             "#availability-section",
+             "Cada horario debe respetar el intervalo de Agenda de 30 minutos."
+           )
+
+    assert has_element?(view, ~s(#availability-monday-0-start[step="1800"]))
+    assert has_element?(view, ~s(#availability-monday-0-end[step="1800"]))
+    assert has_element?(view, ~s(#minimum-lead-minutes[step="5"]))
+
+    invalid =
+      put_in(replacement_params(), ["weekly_availability", "monday", "0", "start"], "08:10")
+
+    view
+    |> form("#availability-form", availability: invalid)
+    |> render_change()
+
+    assert has_element?(
+             view,
+             "#availability-monday-0-start-error",
+             "Debe coincidir con intervalos de 30 minutos."
+           )
+  end
+
   test "uses the Origen palette and keeps the atomic editor in one visual section", %{conn: conn} do
     {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(
+             view,
+             ~s|main[class~="bg-page"][class~="text-text"][class~="dark:bg-gray-950"][class~="dark:text-gray-100"]|
+           )
+
     open_editor(view)
 
     assert has_element?(view, "#availability-section > .pc-card.pc-card--basic")
 
     assert has_element?(
              view,
-             "#availability-section #availability-day-monday.border-border.bg-surface-muted"
+             ~s|#availability-day-monday[class~="border-border"][class~="bg-surface-muted"][class~="dark:border-gray-700"][class~="dark:bg-gray-800"]|
            )
 
     assert has_element?(view, "#availability-section #booking-rules-editor")
@@ -134,6 +186,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#availability-form-actions", "Cancelar")
     assert has_element?(view, "#availability-form-actions", "Guardar disponibilidad")
     refute has_element?(view, "#availability-form > #booking-rules-section")
+
+    view
+    |> element(~s(button[phx-click="open_new_type"]), "Nuevo tipo de consulta")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             ~s|#new-consultation-type-duration[class~="bg-surface-muted"][class~="text-text-muted"][class~="dark:bg-gray-800"][class~="dark:text-gray-200"]|
+           )
   end
 
   test "blocks an off-interval typed boundary and recovers when the field is corrected", %{
