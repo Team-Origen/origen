@@ -21,7 +21,21 @@ Verify and enforce that other roles (Secretary, Professional, Patient, anonymous
 - [x] 1. Branch setup: create `feature/60-admin-permissions-matrix` from `develop`.
 - [x] 2. Authorization matrix tests: add exhaustive negative test cases in `test/origen/authorization_test.exs` proving default-deny for non-administrators and non-active states.
 - [x] 3. Domain verification tests: create `test/origen/accounts/admin_permissions_verification_test.exs` validating transactional boundaries, zero side-effects, and opaque denials for unauthorized roles.
-- [ ] 4. PR 1/2: open stacked PR 1/2 against `develop` (<= 400 lines) and verify CI checks.
-- [ ] 5. Branch setup 2: create `feature/60-admin-ui-permissions-errors` from PR 1 branch.
-- [ ] 6. LiveView protection & tests: verify UI rejection, redirects, focus preservation, and accessibility.
-- [ ] 7. PR 2/2: open stacked PR 2/2 against PR 1 branch (<= 400 lines), provide evidence, and verify CI checks.
+- [x] 4. PR 1/2: open stacked PR 1/2 against `develop` (<= 400 lines) and verify CI checks.
+- [x] 5. Branch setup 2: create `feature/60-admin-ui-permissions-errors` from PR 1 branch.
+- [x] 6. LiveView protection & tests: verify UI rejection, redirects, focus preservation, and accessibility.
+- [x] 7. PR 2/2: open stacked PR 2/2 against PR 1 branch (<= 400 lines), provide evidence, and verify CI checks.
+
+## Verification Evidence
+- **Domain Authorization Matrix:** `mix test test/origen/authorization_test.exs test/origen/accounts/admin_permissions_verification_test.exs` (15 passed, 0 failures).
+- **Accounts Context:** `mix test test/origen/accounts_test.exs` (27 passed, 0 failures).
+- **LiveView UI & Access Control:** `mix test test/origen_web/live/admin_internal_live_test.exs` (26 passed, 0 failures).
+- **Sanitized Scenarios Verified:**
+  - `Secretary` attempting to create `Professional` -> Form select excludes Professional; raw event payload rejected with validation error / unauthorized.
+  - `Secretary` attempting to create `Secretary` -> Denied by domain and LiveView with `"No tiene permiso para realizar esta acción"`. Zero database modifications.
+  - `Professional` attempting direct mount of `/admin/internal` -> Redirected immediately to `/`.
+  - `Patient` attempting direct mount of `/admin/internal` -> Redirected immediately to `/`.
+  - `Unauthenticated` visitor attempting direct mount of `/admin/internal` -> Redirected immediately to `/`.
+  - `Duplicate Email` -> Rejected with `"Ya existe una cuenta con este correo electrónico"`. Input values preserved.
+  - `Accessibility` -> `role="status"` for success feedback, `role="alert"` for error feedback. Input IDs and focus preserved.
+
