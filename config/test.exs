@@ -35,6 +35,7 @@ config :origen,
 
 config :origen,
   bootstrap_admin_enabled: false,
+  organization_timezone: "Etc/UTC",
   consultation_catalog_demo_enabled: true,
   consultation_type_catalog_adapter: Origen.ConsultationTypes.MockCatalog,
   appointments_calendar_adapter: Origen.Appointments.MockCalendar,
