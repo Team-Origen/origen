@@ -43,6 +43,7 @@ config :origen,
     active: %{tag: "test.v1", key: String.duplicate("k", 32)},
     retired: []
   },
+  bootstrap_admin_verifier_key: String.duplicate("k", 32),
   bootstrap_admin_delivery: %{
     enabled: false,
     allowed_adapters: [Origen.TestSupport.BootstrapAdmin.NonRetainingAdapter]

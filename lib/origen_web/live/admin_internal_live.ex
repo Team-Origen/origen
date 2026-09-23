@@ -10,6 +10,7 @@ defmodule OrigenWeb.AdminInternalLive do
   use OrigenWeb, :live_view
 
   alias Ecto.Changeset
+  alias Origen.Accounts
 
   @form_types %{
     role: :string,
@@ -18,12 +19,14 @@ defmodule OrigenWeb.AdminInternalLive do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = normalize_user(session["current_user"])
+    current_user = normalize_user(session["current_user"] || session[:current_user])
 
     current_user =
-      if current_user == nil and Application.get_env(:origen, :env) == :dev,
-        do: %{"id" => 0, "role" => "administrator"},
-        else: current_user
+      if current_user == nil and Application.get_env(:origen, :env) == :dev do
+        ensure_dev_admin()
+      else
+        current_user
+      end
 
     allowed_roles = allowed_roles_for(current_user)
 
@@ -50,12 +53,89 @@ defmodule OrigenWeb.AdminInternalLive do
     changeset = build_changeset(params, socket.assigns.allowed_roles)
 
     if changeset.valid? do
-      result = {:ok, %{email: changeset.changes.email, role: changeset.changes.role}}
+      result =
+        create_account(
+          socket.assigns.current_user,
+          changeset.changes.role,
+          changeset.changes.email
+        )
+
       {:noreply, assign(socket, :form, to_form(changeset, as: :form)) |> assign(:result, result)}
     else
       {:noreply, assign(socket, :form, to_form(changeset, as: :form))}
     end
   end
+
+  defp create_account(current_user, role, email) do
+    with actor_id when is_integer(actor_id) <- get_actor_id(current_user),
+         {:ok, role_atom} <- parse_role(role) do
+      verifier_key = resolve_verifier_key()
+      opts = if verifier_key, do: [verifier_key: verifier_key], else: []
+
+      case Accounts.create_and_invite_internal_account(
+             actor_id,
+             %{email: email, role: role_atom},
+             opts
+           ) do
+        {:ok, invitation} ->
+          {:ok,
+           %{
+             email: email,
+             role: role,
+             invitation_id: invitation.invitation_id,
+             token: invitation.token
+           }}
+
+        {:error, :invalid_request} ->
+          {:error, :email_taken}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    else
+      _ -> {:error, :unauthorized}
+    end
+  end
+
+  defp resolve_verifier_key do
+    case Application.get_env(:origen, :bootstrap_admin_verifier_key) do
+      k when is_binary(k) and byte_size(k) >= 32 ->
+        k
+
+      _ ->
+        if Application.get_env(:origen, :env) in [:dev, :test] do
+          String.duplicate("k", 32)
+        else
+          nil
+        end
+    end
+  end
+
+  defp get_actor_id(%{"id" => id}) when is_integer(id), do: id
+
+  defp get_actor_id(%{"id" => id}) when is_binary(id) do
+    case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  defp get_actor_id(%{id: id}) when is_integer(id), do: id
+
+  defp get_actor_id(%{id: id}) when is_binary(id) do
+    case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  defp get_actor_id(_), do: nil
+
+  defp parse_role("professional"), do: {:ok, :professional}
+  defp parse_role("secretary"), do: {:ok, :secretary}
+  defp parse_role(:professional), do: {:ok, :professional}
+  defp parse_role(:secretary), do: {:ok, :secretary}
+  defp parse_role(_), do: {:error, :invalid_role}
 
   defp build_changeset(params, allowed_roles) do
     new_changeset()
@@ -112,9 +192,9 @@ defmodule OrigenWeb.AdminInternalLive do
         <%!-- Result display --%>
         <div :if={@result} class="mb-6 p-4 rounded-lg border" role="status">
           <p :if={match?({:ok, _}, @result)} class="text-sm text-green-700 font-inter">
-            Cuenta creada exitosamente para {elem(@result, 1).email} como {role_label_text(
+            Invitación creada para {elem(@result, 1).email} como {role_label_text(
               elem(@result, 1).role
-            )}.
+            )}. ID: {elem(@result, 1).invitation_id}, Token: {elem(@result, 1).token}
           </p>
 
           <p :if={match?({:error, _}, @result)} class="text-sm text-red-600 font-inter" role="alert">
@@ -164,8 +244,31 @@ defmodule OrigenWeb.AdminInternalLive do
     """
   end
 
+  defp ensure_dev_admin do
+    case Origen.Repo.query(
+           "SELECT id, role FROM internal_accounts WHERE role = 'administrator' AND state = 'active' ORDER BY id ASC LIMIT 1"
+         ) do
+      {:ok, %{rows: [[id, role]]}} ->
+        %{"id" => id, "role" => role}
+
+      _ ->
+        case Origen.Repo.query("""
+             INSERT INTO internal_accounts (email, role, state, password_hash, totp_secret, activated_at)
+             VALUES ('admin@clinicaorigen.com', 'administrator', 'active', 'dev_hash', 'dev_secret', clock_timestamp())
+             ON CONFLICT (lower(email)) DO UPDATE SET state = 'active'
+             RETURNING id, role
+             """) do
+          {:ok, %{rows: [[id, role]]}} -> %{"id" => id, "role" => role}
+          _ -> %{"id" => 0, "role" => "administrator"}
+        end
+    end
+  rescue
+    _ -> %{"id" => 0, "role" => "administrator"}
+  end
+
   defp error_message(:unauthorized), do: "No tiene permiso para realizar esta acción"
   defp error_message(:email_taken), do: "Ya existe una cuenta con este correo electrónico"
+  defp error_message(:invalid_role), do: "Rol inválido"
 
   defp error_message(:invalid_request),
     do: "Solicitud inválida. Por favor verifique los datos del formulario."
