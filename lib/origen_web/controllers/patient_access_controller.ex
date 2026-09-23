@@ -35,4 +35,15 @@ defmodule OrigenWeb.PatientAccessController do
     |> put_flash(:error, "Enlace de acceso no provisto.")
     |> redirect(to: ~p"/access")
   end
+
+  @doc """
+  Clears the patient identity from the current browser session.
+  """
+  def delete(conn, _params) do
+    conn
+    |> delete_session(@session_key)
+    |> configure_session(renew: true)
+    |> put_flash(:info, "Sesión de paciente cerrada.")
+    |> redirect(to: ~p"/access")
+  end
 end

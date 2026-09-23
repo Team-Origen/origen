@@ -32,7 +32,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
     attrs = %{
       first_name: "Ana",
-      last_name: "GÃ³mez",
+      last_name: "Gómez",
       document_type: "dni",
       document_number: "38123456",
       birthdate: ~D[1994-05-20],
@@ -53,6 +53,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert html =~ "Calendario de Reservas" and html =~ "Medicina General"
       assert html =~ "Perfil pendiente de"
+      assert html =~ "Cambiar paciente"
       html_future = render_change(view, "change_date", %{"date" => "2026-09-28"})
       assert html_future =~ "09:00"
       assert has_element?(view, "button[phx-click='select_slot']")
@@ -67,6 +68,16 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       # Next/prev navigation
       assert render_click(view, "nav_date", %{"step" => "1"}) =~ "Horarios Disponibles para"
       assert render_click(view, "nav_date", %{"step" => "-1"}) =~ "Horarios Disponibles para"
+    end
+  end
+
+  describe "session guard" do
+    test "unauthenticated user is redirected to /access", %{} do
+      bare_conn =
+        Phoenix.ConnTest.build_conn()
+        |> Phoenix.ConnTest.init_test_session(%{})
+
+      assert {:error, {:live_redirect, %{to: "/access"}}} = live(bare_conn, ~p"/patient/calendar")
     end
   end
 
@@ -106,7 +117,31 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert html =~ "Turno Reservado con" and html =~ "Dra. Sof" and html =~ "09:00"
       assert html =~ "Turno ID:" and html =~ "Estado inicial (RF-10):" and html =~ "Importe:"
-      assert html =~ "Turno ID:" and html =~ "Estado inicial (RF-10):" and html =~ "Importe:"
+    end
+
+    test "after a successful booking, selecting a new slot allows a second reservation", %{
+      conn: conn,
+      profile: profile
+    } do
+      Repo.update!(Ecto.Changeset.change(profile, %{phone_verified: true}))
+      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+
+      # Primera reserva
+      render_change(view, "change_date", %{"date" => "2026-10-01"})
+      render_click(view, "select_slot", %{"slot_id" => "SLOT-2026-10-01-0900"})
+      html1 = render_click(view, "confirm_booking")
+      assert html1 =~ "Turno Reservado con"
+
+      # Presionar "Reservar otro turno" (clear_slot) debe volver a la grilla
+      html2 = render_click(view, "clear_slot")
+      assert html2 =~ "Horarios Disponibles para"
+      refute html2 =~ "Turno Reservado con"
+
+      # Segunda reserva en el mismo view
+      render_change(view, "change_date", %{"date" => "2026-10-02"})
+      render_click(view, "select_slot", %{"slot_id" => "SLOT-2026-10-02-0900"})
+      html3 = render_click(view, "confirm_booking")
+      assert html3 =~ "Turno Reservado con"
     end
 
     test "changing consultation type recalculates slot availability", %{conn: conn} do
@@ -122,6 +157,22 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert html_control =~ "Control"
       assert html_control =~ "09:00"
+    end
+
+    test "changing professional resets consultation type and duration", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+
+      html_procedure =
+        render_change(view, "change_type", %{"type_id" => "018f4a5b-0d62-7a44-8e32-2f608bfcb004"})
+
+      assert html_procedure =~ "Procedimiento (60 min)"
+
+      html_lucas = render_change(view, "change_prof", %{"prof_id" => "PRO-DEMO-002"})
+
+      assert html_lucas =~ "Dr. Lucas Varela"
+      assert html_lucas =~ "Consulta general (30 min)"
+      assert html_lucas =~ ~s(id="type-form-PRO-DEMO-002")
+      refute html_lucas =~ "Procedimiento (60 min)"
     end
   end
 end
