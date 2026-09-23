@@ -105,6 +105,9 @@ defmodule Origen.Audit.Events do
   def phone_challenge_failed(actor, ref) when is_binary(ref),
     do: build(actor, "phone_challenge_consumed", {:patient, ref}, "failed")
 
+  def availability_configuration_replaced(actor, ref) when is_binary(ref),
+    do: build(actor, "availability_configuration_replaced", {:account, ref}, "succeeded")
+
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false
 

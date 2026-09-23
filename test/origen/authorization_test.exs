@@ -33,6 +33,8 @@ defmodule Origen.AuthorizationTest do
          %{account_and_phone_match: true, challenge_valid: true, rate_limit_satisfied: true},
          :tel_02},
         {:read_own_availability, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}, :own_02},
+        {:replace_own_availability, {:role, :professional}, {:known, :active},
          %{owner_matches_actor: true}, %{authenticated: true}, :own_02}
       ]
 
@@ -42,8 +44,9 @@ defmodule Origen.AuthorizationTest do
       end
     end
 
-    test "availability reads require an active Professional acting on their own configuration" do
-      for {subject, state, owner_matches, authenticated} <- [
+    test "availability operations require an active Professional acting on their own configuration" do
+      for operation <- [:read_own_availability, :replace_own_availability],
+          {subject, state, owner_matches, authenticated} <- [
             {{:role, :administrator}, {:known, :active}, true, true},
             {{:role, :professional}, {:known, :pending_activation}, true, true},
             {{:role, :professional}, {:known, :active}, false, true},
@@ -51,7 +54,7 @@ defmodule Origen.AuthorizationTest do
           ] do
         decision =
           request(
-            :read_own_availability,
+            operation,
             subject,
             state,
             fact(%{owner_matches_actor: owner_matches}),
