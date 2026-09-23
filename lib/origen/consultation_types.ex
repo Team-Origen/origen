@@ -213,7 +213,10 @@ defmodule Origen.ConsultationTypes do
           active_types = lock_active_owned_types!(owner_account_id)
           blockers = interval_blockers(active_types, interval_minutes)
 
-          if blockers == [] do
+          availability_boundaries =
+            availability_interval_blockers!(owner_account_id, interval_minutes)
+
+          if blockers == [] and availability_boundaries == [] do
             apply_interval_if_changed!(owner_account_id, current_interval, interval_minutes)
 
             %{
@@ -221,13 +224,12 @@ defmodule Origen.ConsultationTypes do
               consultation_types: list_consultation_types!(owner_account_id)
             }
           else
-            Repo.rollback(
-              {:incompatible,
-               %{
-                 maximum_interval_count: min(10, div(240, interval_minutes)),
-                 blockers: blockers
-               }}
-            )
+            evidence =
+              %{}
+              |> maybe_put_type_blockers(blockers, interval_minutes)
+              |> maybe_put_availability_boundaries(availability_boundaries)
+
+            Repo.rollback({:incompatible, evidence})
           end
 
         :error ->
@@ -510,6 +512,44 @@ defmodule Origen.ConsultationTypes do
     end)
     |> Enum.filter(&(&1.prospective_duration_minutes > 240))
   end
+
+  defp availability_interval_blockers!(owner_account_id, interval_minutes) do
+    [[week]] =
+      Repo.query!(
+        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
+        [owner_account_id]
+      ).rows
+
+    ~w(monday tuesday wednesday thursday friday saturday sunday)
+    |> Enum.flat_map(fn day ->
+      week
+      |> Map.fetch!(day)
+      |> Enum.flat_map(fn window ->
+        [Map.fetch!(window, "start"), Map.fetch!(window, "end")]
+        |> Enum.filter(&(rem(time_to_minutes(&1), interval_minutes) != 0))
+        |> Enum.map(&"#{day} #{&1}")
+      end)
+    end)
+  end
+
+  defp time_to_minutes(value) do
+    [hour, minute] = value |> String.split(":") |> Enum.map(&String.to_integer/1)
+    hour * 60 + minute
+  end
+
+  defp maybe_put_type_blockers(evidence, [], _interval_minutes), do: evidence
+
+  defp maybe_put_type_blockers(evidence, blockers, interval_minutes) do
+    Map.merge(evidence, %{
+      maximum_interval_count: min(10, div(240, interval_minutes)),
+      blockers: blockers
+    })
+  end
+
+  defp maybe_put_availability_boundaries(evidence, []), do: evidence
+
+  defp maybe_put_availability_boundaries(evidence, boundaries),
+    do: Map.put(evidence, :availability_boundaries, boundaries)
 
   defp apply_interval_if_changed!(_owner_account_id, interval_minutes, interval_minutes), do: :ok
 
