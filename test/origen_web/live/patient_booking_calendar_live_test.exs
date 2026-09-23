@@ -34,7 +34,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert html =~ "Perfil pendiente de"
       html_future = render_change(view, "change_date", %{"date" => "2026-09-25"})
       assert html_future =~ "09:00"
-      
+
       assert has_element?(view, "button[phx-click='select_slot']")
 
       # Weekend empty state & Day 31 simulated error
