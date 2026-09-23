@@ -25,10 +25,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
   end
 
   @impl true
-  def handle_event("change_prof", %{"prof_id" => id}, socket) do
-    {:noreply,
-     assign(socket, prof_id: id, selected_slot: nil, confirmed?: false) |> load_schedule()}
-  end
+  def handle_event("change_prof", %{"prof_id" => id}, socket),
+    do:
+      {:noreply,
+       assign(socket, prof_id: id, selected_slot: nil, confirmed?: false) |> load_schedule()}
 
   def handle_event("change_date", %{"date" => str}, socket) do
     case Date.from_iso8601(str) do
@@ -41,17 +41,24 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     end
   end
 
-  def handle_event("nav_date", %{"step" => s}, socket) do
-    new_d = Date.add(socket.assigns.date, String.to_integer(s))
+  def handle_event("nav_date", %{"step" => s}, socket),
+    do:
+      {:noreply,
+       assign(socket,
+         date: Date.add(socket.assigns.date, String.to_integer(s)),
+         selected_slot: nil,
+         confirmed?: false
+       )
+       |> load_schedule()}
 
-    {:noreply,
-     assign(socket, date: new_d, selected_slot: nil, confirmed?: false) |> load_schedule()}
-  end
-
-  def handle_event("select_slot", %{"slot_id" => id}, socket) do
-    slot = Enum.find(socket.assigns.schedule[:slots] || [], &(&1.id == id))
-    {:noreply, assign(socket, selected_slot: slot)}
-  end
+  def handle_event("select_slot", %{"slot_id" => id}, socket),
+    do:
+      {:noreply,
+       assign(
+         socket,
+         :selected_slot,
+         Enum.find(socket.assigns.schedule[:slots] || [], &(&1.id == id))
+       )}
 
   def handle_event("clear_slot", _params, socket),
     do: {:noreply, assign(socket, selected_slot: nil)}
@@ -64,7 +71,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        put_flash(
          socket,
          :error,
-         "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
+         "Debés completar tu perfil y verificar tu teléfono antes de reservar."
        )}
     end
   end
@@ -99,12 +106,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 class="text-2xl font-bold text-[#0A3847]">Calendario de Reservas</h1>
-
             <p class="text-sm text-stone-600">
-              SeleccionÃ¡ un profesional y un horario disponible para tu consulta.
+              Seleccioná un profesional y un horario disponible para tu consulta.
             </p>
           </div>
-
           <%= if @profile && @profile.persona do %>
             <div class="text-right">
               <span class="text-xs text-stone-500 block">Paciente</span>
@@ -115,31 +120,30 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
         <div
           :if={Phoenix.Flash.get(@flash, :error)}
-          class="p-4 rounded-xl bg-red-50 text-red-800 text-sm flex items-center gap-2"
+          class="p-4 rounded-xl bg-red-50 text-red-800 text-sm flex items-center gap-2 border border-red-200"
         >
           <.icon name="hero-exclamation-circle" class="w-5 h-5 text-red-600 shrink-0" />
           <span>{Phoenix.Flash.get(@flash, :error)}</span>
         </div>
 
-        <%= if not @ready? do %>
-          <div class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm flex items-start gap-3">
-            <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-            <div class="flex-1">
-              <p class="font-semibold">Perfil pendiente de verificaciÃ³n</p>
-
-              <p class="mt-0.5">
-                Para confirmar turnos de manera autÃ³noma, tu telÃ©fono debe estar verificado.
-              </p>
-            </div>
-
-            <.link
-              navigate={~p"/patient/phone/verify"}
-              class="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold"
-            >
-              Verificar TelÃ©fono
-            </.link>
+        <div
+          :if={not @ready?}
+          class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm flex items-start gap-3 border border-amber-200"
+        >
+          <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+          <div class="flex-1">
+            <p class="font-semibold">Perfil pendiente de verificación</p>
+            <p class="mt-0.5">
+              Para confirmar turnos de manera autónoma, tu teléfono debe estar verificado.
+            </p>
           </div>
-        <% end %>
+          <.link
+            navigate={~p"/patient/phone/verify"}
+            class="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shrink-0 hover:bg-amber-700"
+          >
+            Verificar Teléfono
+          </.link>
+        </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -148,10 +152,12 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
               <form id="professional-form" phx-change="change_prof">
                 <select
                   name="prof_id"
-                  class="w-full rounded-lg border-stone-300 text-sm"
+                  class="w-full rounded-lg border-stone-300 bg-white text-stone-900 text-sm font-medium focus:ring-[#0A3847] focus:border-[#0A3847]"
                 >
                   <%= for p <- @professionals do %>
-                    <option value={p.id} selected={p.id == @prof_id}>{p.name} - {p.specialty}</option>
+                    <option value={p.id} selected={p.id == @prof_id} class="bg-white text-stone-900">
+                      {p.name} - {p.specialty}
+                    </option>
                   <% end %>
                 </select>
               </form>
@@ -163,26 +169,24 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 <button
                   phx-click="nav_date"
                   phx-value-step="-1"
-                  class="p-2 rounded-lg border border-stone-300 hover:bg-stone-50 text-stone-600"
-                  title="DÃ­a anterior"
+                  class="p-2 border border-stone-300 rounded-lg bg-white hover:bg-stone-50 text-stone-800"
+                  title="Día anterior"
                 >
                   <.icon name="hero-chevron-left" class="w-4 h-4" />
                 </button>
-
                 <form id="date-form" phx-change="change_date" class="flex-1">
                   <input
                     type="date"
                     name="date"
                     value={Date.to_iso8601(@date)}
-                    class="w-full rounded-lg border-stone-300 text-sm text-center font-medium"
+                    class="w-full rounded-lg border-stone-300 bg-white text-stone-900 text-sm text-center font-medium focus:ring-[#0A3847] focus:border-[#0A3847]"
                   />
                 </form>
-
                 <button
                   phx-click="nav_date"
                   phx-value-step="1"
-                  class="p-2 rounded-lg border border-stone-300 hover:bg-stone-50 text-stone-600"
-                  title="DÃ­a siguiente"
+                  class="p-2 border border-stone-300 rounded-lg bg-white hover:bg-stone-50 text-stone-800"
+                  title="Día siguiente"
                 >
                   <.icon name="hero-chevron-right" class="w-4 h-4" />
                 </button>
@@ -195,22 +199,19 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
           <% @confirmed? and @selected_slot -> %>
             <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-8 text-center space-y-4">
               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto font-bold text-xl">
-                âœ“
+                ✓
               </div>
-
-              <h2 class="text-xl font-bold text-stone-900">Â¡Turno Reservado con Ã‰xito!</h2>
-
+              <h2 class="text-xl font-bold text-stone-900">¡Turno Reservado con Éxito!</h2>
               <p class="text-sm text-stone-600 max-w-md mx-auto">
                 Tu turno con <strong>{@schedule.professional_name}</strong>
-                para el dÃ­a <strong>{Date.to_iso8601(@date)}</strong>
+                para el día <strong>{Date.to_iso8601(@date)}</strong>
                 a las <strong>{@selected_slot.start_formatted} hs</strong>
                 ha sido confirmado.
               </p>
-
               <div class="pt-4">
                 <.link
                   navigate={~p"/patient/profile/complete"}
-                  class="px-5 py-2.5 rounded-lg bg-[#0A3847] text-white text-sm font-semibold inline-flex"
+                  class="px-5 py-2.5 rounded-lg bg-[#0A3847] text-white text-sm font-semibold hover:bg-[#35545A] inline-flex"
                 >
                   Volver a Mi Perfil
                 </.link>
@@ -220,51 +221,43 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             <div class="bg-white rounded-xl shadow-sm border border-[#0A3847]/30 p-6 space-y-5">
               <div class="flex items-center justify-between border-b border-stone-100 pb-4">
                 <h3 class="text-lg font-bold text-[#0A3847]">Confirmar Reserva</h3>
-
                 <button
                   phx-click="clear_slot"
                   class="text-xs text-stone-500 hover:text-stone-800 underline"
                 >Cambiar horario</button>
               </div>
-
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-stone-50 rounded-lg p-4 text-sm">
                 <div>
                   <span class="text-xs text-stone-500 block">Profesional</span>
                   <span class="font-semibold text-stone-800">{@schedule.professional_name} ({@schedule.specialty})</span>
                 </div>
-
                 <div>
                   <span class="text-xs text-stone-500 block">Fecha y Horario</span>
                   <span class="font-semibold text-stone-800">{Date.to_iso8601(@date)} de {@selected_slot.start_formatted} a {@selected_slot.end_formatted} hs</span>
                 </div>
               </div>
-
               <div class="space-y-2 border-t pt-3 text-xs text-[#0A3847]">
                 <h4 class="font-semibold uppercase tracking-wider text-stone-700">
                   Políticas de Cancelación y Asistencia
                 </h4>
-
                 <p>
                   <strong>Límite sin cargo:</strong> {@schedule.cancellation_policy.cutoff_description}
                 </p>
-
                 <p>
                   <strong>Política de multa ({@schedule.cancellation_policy.penalty_percentage}%):</strong> {@schedule.cancellation_policy.penalty_description}
                 </p>
               </div>
-
               <div class="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   phx-click="confirm_booking"
                   disabled={not @ready?}
-                  class={"w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm shadow-sm " <> if @ready?, do: "bg-[#0A3847] hover:bg-[#35545A] text-white", else: "bg-stone-300 text-stone-500 cursor-not-allowed"}
+                  class={"w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm " <> if @ready?, do: "bg-[#0A3847] hover:bg-[#35545A] text-white", else: "bg-stone-300 text-stone-500 cursor-not-allowed"}
                 >
-                  {if @ready?, do: "Confirmar Turno", else: "VerificaciÃ³n de TelÃ©fono Requerida"}
+                  {if @ready?, do: "Confirmar Turno", else: "Verificación de Teléfono Requerida"}
                 </button>
-
                 <button
                   phx-click="clear_slot"
-                  class="w-full sm:w-auto py-2.5 px-4 rounded-lg border border-stone-300 hover:bg-stone-50 text-stone-700 text-sm font-medium"
+                  class="p-2.5 border border-stone-300 rounded-lg text-sm text-stone-700 hover:bg-stone-50"
                 >Cancelar</button>
               </div>
             </div>
@@ -273,14 +266,13 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
               <h3 class="text-sm font-semibold text-stone-700 uppercase tracking-wider mb-4">
                 Horarios Disponibles para {Date.to_iso8601(@date)}
               </h3>
-
               <%= cond do %>
                 <% @error != nil -> %>
-                  <p class="p-4 bg-red-50 text-red-800 text-sm text-center rounded-lg">
+                  <p class="p-4 bg-red-50 text-red-800 text-sm text-center rounded-lg border border-red-200">
                     No pudimos cargar la disponibilidad en este momento.
                   </p>
                 <% @schedule && @schedule.slots == [] -> %>
-                  <p class="p-6 bg-stone-50 text-stone-600 text-sm text-center rounded-lg border border-dashed">
+                  <p class="p-6 bg-stone-50 text-stone-600 text-sm text-center rounded-lg border border-dashed border-stone-300">
                     No hay turnos disponibles para este día.
                   </p>
                 <% @schedule -> %>
@@ -289,9 +281,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                       <button
                         phx-click="select_slot"
                         phx-value-slot_id={slot.id}
-                        class="p-3 border rounded-lg hover:border-[#0A3847] hover:bg-[#DDE6DB]/20 text-center"
+                        class="p-3 border border-stone-200 rounded-lg hover:border-[#0A3847] hover:bg-[#DDE6DB]/20 text-center transition-all group focus:outline-none focus:ring-2 focus:ring-[#0A3847]"
                       >
-                        <span class="block text-base font-bold text-[#0A3847]">{slot.start_formatted}</span>
+                        <span class="block text-base font-bold text-[#0A3847] group-hover:scale-105 transition-transform">{slot.start_formatted}</span>
                         <span class="block text-xs text-stone-500">hasta {slot.end_formatted}</span>
                       </button>
                     <% end %>

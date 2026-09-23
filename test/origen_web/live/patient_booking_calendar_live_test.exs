@@ -11,7 +11,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
     attrs = %{
       first_name: "Ana",
-      last_name: "GÃ³mez",
+      last_name: "Gómez",
       document_type: "dni",
       document_number: "38123456",
       birthdate: ~D[1994-05-20],
@@ -56,7 +56,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert html =~ "Confirmar Reserva"
       assert html =~ "2026-09-25 de 09:00 a 09:30 hs"
-      assert html =~ "mite sin cargo:"
+      assert html =~ "Límite sin cargo:"
       assert html =~ "18:00" and html =~ "anterior a la cita (D-1)" and html =~ "50%"
 
       assert render_click(view, "clear_slot") =~ "Horarios Disponibles para 2026-09-25"
