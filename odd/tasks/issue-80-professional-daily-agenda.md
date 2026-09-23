@@ -18,6 +18,7 @@ Proveer una experiencia de usuario rápida, accesible y segura donde el profesio
 - Enrutamiento en `lib/origen_web/router.ex` bajo `/profesional/agenda` protegido por pipelines y `on_mount` de rol profesional.
 - Suite de pruebas de LiveView en `test/origen_web/live/professional_agenda_live_test.exs`.
 - Rama local: `feature/80-professional-daily-agenda`.
+- Pull Request: [PR #176](https://github.com/Team-Origen/origen/pull/176).
 
 ## Checklist
 
@@ -43,7 +44,8 @@ Proveer una experiencia de usuario rápida, accesible y segura donde el profesio
 
 ## Progress and evidence
 
-- Commit: `b7089d8` (`Closes #80`).
+- Commit: `3f3ea4b` (`Closes #80`).
+- Pull Request: [PR #176](https://github.com/Team-Origen/origen/pull/176).
 - LiveView `OrigenWeb.ProfessionalAgendaLive` implementado en `lib/origen_web/live/professional_agenda_live.ex` integrando `Origen.Booking.get_professional_agenda/2`.
 - Ruta `/profesional/agenda` montada en `lib/origen_web/router.ex` con pipeline `:require_internal_session`, `:require_professional` y `live_session` con `InternalAuthLive.on_mount(:ensure_professional)`.
 - Renderizado de turnos cronológicos con horarios formateados, etiquetas legibles de estado, tipos de consulta con duración y datos no clínicos de paciente (nombre, teléfono, documento).

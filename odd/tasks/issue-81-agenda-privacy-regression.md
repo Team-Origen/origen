@@ -17,6 +17,7 @@ Prevenir ataques de manipulación de identificadores (IDOR / BOLA), elevación d
 - Suite de regresión en `test/origen/booking/agenda_privacy_regression_test.exs` y pruebas de seguridad en endpoints y LiveView.
 - Verificación estricta de barreras de privacidad tanto a nivel backend como LiveView/HTTP.
 - Rama local: `feature/81-agenda-privacy-regression`.
+- Pull Request: [PR #178](https://github.com/Team-Origen/origen/pull/178).
 
 ## Checklist
 
@@ -42,7 +43,8 @@ Prevenir ataques de manipulación de identificadores (IDOR / BOLA), elevación d
 
 ## Progress and evidence
 
-- Commit: `bbd4de8` (`Closes #81`).
+- Commit: `56cb5c4` (`Closes #81`).
+- Pull Request: [PR #178](https://github.com/Team-Origen/origen/pull/178).
 - Suite de regresión durable implementada en `test/origen/booking/agenda_privacy_regression_test.exs` con 10 pruebas especializadas.
 - Aislamiento horizontal verificado bidireccionalmente: turnos de Profesional A nunca son visibles para Profesional B y viceversa.
 - Inmunidad ante IDOR / inyección de parámetros: intentos de enviar `professional_id`, `account_id`, `owner_account_id` en parámetros de cliente son ignorados y no alteran el alcance.
