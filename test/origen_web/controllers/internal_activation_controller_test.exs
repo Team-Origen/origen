@@ -154,6 +154,32 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     refute audit_dump =~ Base.encode32(seed, padding: false)
   end
 
+  test "returns unavailable when totp_keyring is not configured or invalid", %{conn: conn} do
+    invitation = issue_staff_invitation(:secretary)
+    exchange_conn = exchange(conn, invitation)
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/activate"))
+    seed = page_conn |> html_response(200) |> totp_seed_from_page()
+
+    previous_keyring = Application.get_env(:origen, :totp_keyring)
+    Application.delete_env(:origen, :totp_keyring)
+
+    try do
+      conn =
+        page_conn
+        |> recycle()
+        |> post(https(~p"/activate"), %{
+          "password" => "a-secure-password",
+          "password_confirmation" => "a-secure-password",
+          "totp_code" => NimbleTOTP.verification_code(seed)
+        })
+
+      assert response(conn, 404) == "Activation unavailable"
+      assert pending_state(invitation) == [["pending_activation", nil, nil, nil]]
+    after
+      Application.put_env(:origen, :totp_keyring, previous_keyring)
+    end
+  end
+
   defp issue_staff_invitation(role) do
     password_hash = Credentials.hash_password("administrator-password")
     seed = NimbleTOTP.secret()

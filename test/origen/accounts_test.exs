@@ -913,6 +913,32 @@ defmodule Origen.AccountsTest do
       assert Repo.query!("SELECT count(*) FROM audit_events WHERE event = 'account_activation'").rows ==
                [[2]]
     end
+
+    test "fails closed when verifier key is missing from opts and environment without fallback" do
+      invitation = invite_staff_account(:professional)
+      previous_key = Application.get_env(:origen, :bootstrap_admin_verifier_key)
+      Application.delete_env(:origen, :bootstrap_admin_verifier_key)
+
+      try do
+        assert {:error, :activation_failed} =
+                 Accounts.activate_internal_account(
+                   %{
+                     invitation_id: invitation.invitation_id,
+                     account_id: invitation.account_id,
+                     token: invitation.token,
+                     totp_seed: invitation.seed
+                   },
+                   %{
+                     password: "Password12345!",
+                     password_confirmation: "Password12345!",
+                     totp_code: NimbleTOTP.verification_code(invitation.seed)
+                   },
+                   []
+                 )
+      after
+        Application.put_env(:origen, :bootstrap_admin_verifier_key, previous_key)
+      end
+    end
   end
 
   defp invite_staff_account(role) do

@@ -2,6 +2,7 @@ defmodule OrigenWeb.InternalActivationController do
   use OrigenWeb, :controller
 
   alias Origen.Accounts
+  alias Origen.BootstrapAdmin.Credentials
   alias OrigenWeb.InternalActivationSessionStore
 
   @session_key :internal_activation_nonce
@@ -51,6 +52,7 @@ defmodule OrigenWeb.InternalActivationController do
          true <- is_binary(nonce),
          {:ok, session} <- InternalActivationSessionStore.fetch(nonce),
          {:ok, verifier_key} <- verifier_key(),
+         {:ok, totp_keyring} <- totp_keyring(),
          {:ok, activation_params} <- normalize_params(params),
          {:ok, _result} <-
            Accounts.activate_internal_account(
@@ -61,7 +63,8 @@ defmodule OrigenWeb.InternalActivationController do
                totp_seed: session.seed
              },
              activation_params,
-             verifier_key: verifier_key
+             verifier_key: verifier_key,
+             totp_keyring: totp_keyring
            ) do
       InternalActivationSessionStore.delete(nonce)
 
@@ -127,6 +130,17 @@ defmodule OrigenWeb.InternalActivationController do
   defp verifier_key do
     case Application.get_env(:origen, :bootstrap_admin_verifier_key) do
       key when is_binary(key) and byte_size(key) >= 32 -> {:ok, key}
+      _invalid -> {:error, :invalid_configuration}
+    end
+  end
+
+  defp totp_keyring do
+    keyring =
+      Application.get_env(:origen, :totp_keyring) ||
+        Application.get_env(:origen, :bootstrap_admin_totp_keyring)
+
+    case Credentials.validate_keyring(keyring) do
+      :ok -> {:ok, keyring}
       _invalid -> {:error, :invalid_configuration}
     end
   end
