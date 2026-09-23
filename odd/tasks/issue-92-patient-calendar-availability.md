@@ -16,5 +16,5 @@ Implement the core appointment availability calculation engine and integrate con
 - [x] 5. Branch setup 2: create `feature/92-patient-calendar-consultation-selection` from PR 1 branch.
 - [x] 6. Frontend integration: integrate consultation type selector and dynamic duration slot computation into `PatientBookingCalendarLive`.
 - [x] 7. LiveView tests: test dynamic consultation type selection and slot recalculation in `PatientBookingCalendarLiveTest`.
-- [ ] 8. PR 2/2: open stacked PR 2/2 against PR 1 branch (<= 400 lines) and verify CI checks.
+- [x] 8. PR 2/2: open stacked PR 2/2 against PR 1 branch (<= 400 lines) and verify CI checks.
 - [ ] 9. Verification & manual testing flow: provide interactive step-by-step verification guide.
