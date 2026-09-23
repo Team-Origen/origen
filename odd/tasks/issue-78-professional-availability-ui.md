@@ -18,7 +18,8 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - Professional availability UI at `/configuracion/profesional`.
 - Real integration with `Origen.Availability.get_own_configuration/1` and `replace_own_configuration/2`.
 - Focused LiveView tests and applicable functional verification.
-- No backend behavior changes, database changes, GitHub Issue mutations, commits, pushes, or pull requests without separate authorization.
+- No backend behavior changes, database changes, or GitHub Issue mutations.
+- The user authorized one commit and one push only to the current `feature/78-professional-availability-ui` branch, with no pull request. This bounded writer must leave both operations to the parent after verification.
 
 ## Confirmed contract
 
@@ -33,7 +34,8 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - A testable bulk action may copy one day's complete windows to selected weekdays; the weekday checklist exists only inside that copy action and never becomes a persisted recurring group.
 - Availability uses progressive disclosure: the default state shows the persisted weekly and booking summary, and an explicit `Edit availability` button expands the complete editor.
 - Cancelling discards the draft and collapses the editor; a successful save adopts the normalized backend response and collapses it; validation failure preserves the draft and keeps the editor open.
-- The screen separates responsibilities into independent visual blocks: weekly schedule assignment; booking window plus minimum lead time beneath it; and organization timezone information in its own block.
+- The previous separate-block visual decision is superseded: the weekly schedule, booking horizon, minimum lead time, and editing footer belong to one unified `Weekly availability` section because they are submitted as one atomic replacement. Organization timezone information remains in its own block.
+- Manually typed window boundaries remain supported. The UI validates each boundary against the current agenda interval and local window rules, marks only the affected input invalid with a red border and associated warning, and prevents confirmation while any local error remains. Native `step` behavior is guidance only; backend validation remains authoritative.
 - The existing agenda-interval section remains the single place that displays and edits the agenda interval; the new availability blocks may reference its value only when guidance is required and must not duplicate that editor.
 - Backend-normalized data replaces the local draft after a successful save.
 - Rejected saves preserve the local draft and present one consolidated validation notice.
@@ -67,6 +69,8 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] ODD-78-04 — Submit one complete replacement, preserve drafts on rejection, consolidate backend validation errors, and adopt normalized backend data on success.
 - [ ] ODD-78-05 — Verify semantic accessibility, keyboard workflows, and narrow-screen reflow without relying on color or pointer-only controls.
 - [ ] ODD-78-06 — Run focused integration checks, compilation/format checks, the applicable full suite, and record honest final evidence.
+- [x] ODD-78-07 — Correct the availability palette using established Professional configuration/catalog tokens, unify weekly and booking controls in one visual section, and place Save/Cancel in that section's form footer.
+- [x] ODD-78-08 — Prevent confirmation for manually typed off-interval or otherwise locally invalid boundaries, with field-specific red invalid styling, accessible associated warnings, and recovery when corrected.
 
 ## Acceptance criteria
 
@@ -79,6 +83,10 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - Empty weekly availability saves successfully.
 - The interface remains usable at a narrow viewport and exposes associated labels, status feedback, and invalid-state semantics.
 - Completion uses the real Issue #77 backend rather than fixtures.
+- The editor presents weekly windows, booking horizon, minimum lead time, and Save/Cancel inside one visually coherent `Weekly availability` section using the established Origen palette.
+- A manually typed boundary that is not aligned to the current agenda interval marks that specific input with `aria-invalid`, red-border semantics, and a clearly associated warning; Save is disabled and submission is prevented until all boundaries are aligned and otherwise locally valid.
+- Correcting the affected boundary clears its field-level invalid state and re-enables confirmation when no other local error remains.
+- UI prevention does not alter backend rejection of true overlap, backend merging of touching windows, complete atomic replacement, editable booking controls, authorization, preview safety, or carousel behavior.
 
 ## Applicable checks
 
@@ -89,6 +97,8 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - Full `mix test` when environmentally available.
 - Browser-level keyboard and narrow-viewport verification unless equivalent browser automation is introduced.
 - `git diff --check`.
+- Focused LiveView assertions for the unified section/footer and palette contract through stable public semantics/classes.
+- Focused LiveView assertions that an off-interval typed boundary receives field-specific invalid semantics and warning, disables Save, performs no replacement/persistence, and recovers after correction when practical.
 
 ## Progress and verification evidence
 
@@ -142,6 +152,18 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] Corrective `git diff --check` passed; Git emitted only the documented line-ending conversion warnings for tracked source files.
 - [x] Local-only corrective rerun passed 13/13 focused LiveView tests (seed 771955) and 46/46 existing catalog/backend integration tests (seed 303835).
 - [x] The same local-only rerun passed `mix compile --warnings-as-errors`, exact check-only formatting for the four intentionally formatted files, `mix assets.build`, `mix phx.routes`, and `git diff --check`. No WSL, remote command, commit, push, or GitHub mutation was performed.
+- [x] ODD-78-07 RED observed: `mix test test/origen_web/professional_availability_live_test.exs` passed 13/14 (seed 937321); the editor lacked the unified `#availability-section` card and therefore could not contain the booking controls or form footer under the established Origen palette contract.
+- [x] ODD-78-07 GREEN observed: the focused command passed 14/14 (seed 746820); weekly windows and editable booking controls now share one basic card using Origen semantic surface/border/text tokens, with Save/Cancel in its card footer.
+- [x] ODD-78-08 RED observed: after correcting a test-only selector delimiter, the focused command passed 14/15 (seed 450168); changing the Monday start to `08:10` did not add field-specific invalid semantics, warning association, red-border styling, or disabled confirmation.
+- [x] ODD-78-08 GREEN observed: the focused command passed 15/15 (seed 674312); an off-interval boundary now receives field-specific `aria-invalid`, a red danger border, and an associated Spanish warning, while Save is disabled and a direct submit does not call replacement. Correcting the value clears the error and re-enables Save.
+- [x] Final focused LiveView verification passed 15/15 (seed 878057): `mix test test/origen_web/professional_availability_live_test.exs`.
+- [x] Final existing catalog/backend verification passed 46/46 (seed 590360): `mix test test/origen_web/consultation_type_catalog_live_test.exs test/origen/availability_test.exs`.
+- [x] `mix compile --warnings-as-errors` passed with only the known non-fatal Windows colocated-assets symlink warning (`:eperm`).
+- [x] Source-mutating `mix format` and exact `mix format --check-formatted` passed for `professional_availability_component.ex` and `professional_availability_live_test.exs`; the known catalog whitespace baseline was untouched.
+- [x] `mix assets.build` passed (Tailwind v4.3.0 and esbuild completed successfully).
+- [x] `mix phx.routes` passed and listed both `GET /configuracion/profesional` and the dev-only `GET /dev/professional-availability` route.
+- [x] `git diff --check` passed with only line-ending conversion warnings for the three intentionally changed tracked files.
+- [x] No backend domain file, migration, schema, unrelated source, commit, push, pull request, GitHub artifact, WSL, or remote operation was changed or performed.
 
 ## Pending WSL manual checklist
 

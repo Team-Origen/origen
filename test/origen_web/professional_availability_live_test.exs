@@ -14,6 +14,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     def replace_own_configuration(_principal, _attributes), do: {:error, :unavailable}
   end
 
+  defmodule TrackingAvailability do
+    def get_own_configuration(principal), do: Origen.Availability.get_own_configuration(principal)
+
+    def replace_own_configuration(_principal, _attributes) do
+      send(Application.fetch_env!(:origen, :availability_test_pid), :replacement_called)
+      {:error, :unexpected_replacement}
+    end
+  end
+
   setup %{conn: conn} do
     previous_context = Application.get_env(:origen, :availability_context)
 
@@ -107,6 +116,72 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
            )
 
     assert has_element?(view, ~s(button[type="submit"]), "Guardar disponibilidad")
+  end
+
+  test "uses the Origen palette and keeps the atomic editor in one visual section", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    assert has_element?(view, "#availability-section > .pc-card.pc-card--basic")
+
+    assert has_element?(
+             view,
+             "#availability-section #availability-day-monday.border-border.bg-surface-muted"
+           )
+
+    assert has_element?(view, "#availability-section #booking-rules-editor")
+    assert has_element?(view, "#availability-section .pc-card__footer #availability-form-actions")
+    assert has_element?(view, "#availability-form-actions", "Cancelar")
+    assert has_element?(view, "#availability-form-actions", "Guardar disponibilidad")
+    refute has_element?(view, "#availability-form > #booking-rules-section")
+  end
+
+  test "blocks an off-interval typed boundary and recovers when the field is corrected", %{
+    conn: conn
+  } do
+    Application.put_env(:origen, :availability_context, TrackingAvailability)
+    Application.put_env(:origen, :availability_test_pid, self())
+    on_exit(fn -> Application.delete_env(:origen, :availability_test_pid) end)
+
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    invalid =
+      put_in(replacement_params(), ["weekly_availability", "monday", "0", "start"], "08:10")
+
+    view
+    |> form("#availability-form", availability: invalid)
+    |> render_change()
+
+    assert has_element?(
+             view,
+             ~s(#availability-monday-0-start[aria-invalid="true"][aria-describedby="availability-monday-0-start-error"][class*="border-danger-500"])
+           )
+
+    assert has_element?(
+             view,
+             "#availability-monday-0-start-error",
+             "Debe coincidir con intervalos de 30 minutos."
+           )
+
+    assert has_element?(view, ~s(#availability-save-button[disabled]))
+
+    view
+    |> form("#availability-form", availability: invalid)
+    |> render_submit()
+
+    refute_received :replacement_called
+    assert has_element?(view, "#availability-form")
+
+    valid = put_in(invalid, ["weekly_availability", "monday", "0", "start"], "08:00")
+
+    view
+    |> form("#availability-form", availability: valid)
+    |> render_change()
+
+    refute has_element?(view, ~s(#availability-monday-0-start[aria-invalid="true"]))
+    refute has_element?(view, "#availability-monday-0-start-error")
+    assert has_element?(view, "#availability-save-button:not([disabled])")
   end
 
   test "exposes progressive disclosure and operational narrow-screen day carousel bindings", %{
