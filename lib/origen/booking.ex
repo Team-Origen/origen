@@ -3,12 +3,14 @@ defmodule Origen.Booking do
   Contexto de dominio para la gestión y operación de reservas de turnos (PLN-08).
 
   Implementa la validación sintáctica de contratos (Issue #62), la persistencia
-  transaccional de turnos con snapshots históricos inmutables (Issue #63) y las
-  reglas de autorización por actor Paciente / Secretaría / Profesional (Issue #64).
+  transaccional de turnos con snapshots históricos inmutables (Issue #63), las
+  reglas de autorización por actor Paciente / Secretaría / Profesional (Issue #64)
+  y la prevención de solapamientos y concurrencia de turnos (Issue #65).
   """
 
   alias Origen.Booking.Appointment
   alias Origen.Booking.Authorization
+  alias Origen.Booking.Overlap
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
   alias Origen.Repo
@@ -36,12 +38,37 @@ defmodule Origen.Booking do
   defdelegate authorize_reservation(request_or_params), to: Authorization
 
   @doc """
+  Valida que el intervalo `[start_time, end_time)` propuesto no solape turnos
+  activos de la agenda del profesional ni de la del paciente (Issue #65).
+
+  Delega en `Origen.Booking.Overlap.validate_no_overlap/1`: retorna
+  `{:ok, :no_conflict}`, `{:error, :professional_schedule_conflict}` o
+  `{:error, :patient_schedule_conflict}`.
+  """
+  @spec validate_no_overlap(map()) :: {:ok, :no_conflict} | {:error, atom()}
+  defdelegate validate_no_overlap(attrs), to: Overlap
+
+  @doc """
+  Alias de `validate_no_overlap/1` expuesto como verbo descriptivo de la
+  consulta de conflictos de agenda (Issue #65).
+  """
+  @spec check_overlaps(map()) :: {:ok, :no_conflict} | {:error, atom()}
+  defdelegate check_overlaps(attrs), to: Overlap
+
+  @doc """
   Persiste un turno en la base de datos copiando nombre, duración y precio del tipo
   de consulta como snapshots históricos inmutables propios (Issue #63).
 
   Acepta un mapa de atributos de turno y opcionalmente un mapa de snapshot precalculado
   o simulado para testing (`%{name: ..., duration_minutes: ..., exact_price_ars: ...}`).
   Si no se pasa snapshot explícito, lo resuelve de la persistencia de tipos de consulta.
+
+  Previene solapamientos (Issue #65): verifica con `Origen.Booking.Overlap` que el
+  intervalo `[start_time, end_time)` no solape turnos activos del profesional ni del
+  paciente, y traduce las violaciones de las restricciones de exclusión de PostgreSQL
+  (`appointments_no_professional_overlap` / `appointments_no_patient_overlap`) que
+  sobrevivan a una carrera concurrente. Un conflicto de agenda del profesional retorna
+  `{:error, :slot_already_booked}` y uno del paciente `{:error, :patient_schedule_conflict}`.
 
   Garantiza atomicidad transaccional: ante cualquier falla o restricción violada,
   no se deja registro parcial y se devuelve un error claro.
@@ -89,15 +116,27 @@ defmodule Origen.Booking do
                 snapshot_exact_price_ars: price
               }
 
-              %Appointment{}
-              |> Appointment.changeset(appointment_params)
-              |> Repo.insert()
-              |> case do
-                {:ok, appointment} ->
-                  appointment
+              case Overlap.validate_no_overlap(appointment_params) do
+                {:ok, :no_conflict} ->
+                  %Appointment{}
+                  |> Appointment.changeset(appointment_params)
+                  |> Repo.insert()
+                  |> case do
+                    {:ok, appointment} ->
+                      appointment
 
-                {:error, changeset} ->
-                  Repo.rollback({:validation_error, changeset})
+                    {:error, changeset} ->
+                      rollback_exclusion_or_validation(changeset)
+                  end
+
+                {:error, :professional_schedule_conflict} ->
+                  Repo.rollback(:slot_already_booked)
+
+                {:error, :patient_schedule_conflict} ->
+                  Repo.rollback(:patient_schedule_conflict)
+
+                {:error, reason} ->
+                  Repo.rollback(reason)
               end
 
             _invalid_start_time ->
@@ -128,6 +167,25 @@ defmodule Origen.Booking do
       base_price_amount: appt.snapshot_exact_price_ars,
       relationship_created?: relationship_created?
     }
+  end
+
+  defp rollback_exclusion_or_validation(changeset) do
+    cond do
+      constraint_violation?(changeset, "appointments_no_professional_overlap") ->
+        Repo.rollback(:slot_already_booked)
+
+      constraint_violation?(changeset, "appointments_no_patient_overlap") ->
+        Repo.rollback(:patient_schedule_conflict)
+
+      true ->
+        Repo.rollback({:validation_error, changeset})
+    end
+  end
+
+  defp constraint_violation?(changeset, constraint_name) do
+    Enum.any?(changeset.errors, fn {_field, {_message, opts}} ->
+      Keyword.get(opts, :constraint_name) == constraint_name
+    end)
   end
 
   defp resolve_consultation_type_snapshot(nil, _owner_id),

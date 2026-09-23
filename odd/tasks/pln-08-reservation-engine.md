@@ -42,7 +42,7 @@ Separating scenario definition, syntactic contracts, and snapshot persistence in
 
 ### Phase 2: Engine Integration (Issues #64, #65, #66)
 - [x] ODD-08-12 — Implement actor authorization (`Origen.Booking.Authorization`): Patient profile completion & phone verification, Secretary assisted flow, Professional permitted patient check (Issue #64).
-- [ ] ODD-08-13 — Implement overlap and concurrency prevention: non-overlapping agenda validation and database-level exclusion / atomic locking (Issue #65).
+- [x] ODD-08-13 — Implement overlap and concurrency prevention: non-overlapping agenda validation and database-level exclusion / atomic locking (Issue #65).
 - [ ] ODD-08-14 — Implement atomic multi-step reservation orchestration: Appointment + ProfessionalPatientRelationship + AuditEvent with complete rollback guarantee (Issue #66).
 - [ ] ODD-08-15 — Technical audit and verification by subagent.
 - [ ] ODD-08-16 — Open chained Pull Requests for #64, #65, and #66 without merging.
