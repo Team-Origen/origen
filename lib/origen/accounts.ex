@@ -699,12 +699,26 @@ defmodule Origen.Accounts do
 
   defp verifier_key(opts) do
     key =
-      Keyword.get(opts, :verifier_key) ||
-        Application.get_env(:origen, :bootstrap_admin_verifier_key) ||
-        if(Application.get_env(:origen, :env) == :dev, do: String.duplicate("d", 32))
+      case Keyword.get(opts, :verifier_key) do
+        k when is_binary(k) and byte_size(k) >= 32 ->
+          k
+
+        _ ->
+          case Application.get_env(:origen, :bootstrap_admin_verifier_key) do
+            k when is_binary(k) and byte_size(k) >= 32 ->
+              k
+
+            _ ->
+              if Application.get_env(:origen, :env) in [:dev, :test] do
+                String.duplicate("k", 32)
+              else
+                nil
+              end
+          end
+      end
 
     case key do
-      key when is_binary(key) and byte_size(key) >= 32 -> {:ok, key}
+      k when is_binary(k) and byte_size(k) >= 32 -> {:ok, k}
       _invalid -> {:error, :invalid_verifier_key}
     end
   end

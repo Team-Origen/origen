@@ -69,7 +69,7 @@ defmodule OrigenWeb.AdminInternalLive do
   defp create_account(current_user, role, email) do
     with actor_id when is_integer(actor_id) <- get_actor_id(current_user),
          {:ok, role_atom} <- parse_role(role) do
-      verifier_key = Application.get_env(:origen, :bootstrap_admin_verifier_key)
+      verifier_key = resolve_verifier_key()
       opts = if verifier_key, do: [verifier_key: verifier_key], else: []
 
       case Accounts.create_and_invite_internal_account(
@@ -94,6 +94,20 @@ defmodule OrigenWeb.AdminInternalLive do
       end
     else
       _ -> {:error, :unauthorized}
+    end
+  end
+
+  defp resolve_verifier_key do
+    case Application.get_env(:origen, :bootstrap_admin_verifier_key) do
+      k when is_binary(k) and byte_size(k) >= 32 ->
+        k
+
+      _ ->
+        if Application.get_env(:origen, :env) in [:dev, :test] do
+          String.duplicate("k", 32)
+        else
+          nil
+        end
     end
   end
 

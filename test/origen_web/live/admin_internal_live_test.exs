@@ -11,6 +11,23 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   use OrigenWeb.LiveViewCase
 
+  @default_verifier_key String.duplicate("k", 32)
+
+  setup do
+    previous_key = Application.get_env(:origen, :bootstrap_admin_verifier_key)
+    Application.put_env(:origen, :bootstrap_admin_verifier_key, @default_verifier_key)
+
+    on_exit(fn ->
+      if previous_key do
+        Application.put_env(:origen, :bootstrap_admin_verifier_key, previous_key)
+      else
+        Application.put_env(:origen, :bootstrap_admin_verifier_key, @default_verifier_key)
+      end
+    end)
+
+    :ok
+  end
+
   describe "mount/3" do
     test "renders the form with role and email fields", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
