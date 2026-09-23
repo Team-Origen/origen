@@ -9,6 +9,8 @@ defmodule Origen.Booking.Appointment do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @type t :: %__MODULE__{}
+
   @statuses ~w(requested reserved confirmed attended cancelled no_show)
 
   @primary_key {:id, :id, autogenerate: true}
@@ -64,6 +66,14 @@ defmodule Origen.Booking.Appointment do
       greater_than_or_equal_to: Decimal.new("0.00")
     )
     |> validate_end_after_start()
+    |> exclusion_constraint(:start_time,
+      name: :appointments_no_professional_overlap,
+      message: "overlaps an active appointment in the professional schedule"
+    )
+    |> exclusion_constraint(:start_time,
+      name: :appointments_no_patient_overlap,
+      message: "overlaps an active appointment in the patient schedule"
+    )
   end
 
   defp validate_end_after_start(changeset) do

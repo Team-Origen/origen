@@ -247,6 +247,62 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       refute html =~ "Profesional"
       assert html =~ "Secretaria"
     end
+
+    test "tampering with role to create professional by secretary is rejected", %{conn: conn} do
+      secretary = insert_active_account("secretary")
+      conn = put_user_in_session(conn, secretary)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      # Client bypasses DOM and directly pushes event
+      html =
+        render_submit(view, :save, %{
+          "form" => %{"role" => "professional", "email" => "hacked@example.com"}
+        })
+
+      # Validation catches it because "professional" is not in secretary's allowed_roles
+      assert html =~ "is invalid" or html =~ "No tiene permiso"
+    end
+
+    test "tampering with role to create administrator is rejected", %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      # Client bypasses DOM and directly pushes event
+      html =
+        render_submit(view, :save, %{
+          "form" => %{"role" => "administrator", "email" => "newadmin@example.com"}
+        })
+
+      assert html =~ "is invalid" or html =~ "Rol inválido"
+    end
+
+    test "typed values are preserved in the form inputs upon rejection", %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      # First submission creates the account
+      view
+      |> form("#admin-internal-form",
+        form: %{role: "professional", email: "first@example.com"}
+      )
+      |> render_submit()
+
+      # Second submission with the same email fails (email taken)
+      html =
+        view
+        |> form("#admin-internal-form",
+          form: %{role: "professional", email: "first@example.com"}
+        )
+        |> render_submit()
+
+      assert html =~ "Ya existe una cuenta con este correo electrónico"
+      assert html =~ ~s(value="first@example.com")
+    end
   end
 
   describe "teclado y foco" do
@@ -287,6 +343,35 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> render_change()
 
       assert html =~ "person@example.com"
+    end
+  end
+
+  describe "accessibility and ARIA feedback" do
+    test "result and error banners have proper ARIA live region roles", %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
+
+      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+
+      # Success case has role="status"
+      html =
+        view
+        |> form("#admin-internal-form",
+          form: %{role: "professional", email: "aria.success@example.com"}
+        )
+        |> render_submit()
+
+      assert html =~ ~s(role="status")
+
+      # Duplicate failure has role="alert"
+      html =
+        view
+        |> form("#admin-internal-form",
+          form: %{role: "professional", email: "aria.success@example.com"}
+        )
+        |> render_submit()
+
+      assert html =~ ~s(role="alert")
     end
   end
 

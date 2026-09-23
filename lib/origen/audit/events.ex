@@ -96,6 +96,15 @@ defmodule Origen.Audit.Events do
   def document_collision_derived(actor, ref) when is_binary(ref),
     do: build(actor, "document_collision_derived", {:patient, ref}, "succeeded")
 
+  def persona_searched(actor, ref, result \\ "succeeded") when is_binary(ref),
+    do: build(actor, "persona_searched", {:patient, ref}, result)
+
+  def persona_created(actor, ref) when is_binary(ref),
+    do: build(actor, "persona_created", {:patient, ref}, "succeeded")
+
+  def persona_reused(actor, ref) when is_binary(ref),
+    do: build(actor, "persona_reused", {:patient, ref}, "succeeded")
+
   def phone_challenge_issued(actor, ref) when is_binary(ref),
     do: build(actor, "phone_challenge_issued", {:patient, ref}, "succeeded")
 

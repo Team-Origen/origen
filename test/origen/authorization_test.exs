@@ -66,6 +66,53 @@ defmodule Origen.AuthorizationTest do
       end
     end
 
+    test "internal account creation operations strictly require an active Administrator (#60)" do
+      operations = [:create_professional_account, :create_secretary_account]
+
+      unauthorized_subjects = [
+        {:role, :secretary},
+        {:role, :professional},
+        {:channel, :public_possession},
+        {:channel, :invitation}
+      ]
+
+      for operation <- operations do
+        target_role =
+          if operation == :create_professional_account, do: :professional, else: :secretary
+
+        target = fact(%{role: target_role, state: :pending_activation})
+
+        for subject <- unauthorized_subjects do
+          request = request(operation, subject, {:known, :active}, target, :not_applicable)
+          assert Authorization.decide(request) == {:deny, :no_matching_rule}
+        end
+
+        request =
+          request(
+            operation,
+            {:role, :administrator},
+            {:known, :pending_activation},
+            target,
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+
+        admin_target = fact(%{role: :administrator, state: :pending_activation})
+
+        request =
+          request(
+            operation,
+            {:role, :administrator},
+            {:known, :active},
+            admin_target,
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+    end
+
     test "does not treat role names as a hierarchy" do
       request =
         request(

@@ -66,6 +66,13 @@ defmodule Origen.Appointments.MockCalendar do
             duration = Keyword.get(opts, :duration_minutes, 30)
             interval = Keyword.get(opts, :agenda_interval_minutes, duration)
 
+            now =
+              Keyword.get(opts, :now) ||
+                if(Application.get_env(:origen, :env) == :test,
+                  do: ~U[2026-09-23 08:00:00Z],
+                  else: DateTime.utc_now()
+                )
+
             slots =
               Availability.calculate_slots(
                 date,
@@ -74,7 +81,7 @@ defmodule Origen.Appointments.MockCalendar do
                 agenda_interval_minutes: interval,
                 duration_minutes: duration,
                 min_lead_time_minutes: Keyword.get(opts, :min_lead_time_minutes, 30),
-                now: Keyword.get(opts, :now, DateTime.utc_now())
+                now: now
               )
 
             {:ok,

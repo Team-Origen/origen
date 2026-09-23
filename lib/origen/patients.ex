@@ -158,6 +158,191 @@ defmodule Origen.Patients do
   def ready_for_booking?(%PatientProfile{state: "completed", phone_verified: true}), do: true
   def ready_for_booking?(_profile), do: false
 
+  @doc """
+  Searches a Persona by controlled document type and normalized document number on behalf
+  of an authenticated Secretary.
+  Returns:
+  - `{:ok, %{persona: persona, profile: profile}}` when the identity exists, where `profile`
+    is the linked `PatientProfile` (may be `nil` when the persona has no profile yet).
+  - `{:ok, nil}` when no persona matches the document.
+  Every search is audited in `public.audit_events` with the Secretary as actor and a
+  sanitized document reference as entity. The document reference is used because a
+  persona id does not exist for missed searches.
+  """
+  @spec search_persona_by_document(String.t(), String.t(), integer()) ::
+          {:ok, %{persona: Persona.t(), profile: PatientProfile.t() | nil} | nil}
+  def search_persona_by_document(document_type, document_number, secretary_account_id)
+      when is_binary(document_type) and is_binary(document_number) and
+             is_integer(secretary_account_id) do
+    doc_num = Persona.normalize_number(document_number)
+
+    persona =
+      Repo.one(
+        from p in Persona,
+          where: p.document_type == ^document_type and p.document_number == ^doc_num
+      )
+
+    profile = linked_profile(persona)
+
+    audit_persona_searched(secretary_account_id, document_type, doc_num)
+
+    case persona do
+      nil -> {:ok, nil}
+      %Persona{} = found -> {:ok, %{persona: found, profile: profile}}
+    end
+  end
+
+  @doc """
+  Registers or reuses a Persona for the assisted booking flow (RF-01, RF-02, BOOK-02).
+  Enforces:
+  1. Document normalization through `Persona.changeset/2`.
+  2. Existing identities are reused without overwriting their identity fields.
+  3. A persona without a linked profile gets a new `PatientProfile` in
+     `pending_completion` with the assisted placeholder email when no email is provided.
+  4. New identities get a `Persona` plus a linked `pending_completion` profile.
+  5. Creation and reuse are audited with the Secretary as actor.
+  Returns `{:ok, %{persona: persona, profile: profile, outcome: :created | :reused}}`
+  or `{:error, changeset}` when the provided attributes are invalid.
+  """
+  @spec register_or_reuse_assisted_persona(map(), integer()) ::
+          {:ok, %{persona: Persona.t(), profile: PatientProfile.t(), outcome: :created | :reused}}
+          | {:error, Ecto.Changeset.t()}
+  def register_or_reuse_assisted_persona(attrs, secretary_account_id)
+      when is_map(attrs) and is_integer(secretary_account_id) do
+    persona_changeset = Persona.changeset(%Persona{}, attrs)
+
+    if persona_changeset.valid? do
+      doc_type = Ecto.Changeset.get_field(persona_changeset, :document_type)
+      doc_num = Ecto.Changeset.get_field(persona_changeset, :document_number)
+
+      Repo.transaction(fn ->
+        existing_persona =
+          Repo.one(
+            from p in Persona,
+              where: p.document_type == ^doc_type and p.document_number == ^doc_num,
+              lock: "FOR UPDATE"
+          )
+
+        case existing_persona do
+          nil -> create_assisted_persona(persona_changeset, attrs, secretary_account_id)
+          %Persona{} = persona -> reuse_assisted_persona(persona, attrs, secretary_account_id)
+        end
+      end)
+    else
+      {:error, persona_changeset}
+    end
+  end
+
+  defp linked_profile(nil), do: nil
+
+  defp linked_profile(%Persona{} = persona) do
+    Repo.one(
+      from pf in PatientProfile,
+        where: pf.persona_id == ^persona.id,
+        order_by: [asc: pf.id],
+        limit: 1
+    )
+  end
+
+  defp create_assisted_persona(persona_changeset, attrs, secretary_account_id) do
+    case Repo.insert(persona_changeset) do
+      {:ok, persona} ->
+        case insert_assisted_profile(persona, attrs) do
+          {:ok, profile} ->
+            audit_persona_created(secretary_account_id, persona)
+            %{persona: persona, profile: profile, outcome: :created}
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
+    end
+  end
+
+  defp reuse_assisted_persona(%Persona{} = persona, attrs, secretary_account_id) do
+    case linked_profile(persona) do
+      %PatientProfile{} = profile ->
+        audit_persona_reused(secretary_account_id, persona)
+        %{persona: persona, profile: profile, outcome: :reused}
+
+      nil ->
+        case insert_assisted_profile(persona, attrs) do
+          {:ok, profile} ->
+            audit_persona_reused(secretary_account_id, persona)
+            %{persona: persona, profile: profile, outcome: :reused}
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+    end
+  end
+
+  defp insert_assisted_profile(%Persona{} = persona, attrs) do
+    %PatientProfile{}
+    |> PatientProfile.changeset(%{
+      email: assisted_email(persona, attrs),
+      persona_id: persona.id,
+      state: "pending_completion",
+      phone: Map.get(attrs, :phone) || Map.get(attrs, "phone"),
+      phone_verified: false
+    })
+    |> Repo.insert()
+  end
+
+  defp assisted_email(%Persona{} = persona, attrs) do
+    email = Map.get(attrs, :email) || Map.get(attrs, "email")
+
+    if is_binary(email) and String.trim(email) != "" do
+      String.trim(email) |> String.downcase()
+    else
+      "asistido-persona-#{persona.id}@origen.local"
+    end
+  end
+
+  # The actor reference keeps the plain account id: `Events` sanitization rejects
+  # references containing "secret" (and therefore any "secretary:<id>" prefix), and
+  # `actor_kind: "secretary"` already carries the role.
+  defp secretary_actor(secretary_account_id),
+    do: {:secretary, Integer.to_string(secretary_account_id)}
+
+  defp persona_ref(%Persona{} = persona),
+    do: "#{persona.document_type}:#{persona.document_number}"
+
+  defp audit_persona_searched(secretary_account_id, document_type, document_number) do
+    with {:ok, event} <-
+           Events.persona_searched(
+             secretary_actor(secretary_account_id),
+             "#{document_type}:#{document_number}"
+           ),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
+  defp audit_persona_created(secretary_account_id, %Persona{} = persona) do
+    with {:ok, event} <-
+           Events.persona_created(secretary_actor(secretary_account_id), persona_ref(persona)),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
+  defp audit_persona_reused(secretary_account_id, %Persona{} = persona) do
+    with {:ok, event} <-
+           Events.persona_reused(secretary_actor(secretary_account_id), persona_ref(persona)),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> :ok
+    end
+  end
+
   defp audit_profile_completed(email) do
     with {:ok, event} <- Events.patient_profile_completed({:patient, email}, email),
          {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
