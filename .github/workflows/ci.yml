@@ -94,7 +94,7 @@ jobs:
         run: mix compile --warnings-as-errors
 
       - name: Análisis estático de seguridad (Sobelow)
-        run: mix sobelow --skip --threshold medium
+        run: mix sobelow --skip --threshold medium --exit
 
       - name: Análisis estático de tipos (Dialyzer)
         run: mix dialyzer --format short
