@@ -7,7 +7,11 @@ defmodule OrigenWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {OrigenWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
+
+    plug :put_secure_browser_headers, %{
+      "content-security-policy" =>
+        "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data:; font-src 'self' data:;"
+    }
   end
 
   pipeline :api do
