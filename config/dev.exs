@@ -87,6 +87,13 @@ config :swoosh, :api_client, false
 # Bootstrap admin verifier key for development invitation issuance
 config :origen, bootstrap_admin_verifier_key: String.duplicate("d", 32)
 
+# Development TOTP keyring for internal account activation
+config :origen,
+  totp_keyring: %{
+    active: %{tag: "seed.dev.v1", key: String.duplicate("d", 32)},
+    retired: []
+  }
+
 if File.exists?(Path.expand("dev.local.exs", __DIR__)) do
   import_config "dev.local.exs"
 end

@@ -46,3 +46,5 @@ npm-debug.log
 .pi/
 .codegraph/
 .DS_Store
+*.plt
+*.plt.hash
