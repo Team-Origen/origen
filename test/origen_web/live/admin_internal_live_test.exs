@@ -57,6 +57,23 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       assert html =~ "Secretaria"
       refute html =~ "Profesional"
     end
+
+    test "authenticates and mounts using real internal_session_token without synthetic current_user",
+         %{conn: conn} do
+      admin = insert_active_account("administrator")
+      {:ok, %{token: token}} = Origen.Sessions.create_session(admin.id)
+
+      conn =
+        conn
+        |> Plug.Test.init_test_session(%{})
+        |> Plug.Conn.put_session(:internal_session_token, token)
+
+      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+
+      assert html =~ "Crear Cuenta"
+      assert html =~ "Profesional"
+      assert html =~ "Secretaria"
+    end
   end
 
   describe "authorization" do
@@ -405,6 +422,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/admin/internal")
 
+      assert html =~ "phx-disable-with=\"Creando Cuenta...\""
       assert html =~ "bg-[#174B63]"
       assert html =~ "text-white"
       assert html =~ "h-[44px]"
