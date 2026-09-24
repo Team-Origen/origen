@@ -19,7 +19,9 @@ defmodule OrigenWeb.AdminInternalLive do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = normalize_user(session["current_user"] || session[:current_user])
+    current_user =
+      resolve_session_user(session) ||
+        normalize_user(session["current_user"] || session[:current_user])
 
     current_user =
       if current_user == nil and Application.get_env(:origen, :env) == :dev do
@@ -153,6 +155,19 @@ defmodule OrigenWeb.AdminInternalLive do
     |> Changeset.cast(%{}, [:role, :email])
   end
 
+  defp resolve_session_user(session) when is_map(session) do
+    token = session["internal_session_token"] || session[:internal_session_token]
+
+    with token when is_binary(token) <- token,
+         {:ok, internal_session} <- Origen.Sessions.touch_session(token) do
+      %{"id" => internal_session.account_id, "role" => to_string(internal_session.role)}
+    else
+      _ -> nil
+    end
+  end
+
+  defp resolve_session_user(_session), do: nil
+
   defp normalize_user(%{"role" => role} = user) when is_binary(role), do: user
   defp normalize_user(%{"role" => role} = user), do: Map.put(user, "role", to_string(role))
 
@@ -234,6 +249,7 @@ defmodule OrigenWeb.AdminInternalLive do
 
           <.button
             type="submit"
+            phx-disable-with="Creando Cuenta..."
             class="w-full bg-[#174B63] text-white h-[44px] lg:h-[52px] lg:text-lg px-6 rounded-md font-inter font-semibold hover:bg-[#143d52] focus:ring-2 focus:ring-[#174B63] focus:ring-offset-2"
           >
             Crear Cuenta

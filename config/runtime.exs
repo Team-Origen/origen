@@ -69,6 +69,19 @@ if config_env() == :prod do
     bootstrap_admin_local: %{enabled: false},
     bootstrap_admin_delivery: %{enabled: false}
 
+  if verifier_key =
+       System.get_env("ORIGEN_VERIFIER_KEY") || System.get_env("BOOTSTRAP_ADMIN_VERIFIER_KEY") do
+    config :origen, bootstrap_admin_verifier_key: verifier_key
+  end
+
+  if totp_key = System.get_env("ORIGEN_TOTP_KEY") || System.get_env("BOOTSTRAP_ADMIN_TOTP_KEY") do
+    config :origen,
+      totp_keyring: %{
+        active: %{tag: "seed.prod.v1", key: totp_key},
+        retired: []
+      }
+  end
+
   database_url =
     System.get_env("DATABASE_URL") ||
       raise """

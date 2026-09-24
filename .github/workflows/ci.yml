@@ -13,9 +13,11 @@ jobs:
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
-          # La rama debe empezar con un tipo válido o ser un hotfix
-          if [[ ! "$BRANCH" =~ ^(feat|feature|fix|chore|docs|style|refactor|perf|test|build|ci|revert)/.*$ ]] && [[ ! "$BRANCH" =~ ^hotfix/.*$ ]]; then
-            echo "Error: La rama debe cumplir con el estándar (ej. feat/1-scaffold-ci, feature/mi-cambio o hotfix/bug-urgente)."
+          PATTERN="^(feat|feature|fix|chore|docs|style|refactor|perf|test)"
+          PATTERN="${PATTERN}|(build|ci|revert)/.*$"
+          if [[ ! "$BRANCH" =~ $PATTERN ]] && \
+             [[ ! "$BRANCH" =~ ^hotfix/.*$ ]]; then
+            echo "Error: La rama no cumple el estandar."
             exit 1
           fi
 
@@ -24,7 +26,7 @@ jobs:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           if [[ ! "$BODY" =~ (Closes|Fixes|Resolves)\ #[0-9]+ ]]; then
-            echo "Error: La descripción del PR debe vincular una issue aprobada (ej. 'Closes #1')."
+            echo "Error: Vincular issue aprobada (ej. 'Closes #1')."
             exit 1
           fi
 
@@ -55,7 +57,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: origen_test
         ports:
-          - 5432:5432 # En CI usamos el puerto estándar del entorno, no el 5433
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -72,12 +74,15 @@ jobs:
           otp-version: "29.0"
           elixir-version: "1.20.3"
 
-      - name: Caché de dependencias
-        uses: actions/cache@v3
+      - name: Caché de dependencias y compilación
+        uses: actions/cache@v4
         with:
-          path: deps
+          path: |
+            deps
+            _build
           key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+          restore-keys: |
+            ${{ runner.os }}-mix-
 
       - name: Instalar dependencias
         run: mix deps.get
@@ -87,6 +92,12 @@ jobs:
 
       - name: Compilar con advertencias como errores
         run: mix compile --warnings-as-errors
+
+      - name: Análisis estático de seguridad (Sobelow)
+        run: mix sobelow --skip --threshold medium --exit
+
+      - name: Análisis estático de tipos (Dialyzer)
+        run: mix dialyzer --format short
 
       - name: Provision least-privilege database roles
         env:
@@ -101,13 +112,16 @@ jobs:
           ORIGEN_MIGRATOR_PASSWORD: postgres
           ORIGEN_RUNTIME_PASSWORD: postgres
           ORIGEN_VERIFIER_PASSWORD: postgres
-        run: psql -X -v ON_ERROR_STOP=1 -d origen_test -f priv/repo/security/provision_roles.sql
+        run: >-
+          psql -X -v ON_ERROR_STOP=1 -d origen_test
+          -f priv/repo/security/provision_roles.sql
 
       - name: Migrate with SET-only owner capability
         env:
           MIX_ENV: test
           ORIGEN_OWNER_ROLE: origen_owner
-          ORIGEN_MIGRATION_DATABASE_URL: ecto://origen_migrator:postgres@localhost:5432/origen_test
+          ORIGEN_MIGRATION_DATABASE_URL: >-
+            ecto://origen_migrator:postgres@localhost:5432/origen_test
         run: mix ecto.security.migrate
 
       - name: Apply runtime and verifier grants
@@ -123,7 +137,9 @@ jobs:
           ORIGEN_MIGRATOR_PASSWORD: postgres
           ORIGEN_RUNTIME_PASSWORD: postgres
           ORIGEN_VERIFIER_PASSWORD: postgres
-        run: psql -X -v ON_ERROR_STOP=1 -d origen_test -f priv/repo/security/provision_roles.sql
+        run: >-
+          psql -X -v ON_ERROR_STOP=1 -d origen_test
+          -f priv/repo/security/provision_roles.sql
 
       - name: Run application tests
         env:
@@ -134,9 +150,12 @@ jobs:
 
       - name: Prove runtime and verifier capabilities
         env:
-          ORIGEN_DATABASE_URL: ecto://origen_runtime:postgres@localhost:5432/origen_test
-          ORIGEN_MIGRATION_DATABASE_URL: ecto://origen_migrator:postgres@localhost:5432/origen_test
-          ORIGEN_SECURITY_DATABASE_URL: ecto://origen_verifier:postgres@localhost:5432/origen_test
+          ORIGEN_DATABASE_URL: >-
+            ecto://origen_runtime:postgres@localhost:5432/origen_test
+          ORIGEN_MIGRATION_DATABASE_URL: >-
+            ecto://origen_migrator:postgres@localhost:5432/origen_test
+          ORIGEN_SECURITY_DATABASE_URL: >-
+            ecto://origen_verifier:postgres@localhost:5432/origen_test
           ORIGEN_OWNER_ROLE: origen_owner
           ORIGEN_MIGRATOR_ROLE: origen_migrator
           ORIGEN_RUNTIME_ROLE: origen_runtime

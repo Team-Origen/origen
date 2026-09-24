@@ -709,11 +709,7 @@ defmodule Origen.Accounts do
               k
 
             _ ->
-              if Application.get_env(:origen, :env) in [:dev, :test] do
-                String.duplicate("k", 32)
-              else
-                nil
-              end
+              nil
           end
       end
 

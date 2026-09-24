@@ -75,8 +75,11 @@ defmodule OrigenWeb.InternalActivationSessionStore do
       {:ok, %Session{rendered?: false} = session} ->
         {:reply, {:ok, session}, put_in(sessions, [nonce, Access.key(:rendered?)], true)}
 
-      _missing_or_rendered ->
-        {:reply, {:error, :invalid_session}, Map.delete(sessions, nonce)}
+      {:ok, %Session{rendered?: true} = session} ->
+        {:reply, {:ok, session}, sessions}
+
+      _missing ->
+        {:reply, {:error, :invalid_session}, sessions}
     end
   end
 
@@ -123,6 +126,7 @@ defmodule OrigenWeb.InternalActivationSessionStore do
     case Supervisor.restart_child(Origen.Supervisor, __MODULE__) do
       {:ok, _pid} -> :ok
       {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
       {:error, {:running, _pid}} -> :ok
       {:error, reason} -> {:error, reason}
     end
