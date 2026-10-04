@@ -15,7 +15,7 @@ runtime_database_options =
       username:
         System.get_env(
           "ORIGEN_TEST_DB_USERNAME",
-          System.get_env("PGUSER", System.get_env("USER"))
+          System.get_env("PGUSER", System.get_env("USER", "postgres"))
         ),
       password: System.get_env("ORIGEN_TEST_DB_PASSWORD", System.get_env("PGPASSWORD")),
       hostname: "localhost",
