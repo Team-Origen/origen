@@ -59,4 +59,20 @@ defmodule OrigenWeb.PageControllerTest do
   end
 
   defp https(path), do: "https://www.example.com" <> path
+
+  defp insert_active_internal_account!(role) do
+    %{rows: [[account_id]]} =
+      Origen.Repo.query!(
+        """
+        INSERT INTO internal_accounts
+          (role, state, password_hash, totp_secret, activated_at)
+        VALUES
+          ($1, 'active', 'argon2_hash_dummy', decode('0102030405', 'hex'), NOW())
+        RETURNING id
+        """,
+        [Atom.to_string(role)]
+      )
+
+    %{id: account_id, role: role, state: :active}
+  end
 end

@@ -49,23 +49,4 @@ defmodule OrigenWeb.ConnCase do
     |> Plug.Test.init_test_session(%{})
     |> Plug.Conn.put_session(:internal_session_token, token)
   end
-
-  @doc """
-  Inserts an active internal account with the given role.
-  """
-  def insert_active_internal_account!(role) when is_atom(role) do
-    %{rows: [[account_id]]} =
-      Origen.Repo.query!(
-        """
-        INSERT INTO internal_accounts
-          (role, state, password_hash, totp_secret, activated_at)
-        VALUES
-          ($1, 'active', 'argon2_hash_dummy', decode('0102030405', 'hex'), NOW())
-        RETURNING id
-        """,
-        [Atom.to_string(role)]
-      )
-
-    %{id: account_id, role: role, state: :active}
-  end
 end
