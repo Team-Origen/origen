@@ -8,6 +8,7 @@ defmodule Origen.Patients.Persona do
   import Ecto.Changeset
 
   @controlled_document_types ~w(dni passport identity_card other)
+  @controlled_genders ~w(femenino masculino otro prefiero_no_decir)
 
   @primary_key {:id, :id, autogenerate: true}
   schema "personas" do
@@ -22,6 +23,7 @@ defmodule Origen.Patients.Persona do
   end
 
   def document_types, do: @controlled_document_types
+  def genders, do: @controlled_genders
 
   @doc false
   def changeset(persona, attrs) do
@@ -36,6 +38,7 @@ defmodule Origen.Patients.Persona do
     ])
     |> validate_required([:first_name, :last_name, :document_type, :document_number, :birthdate])
     |> validate_inclusion(:document_type, @controlled_document_types)
+    |> validate_inclusion(:gender, @controlled_genders)
     |> normalize_document_number()
     |> validate_format(:document_number, ~r/^[A-Za-z0-9]{1,32}$/)
     |> validate_birthdate_in_past()

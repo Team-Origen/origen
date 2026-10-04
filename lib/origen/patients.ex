@@ -215,22 +215,93 @@ defmodule Origen.Patients do
       doc_type = Ecto.Changeset.get_field(persona_changeset, :document_type)
       doc_num = Ecto.Changeset.get_field(persona_changeset, :document_number)
 
-      Repo.transaction(fn ->
-        existing_persona =
-          Repo.one(
-            from p in Persona,
-              where: p.document_type == ^doc_type and p.document_number == ^doc_num,
-              lock: "FOR UPDATE"
-          )
-
-        case existing_persona do
-          nil -> create_assisted_persona(persona_changeset, attrs, secretary_account_id)
-          %Persona{} = persona -> reuse_assisted_persona(persona, attrs, secretary_account_id)
-        end
-      end)
+      attempt_assisted_registration_or_reuse(
+        persona_changeset,
+        doc_type,
+        doc_num,
+        attrs,
+        secretary_account_id
+      )
     else
       {:error, persona_changeset}
     end
+  end
+
+  defp attempt_assisted_registration_or_reuse(
+         persona_changeset,
+         doc_type,
+         doc_num,
+         attrs,
+         secretary_account_id
+       ) do
+    result =
+      try do
+        Repo.transaction(fn ->
+          existing_persona =
+            Repo.one(
+              from p in Persona,
+                where: p.document_type == ^doc_type and p.document_number == ^doc_num,
+                lock: "FOR UPDATE"
+            )
+
+          case existing_persona do
+            nil -> create_assisted_persona(persona_changeset, attrs, secretary_account_id)
+            %Persona{} = persona -> reuse_assisted_persona(persona, attrs, secretary_account_id)
+          end
+        end)
+      rescue
+        e in Ecto.ConstraintError ->
+          if e.constraint == "personas_document_unique" do
+            {:error, :concurrent_race}
+          else
+            reraise e, __STACKTRACE__
+          end
+      end
+
+    case result do
+      {:ok, val} ->
+        {:ok, val}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if has_document_unique_error?(changeset) do
+          fallback_reuse_assisted_persona(doc_type, doc_num, attrs, secretary_account_id)
+        else
+          {:error, changeset}
+        end
+
+      {:error, :concurrent_race} ->
+        fallback_reuse_assisted_persona(doc_type, doc_num, attrs, secretary_account_id)
+
+      {:error, other} ->
+        {:error, other}
+    end
+  end
+
+  defp fallback_reuse_assisted_persona(doc_type, doc_num, attrs, secretary_account_id) do
+    Repo.transaction(fn ->
+      case Repo.one(
+             from p in Persona,
+               where: p.document_type == ^doc_type and p.document_number == ^doc_num,
+               lock: "FOR UPDATE"
+           ) do
+        %Persona{} = existing ->
+          reuse_assisted_persona(existing, attrs, secretary_account_id)
+
+        nil ->
+          Repo.rollback(:persona_not_found_on_fallback)
+      end
+    end)
+  end
+
+  defp has_document_unique_error?(changeset) do
+    Enum.any?(changeset.errors, fn
+      {_field, {_msg, opts}} ->
+        opts[:constraint] == :unique or
+          opts[:constraint_name] in ["personas_document_unique", :personas_document_unique]
+
+      _ ->
+        false
+    end)
   end
 
   defp linked_profile(nil), do: nil

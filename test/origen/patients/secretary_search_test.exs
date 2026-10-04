@@ -269,6 +269,40 @@ defmodule Origen.Patients.SecretarySearchTest do
 
       assert errors_on(changeset).document_type != nil
     end
+
+    test "rejects gender values outside the controlled catalog" do
+      assert {:error, changeset} =
+               Patients.register_or_reuse_assisted_persona(
+                 %{@valid_attrs | gender: "invalido"},
+                 @secretary_account_id
+               )
+
+      assert errors_on(changeset).gender != nil
+    end
+
+    test "recovers and reuses identity when a concurrent insert conflict occurs" do
+      # Simulate another process having committed the persona right before this insert
+      {:ok, existing} =
+        %Persona{}
+        |> Persona.changeset(%{
+          first_name: "Original",
+          last_name: "Usuario",
+          document_type: "dni",
+          document_number: "37111222",
+          birthdate: ~D[1990-03-05],
+          gender: "femenino"
+        })
+        |> Repo.insert()
+
+      # Attempting to register the same document recovers idempotently as reuse
+      assert {:ok, %{persona: persona, profile: profile, outcome: :reused}} =
+               Patients.register_or_reuse_assisted_persona(@valid_attrs, @secretary_account_id)
+
+      assert persona.id == existing.id
+      assert profile.persona_id == existing.id
+      assert profile.state == "pending_completion"
+      assert Repo.aggregate(Persona, :count) == 1
+    end
   end
 
   test "event constructors validate actor kinds and document references" do

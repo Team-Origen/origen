@@ -355,6 +355,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     <.field
                       field={@search_form[:document_number]}
                       type="text"
+                      phx-debounce="300"
                       inputmode={
                         if @search_form[:document_type].value in [nil, "", "dni"],
                           do: "numeric",
@@ -367,7 +368,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     />
                   </div>
                   <div>
-                    <.button type="submit" color="primary">Buscar</.button>
+                    <.button type="submit" color="primary" phx-disable-with="Buscando...">Buscar</.button>
                   </div>
                 </.form>
               </.card_content>
@@ -426,6 +427,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     <.field
                       field={@registration_form[:first_name]}
                       type="text"
+                      phx-debounce="300"
                       label="Nombres"
                       placeholder="Ej. Juan Manuel"
                       required
@@ -434,6 +436,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     <.field
                       field={@registration_form[:last_name]}
                       type="text"
+                      phx-debounce="300"
                       label="Apellidos"
                       placeholder="Ej. Pérez"
                       required
@@ -442,6 +445,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     <.field
                       field={@registration_form[:birthdate]}
                       type="date"
+                      phx-debounce="300"
                       label="Fecha de nacimiento"
                       required
                       no_margin
@@ -449,6 +453,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     <.field
                       field={@registration_form[:phone]}
                       type="tel"
+                      phx-debounce="300"
                       label="Teléfono"
                       placeholder="Ej. +5491122334455"
                       required
@@ -467,7 +472,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   />
 
                   <div>
-                    <.button type="submit" color="primary">Registrar persona</.button>
+                    <.button type="submit" color="primary" phx-disable-with="Registrando...">Registrar persona</.button>
                   </div>
                 </.form>
               </.card_content>

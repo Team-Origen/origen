@@ -79,6 +79,16 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
     test "searching an unknown document shows the assisted registration form" do
       {:ok, view, _html} = live(secretary_conn(), @path)
 
+      assert has_element?(
+               view,
+               ~s(#persona-search-form input[name="search[document_number]"][phx-debounce="300"])
+             )
+
+      assert has_element?(
+               view,
+               ~s(#persona-search-form button[type="submit"][phx-disable-with="Buscando..."])
+             )
+
       html =
         view
         |> form("#persona-search-form",
@@ -107,7 +117,16 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
         assert has_element?(view, "#assisted-registration-form label", label)
       end
 
-      assert has_element?(view, "#assisted-registration-form button", "Registrar persona")
+      assert has_element?(
+               view,
+               ~s(#assisted-registration-form input[name="registration[first_name]"][phx-debounce="300"])
+             )
+
+      assert has_element?(
+               view,
+               ~s(#assisted-registration-form button[type="submit"][phx-disable-with="Registrando..."]),
+               "Registrar persona"
+             )
     end
 
     test "invalid searches keep real-time feedback without leaving the search form" do
