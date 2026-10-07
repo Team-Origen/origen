@@ -164,6 +164,36 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#availability-save-error[role=alert]", "No se pudo guardar")
   end
 
+  test "exposes operational narrow-screen day carousel bindings", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+
+    assert_day_carousel(view, "summary")
+    assert rendered_element_count(view, "#availability-summary-days > *") == 7
+
+    open_editor(view)
+
+    assert_day_carousel(view, "editor")
+    assert rendered_element_count(view, "#availability-editor-days > fieldset") == 7
+  end
+
+  test "development preview renders the shared component and states that changes are not persisted",
+       %{conn: conn} do
+    {:ok, view, _html} = live_isolated(conn, OrigenWeb.ProfessionalAvailabilityPreviewLive)
+
+    assert has_element?(view, "#availability-development-preview[role=note]", "Vista previa")
+    assert has_element?(view, "#availability-development-preview", "no se guardan")
+    assert has_element?(view, "#availability-summary-monday", "08:00 a 12:00")
+
+    open_editor(view)
+
+    view
+    |> form("#availability-form", availability: replacement_params())
+    |> render_submit()
+
+    assert has_element?(view, "#availability-save-success", "Vista previa actualizada")
+    assert has_element?(view, "#availability-save-success", "no se guardan")
+  end
+
   defp open_editor(view) do
     view
     |> element(~s(button[phx-click="edit_availability"]), "Editar disponibilidad")
@@ -186,6 +216,32 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
       "booking_horizon_days" => "45",
       "minimum_lead_minutes" => "60"
     }
+  end
+
+  defp rendered_element_count(view, selector) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.to_tree()
+    |> length()
+  end
+
+  defp assert_day_carousel(view, name) do
+    root = "#availability-#{name}-carousel"
+    viewport = "availability-#{name}-days"
+
+    assert has_element?(view, ~s(#{root}[phx-hook$="AvailabilityCarousel"]))
+
+    assert has_element?(
+             view,
+             ~s(#{root} button[data-carousel-direction="previous"][aria-controls="#{viewport}"])
+           )
+
+    assert has_element?(
+             view,
+             ~s(#{root} button[data-carousel-direction="next"][aria-controls="#{viewport}"])
+           )
   end
 
   defp insert_active_internal_account!(role) do

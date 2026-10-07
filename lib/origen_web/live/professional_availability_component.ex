@@ -188,7 +188,11 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
         variant="callout"
         with_icon
       >
-        La disponibilidad se guardó correctamente.
+        <%= if @persistence_mode == :preview do %>
+          <strong>Vista previa actualizada.</strong> Los cambios no se guardan.
+        <% else %>
+          La disponibilidad se guardó correctamente.
+        <% end %>
       </.alert>
 
       <.alert
@@ -224,17 +228,23 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
               </:action>
             </.card_header>
             <.card_content>
-              <div id="availability-summary" class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                <article
-                  :for={{day, label} <- @days}
-                  id={"availability-summary-#{day}"}
-                  class="rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800"
+              <div id="availability-summary">
+                <.day_carousel
+                  id="availability-summary-carousel"
+                  viewport_id="availability-summary-days"
                 >
-                  <h3 class="font-semibold">{label}</h3>
-                  <p class="mt-2 text-sm text-text-muted dark:text-gray-300">
-                    {windows_summary(Map.fetch!(@configuration.weekly_availability, day))}
-                  </p>
-                </article>
+                  <article
+                    :for={{day, label} <- @days}
+                    id={"availability-summary-#{day}"}
+                    class="w-[85%] shrink-0 snap-start rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800 sm:w-[55%] lg:w-auto"
+                    role="listitem"
+                  >
+                    <h3 class="font-semibold">{label}</h3>
+                    <p class="mt-2 text-sm text-text-muted dark:text-gray-300">
+                      {windows_summary(Map.fetch!(@configuration.weekly_availability, day))}
+                    </p>
+                  </article>
+                </.day_carousel>
               </div>
               <div class="mt-6 border-t border-border pt-6">
                 <h3 id="booking-rules-heading" class="font-semibold text-text dark:text-gray-100">
@@ -291,11 +301,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   </:action>
                 </.card_header>
                 <.card_content>
-                  <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                  <.day_carousel
+                    id="availability-editor-carousel"
+                    viewport_id="availability-editor-days"
+                  >
                     <fieldset
                       :for={{day, label} <- @days}
                       id={"availability-day-#{day}"}
-                      class="rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800"
+                      class="w-[90%] shrink-0 snap-start rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800 sm:w-[60%] lg:w-auto"
+                      role="listitem"
                     >
                       <legend class="px-1 font-semibold">{label}</legend>
                       <input
@@ -383,7 +397,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                         </.button>
                       </div>
                     </fieldset>
-                  </div>
+                  </.day_carousel>
 
                   <div id="booking-rules-editor" class="mt-6 border-t border-border pt-6">
                     <h3 class="font-semibold text-text dark:text-gray-100">Período de reserva</h3>
@@ -451,6 +465,80 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
           </.card>
         </section>
       <% end %>
+
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".AvailabilityCarousel">
+        export default {
+          mounted() {
+            this.viewport = this.el.querySelector("[data-carousel-viewport]")
+            this.handlers = []
+
+            this.el.querySelectorAll("[data-carousel-direction]").forEach(button => {
+              const handler = () => this.move(button.dataset.carouselDirection)
+              button.addEventListener("click", handler)
+              this.handlers.push([button, handler])
+            })
+          },
+
+          destroyed() {
+            this.handlers.forEach(([button, handler]) => button.removeEventListener("click", handler))
+          },
+
+          move(direction) {
+            const cards = Array.from(this.viewport.children)
+            if (cards.length === 0) return
+
+            const currentIndex = cards.reduce((closestIndex, card, index) => {
+              const currentDistance = Math.abs(cards[closestIndex].offsetLeft - this.viewport.scrollLeft)
+              const candidateDistance = Math.abs(card.offsetLeft - this.viewport.scrollLeft)
+              return candidateDistance < currentDistance ? index : closestIndex
+            }, 0)
+
+            const delta = direction === "next" ? 1 : -1
+            const targetIndex = Math.min(Math.max(currentIndex + delta, 0), cards.length - 1)
+
+            cards[targetIndex].scrollIntoView({behavior: "smooth", block: "nearest", inline: "start"})
+          }
+        }
+      </script>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :viewport_id, :string, required: true
+  slot :inner_block, required: true
+
+  defp day_carousel(assigns) do
+    ~H"""
+    <div id={@id} phx-hook=".AvailabilityCarousel">
+      <div class="mb-3 flex justify-end gap-2 lg:hidden" aria-label="Navegación por días">
+        <button
+          type="button"
+          class="inline-flex size-10 items-center justify-center rounded-md border border-border bg-surface text-lg font-semibold text-text-muted dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+          data-carousel-direction="previous"
+          aria-label="Ver día anterior"
+          aria-controls={@viewport_id}
+        >
+          <span aria-hidden="true">←</span>
+        </button>
+        <button
+          type="button"
+          class="inline-flex size-10 items-center justify-center rounded-md border border-border bg-surface text-lg font-semibold text-text-muted dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+          data-carousel-direction="next"
+          aria-label="Ver día siguiente"
+          aria-controls={@viewport_id}
+        >
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <div
+        id={@viewport_id}
+        data-carousel-viewport
+        role="list"
+        class="flex touch-pan-x snap-x snap-mandatory gap-4 overflow-x-auto pb-3 lg:grid lg:grid-cols-2 lg:overflow-visible lg:pb-0 xl:grid-cols-3"
+      >
+        {render_slot(@inner_block)}
+      </div>
     </div>
     """
   end
