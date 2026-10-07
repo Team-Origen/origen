@@ -855,6 +855,32 @@ defmodule Origen.ConsultationTypesTest do
     end
   end
 
+  describe "confirm_agenda_interval/2" do
+    test "atomically applies the reviewed interval and availability" do
+      principal = professional_principal!()
+      type = create_type!(principal, %{name: "Follow-up", interval_count: 2})
+
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+
+      assert {:ok, applied} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: preview.reviewed_availability,
+                 stale_token: preview.stale_token
+               })
+
+      assert applied.agenda_interval_minutes == 60
+      assert applied.consultation_types == [type]
+      assert applied.reviewed_availability.agenda_interval_minutes == 60
+
+      assert {:ok, %{agenda_interval_minutes: 60, consultation_types: [^type]}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, persisted_availability} = Availability.get_own_configuration(principal)
+      assert persisted_availability.agenda_interval_minutes == 60
+    end
+  end
+
   defp professional_principal! do
     :professional
     |> insert_active_account!()
