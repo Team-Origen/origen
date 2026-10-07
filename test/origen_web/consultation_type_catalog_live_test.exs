@@ -259,6 +259,22 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, "#agenda-interval-review", "Todavía no se aplicó ningún cambio")
     refute has_element?(view, "#professional-settings-content #interval-review-form")
     refute has_element?(view, "#interval-apply-success")
+    assert has_element?(view, "#interval-review-day-monday")
+    assert has_element?(view, "#interval-review-monday-0-start")
+
+    view
+    |> element(~s(button[phx-click="add_interval_review_window"][phx-value-day="saturday"]))
+    |> render_click()
+
+    assert has_element?(view, "#interval-review-saturday-0-start")
+
+    view
+    |> element(
+      ~s(button[phx-click="remove_interval_review_window"][phx-value-day="saturday"][phx-value-index="0"])
+    )
+    |> render_click()
+
+    refute has_element?(view, "#interval-review-saturday-0-start")
 
     view
     |> form("#interval-review-form")
