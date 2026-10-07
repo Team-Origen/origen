@@ -222,7 +222,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
   test "a pending interval selection warns without applying immediately", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
-    assert has_element?(view, ~s(main[data-theme="light"]))
 
     view
     |> form("#agenda-interval-form", interval_minutes: "30")
@@ -236,7 +235,12 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> element("#open-interval-change-modal")
     |> render_click()
 
-    assert has_element?(view, "#agenda-interval-change-modal", "Nada cambiará antes")
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "Las cantidades de intervalos no cambiarán"
+           )
+
     assert has_element?(view, "#agenda-interval-change-modal", "Consulta general")
     assert has_element?(view, "#agenda-interval-change-modal", "30 a 60 minutos")
     refute has_element?(view, "#agenda-interval-change-modal", "TC-001")
@@ -689,6 +693,244 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     end
   end
 
+  test "contains warning and review steps in one modal with an inert background", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal [role=dialog]",
+             "Cambiar el intervalo de la agenda"
+           )
+
+    assert has_element?(view, "#professional-settings-content[inert]")
+    assert has_element?(view, "#interval-modal-warning", "Nada cambiará antes")
+    assert has_element?(view, "#interval-modal-warning", "Revisar cambios")
+    refute has_element?(view, "#agenda-interval-review")
+    refute has_element?(view, "#professional-settings-content #interval-review-form")
+
+    assert has_element?(
+             view,
+             ~s(#agenda-interval-change-modal[data-cancel*="cancel_interval_change"])
+           )
+
+    assert has_element?(view, "#agenda-interval-change-modal .pc-modal__header__button")
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    assert rendered_element_count(view, "#agenda-interval-change-modal") == 1
+    assert has_element?(view, "#agenda-interval-change-modal #agenda-interval-review")
+    assert has_element?(view, "#agenda-interval-change-modal #interval-review-form")
+    refute has_element?(view, "#professional-settings-content #interval-review-form")
+
+    view
+    |> element(
+      ~s(#agenda-interval-change-modal button[phx-click="cancel_interval_change"]),
+      "Cancelar"
+    )
+    |> render_click()
+
+    refute has_element?(view, "#agenda-interval-change-modal")
+    refute has_element?(view, "#professional-settings-content[inert]")
+    assert persisted_interval(professional.id) == 15
+  end
+
+  test "refuses the interval modal over a dirty weekly draft until cancel clears the gate", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_availability_editor(view)
+
+    view
+    |> element(~s(button[phx-click="clear_availability_day"][phx-value-day="monday"]))
+    |> render_click()
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    refute has_element?(view, "#agenda-interval-change-modal")
+
+    assert has_element?(
+             view,
+             "#interval-availability-draft-warning[role=alert]",
+             "Guarde o cancele"
+           )
+
+    assert has_element?(view, "#availability-form")
+    refute has_element?(view, "#availability-monday-0-start")
+
+    view
+    |> element(~s(button[phx-click="cancel_availability"]), "Cancelar")
+    |> render_click()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-change-modal [role=dialog]")
+  end
+
+  test "allows a clean open weekly editor and preserves it when interval modal is cancelled", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_availability_editor(view)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-change-modal [role=dialog]")
+    assert has_element?(view, "#professional-settings-content[inert] #availability-form")
+
+    view
+    |> element(
+      ~s(#agenda-interval-change-modal button[phx-click="cancel_interval_change"]),
+      "Cancelar"
+    )
+    |> render_click()
+
+    refute has_element?(view, "#agenda-interval-change-modal")
+    assert has_element?(view, "#availability-form")
+    assert has_element?(view, ~s(#availability-monday-0-start option[value="08:00"][selected]))
+  end
+
+  test "refreshes and collapses weekly availability after successful modal confirmation", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_availability_editor(view)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "40")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#current-agenda-interval", "40 minutos")
+    refute has_element?(view, "#agenda-interval-change-modal")
+    refute has_element?(view, "#availability-form")
+
+    open_availability_editor(view)
+    assert has_element?(view, ~s(#availability-monday-0-start option[value="00:40"]))
+    refute has_element?(view, ~s(#availability-monday-0-start option[value="00:30"]))
+  end
+
+  test "final confirmation atomically applies a fresh compatible review", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    open_interval_review(view, "30")
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#current-agenda-interval", "30 minutos")
+    assert has_element?(view, "#interval-apply-success[role=status]")
+    refute has_element?(view, "#agenda-interval-review")
+  end
+
+  test "a stale final confirmation keeps the loaded settings and review visible", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    Origen.Repo.query!(
+      "UPDATE agenda_settings SET minimum_lead_minutes = 35, updated_at = clock_timestamp() WHERE owner_account_id = $1",
+      [professional.id]
+    )
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal #interval-apply-error[role=alert]",
+             "No se aplicó el intervalo"
+           )
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal #interval-apply-error",
+             "cambió desde la revisión"
+           )
+
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(view, "#agenda-interval-review")
+    assert has_element?(view, "#consultation-types-heading")
+    refute has_element?(view, "#configuration-load-error")
+  end
+
+  test "a failed final persistence remains a targeted rejection instead of a load failure", %{
+    conn: conn
+  } do
+    Application.put_env(:origen, :consultation_types_context, RejectingIntervalConfirmation)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#interval-apply-error[role=alert]", "No se aplicó el intervalo")
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(view, "#agenda-interval-review")
+    assert has_element?(view, "#consultation-types-heading")
+    refute has_element?(view, "#configuration-load-error")
+  end
+
+  test "a compatible apply recalculates durations and preserves counts", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    confirm_interval_change(view, "30")
+
+    row = "#consultation-type-018f4a5b-0d62-7a44-8e32-2f608bfcb001"
+
+    assert has_element?(view, "#current-agenda-interval", "30 minutos")
+    assert has_element?(view, "#interval-apply-success[role=status]")
+    assert has_element?(view, row, "Cantidad de intervalos 2")
+    assert has_element?(view, row, "Duración: 60 minutos")
+    refute has_element?(view, "#agenda-interval-change-modal")
+  end
+
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{
     conn: conn
   } do
@@ -710,12 +952,18 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_change()
 
-    assert has_element?(view, "#interval-change-warning", "Control")
-    assert has_element?(view, "#interval-change-warning", "15 a 30 minutos")
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-change-modal", "Control")
+    assert has_element?(view, "#agenda-interval-change-modal", "15 a 30 minutos")
 
     view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    |> element("#agenda-interval-change-modal button", "Cancelar")
+    |> render_click()
+
+    confirm_interval_change(view, "30")
 
     assert has_element?(view, "#current-agenda-interval", "30 minutos")
     assert has_element?(view, row, "Duración: 30 minutos")
@@ -734,7 +982,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, row, "Activo")
   end
 
-  test "an incompatible apply is rejected without inferring a replacement count", %{
+  test "an incompatible review blocks confirmation without inferring a replacement count", %{
     conn: conn,
     professional_account: professional
   } do
@@ -752,19 +1000,29 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "60")
-    |> render_submit()
+    open_interval_review(view, "60")
 
     row = "#consultation-type-018f4a5b-0d62-7a44-8e32-2f608bfcb008"
 
-    assert has_element?(view, "#interval-apply-error[role=alert]", "No se aplicó el intervalo")
-    assert has_element?(view, "#interval-apply-error", "máximo de 4")
-    assert has_element?(view, "#interval-apply-error", "Consulta prolongada")
-    refute has_element?(view, "#interval-apply-error", "TC-008")
+    assert has_element?(view, "#interval-type-effects", "Consulta prolongada")
+    assert has_element?(view, "#interval-type-effects", "supera el máximo permitido")
+    assert has_element?(view, "#confirm-interval-change[disabled]")
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
     assert has_element?(view, row, "Cantidad de intervalos 8")
     assert has_element?(view, row, "Duración: 120 minutos")
+  end
+
+  test "an availability-only incompatibility keeps the loaded settings visible", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    open_interval_review(view, "25")
+
+    assert has_element?(view, "#interval-boundary-conflicts", "Lunes 08:00")
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+    assert has_element?(view, "#agenda-interval-review", "Todavía no se aplicó ningún cambio")
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(view, "#consultation-types-heading", "Tipos de consulta")
+    refute has_element?(view, "#configuration-load-error")
   end
 
   test "actions follow consultation status and target stable IDs", %{conn: conn} do
@@ -894,9 +1152,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     row = "#consultation-type-#{@incompatible_inactive_type.id}"
     initial_item_count = rendered_catalog_item_count(view)
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    confirm_interval_change(view, "30")
 
     assert has_element?(view, row, "Duración: 180 minutos")
 
@@ -1456,9 +1712,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     )
     |> render_click()
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    confirm_interval_change(view, "30")
 
     {:ok, remounted_view, _html} = live(conn, @professional_configuration_path)
     show_inactive(remounted_view)
@@ -1739,9 +1993,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> element("#new-consultation-type-modal button", "Cancelar")
     |> render_click()
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "60")
-    |> render_submit()
+    confirm_interval_change(view, "60")
 
     assert has_element?(view, "#current-agenda-interval", "60 minutos")
     open_new_type_modal(view)
@@ -1858,6 +2110,55 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> render_change()
   end
 
+  defp open_interval_review(view, interval) do
+    view
+    |> form("#agenda-interval-form", interval_minutes: interval)
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+  end
+
+  defp open_availability_editor(view) do
+    view
+    |> element(~s(button[phx-click="edit_availability"]), "Editar disponibilidad")
+    |> render_click()
+  end
+
+  defp persisted_interval(account_id) do
+    [[interval]] =
+      Origen.Repo.query!(
+        "SELECT interval_minutes FROM agenda_settings WHERE owner_account_id = $1",
+        [account_id]
+      ).rows
+
+    interval
+  end
+
+  defp persisted_weekly_availability(account_id) do
+    [[weekly_availability]] =
+      Origen.Repo.query!(
+        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
+        [account_id]
+      ).rows
+
+    weekly_availability
+  end
+
+  defp confirm_interval_change(view, interval) do
+    open_interval_review(view, interval)
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+  end
+
   defp deactivation_dialog_id(type), do: "deactivate-consultation-type-#{type.id}"
 
   defp deactivation_trigger_selector(type, presentation) do
@@ -1899,30 +2200,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
-  end
-
-  defp open_interval_review(view, interval) do
-    view
-    |> form("#agenda-interval-form", interval_minutes: interval)
-    |> render_change()
-
-    view
-    |> element("#open-interval-change-modal")
-    |> render_click()
-
-    view
-    |> element("#agenda-interval-change-modal button", "Revisar cambios")
-    |> render_click()
-  end
-
-  defp persisted_interval(account_id) do
-    [[interval]] =
-      Origen.Repo.query!(
-        "SELECT interval_minutes FROM agenda_settings WHERE owner_account_id = $1",
-        [account_id]
-      ).rows
-
-    interval
   end
 
   defp rendered_option_states(view, selector) do
@@ -2018,16 +2295,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> String.replace(".", "")
     |> String.replace(",", ".")
     |> Decimal.new()
-  end
-
-  defp persisted_weekly_availability(account_id) do
-    [[weekly_availability]] =
-      Origen.Repo.query!(
-        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
-        [account_id]
-      ).rows
-
-    weekly_availability
   end
 
   defp insert_active_internal_account!(role) do
