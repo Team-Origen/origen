@@ -8,6 +8,20 @@ defmodule Origen.ConsultationTypes do
 
   alias Origen.Repo
 
+  @default_interval_minutes 30
+  @default_booking_horizon_days 30
+  @default_minimum_lead_minutes 30
+  @default_week Map.merge(
+                  Map.new(~w(monday tuesday wednesday thursday friday), fn day ->
+                    {day,
+                     [
+                       %{"start" => "08:00", "end" => "12:00"},
+                       %{"start" => "14:00", "end" => "18:00"}
+                     ]}
+                  end),
+                  %{"saturday" => [], "sunday" => []}
+                )
+
   @type configuration :: %{
           agenda_interval_minutes: pos_integer(),
           consultation_types: [map()]
@@ -181,6 +195,54 @@ defmodule Origen.ConsultationTypes do
   def reactivate_type(_invalid_principal, _consultation_type_id),
     do: {:error, :unauthorized}
 
+  @spec preview_agenda_interval(map(), integer() | String.t(), map() | nil) ::
+          {:ok, map()}
+          | {:error, :unauthorized | :unavailable | {:validation, map()}}
+  def preview_agenda_interval(principal, proposed_interval, reviewed_availability \\ nil)
+
+  def preview_agenda_interval(
+        %{session_id: session_id, account_id: account_id},
+        proposed_interval,
+        reviewed_availability
+      )
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(
+      fn ->
+        owner_account_id = resolve_owner!(session_id, account_id)
+
+        case validate_agenda_interval(proposed_interval) do
+          {:ok, interval_minutes} ->
+            settings = agenda_settings_snapshot!(owner_account_id)
+            active_types = active_types_snapshot!(owner_account_id)
+            availability = reviewed_availability || settings_to_availability(settings)
+
+            build_interval_preview(
+              owner_account_id,
+              settings,
+              active_types,
+              interval_minutes,
+              availability
+            )
+
+          :error ->
+            Repo.rollback({:validation, %{agenda_interval_minutes: :invalid}})
+        end
+      end,
+      isolation: :repeatable_read
+    )
+    |> case do
+      {:ok, preview} -> {:ok, preview}
+      {:error, :unauthorized} -> {:error, :unauthorized}
+      {:error, {:validation, errors}} -> {:error, {:validation, errors}}
+      {:error, _reason} -> {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def preview_agenda_interval(_principal, _proposed_interval, _reviewed_availability),
+    do: {:error, :unauthorized}
+
   @spec apply_agenda_interval(map(), integer() | String.t()) ::
           {:ok, configuration()}
           | {:error,
@@ -190,14 +252,7 @@ defmodule Origen.ConsultationTypes do
              | {:incompatible,
                 %{
                   maximum_interval_count: pos_integer(),
-                  blockers: [
-                    %{
-                      id: String.t(),
-                      name: String.t(),
-                      interval_count: pos_integer(),
-                      prospective_duration_minutes: pos_integer()
-                    }
-                  ]
+                  blockers: [map()]
                 }}}
   def apply_agenda_interval(
         %{session_id: session_id, account_id: account_id},
@@ -306,6 +361,127 @@ defmodule Origen.ConsultationTypes do
       [owner_account_id]
     ).rows
     |> Enum.map(&row_to_consultation_type/1)
+  end
+
+  defp agenda_settings_snapshot!(owner_account_id) do
+    owner_account_id
+    |> select_agenda_settings_snapshot()
+    |> case do
+      [row] -> settings_snapshot(row, true)
+      [] -> absent_settings_snapshot()
+    end
+  end
+
+  defp active_types_snapshot!(owner_account_id) do
+    Repo.query!(
+      """
+      SELECT id, name, interval_count, updated_at
+      FROM consultation_types
+      WHERE owner_account_id = $1 AND status = 'active'
+      ORDER BY created_at, id
+      """,
+      [owner_account_id]
+    ).rows
+    |> Enum.map(fn [id, name, interval_count, updated_at] ->
+      %{
+        id: Ecto.UUID.load!(id),
+        name: name,
+        interval_count: interval_count,
+        updated_at: updated_at
+      }
+    end)
+  end
+
+  defp select_agenda_settings_snapshot(owner_account_id, lock_clause \\ "") do
+    Repo.query!(
+      """
+      SELECT interval_minutes, weekly_availability, booking_horizon_days,
+             minimum_lead_minutes, updated_at
+      FROM agenda_settings
+      WHERE owner_account_id = $1#{lock_clause}
+      """,
+      [owner_account_id]
+    ).rows
+  end
+
+  defp settings_snapshot([interval, week, horizon, lead, updated_at], exists?) do
+    %{
+      exists?: exists?,
+      interval_minutes: interval,
+      weekly_availability: week,
+      booking_horizon_days: horizon,
+      minimum_lead_minutes: lead,
+      updated_at: updated_at
+    }
+  end
+
+  defp absent_settings_snapshot do
+    %{
+      exists?: false,
+      interval_minutes: @default_interval_minutes,
+      weekly_availability: @default_week,
+      booking_horizon_days: @default_booking_horizon_days,
+      minimum_lead_minutes: @default_minimum_lead_minutes,
+      updated_at: nil
+    }
+  end
+
+  defp build_interval_preview(
+         owner_account_id,
+         settings,
+         active_types,
+         proposed_interval,
+         availability
+       ) do
+    %{
+      current_interval_minutes: settings.interval_minutes,
+      proposed_interval_minutes: proposed_interval,
+      consultation_type_effects:
+        Enum.map(
+          active_types,
+          &consultation_type_effect(&1, settings.interval_minutes, proposed_interval)
+        ),
+      incompatible_availability_boundaries: [],
+      future_appointment_conflicts: [],
+      availability_validation_errors: %{},
+      reviewed_availability: availability,
+      stale_token: interval_state_token(owner_account_id, settings, active_types)
+    }
+  end
+
+  defp consultation_type_effect(type, current_interval, proposed_interval) do
+    proposed_duration = type.interval_count * proposed_interval
+
+    %{
+      id: type.id,
+      name: type.name,
+      interval_count: type.interval_count,
+      current_duration_minutes: type.interval_count * current_interval,
+      proposed_duration_minutes: proposed_duration,
+      compatible: proposed_duration <= 240
+    }
+  end
+
+  defp settings_to_availability(settings) do
+    %{
+      weekly_availability: settings.weekly_availability,
+      booking_horizon_days: settings.booking_horizon_days,
+      minimum_lead_minutes: settings.minimum_lead_minutes,
+      agenda_interval_minutes: settings.interval_minutes,
+      timezone: Application.fetch_env!(:origen, :organization_timezone)
+    }
+  end
+
+  defp interval_state_token(owner_account_id, settings, active_types) do
+    snapshot = %{
+      owner_account_id: owner_account_id,
+      settings: settings,
+      active_types: active_types
+    }
+
+    :sha256
+    |> :crypto.hash(:erlang.term_to_binary(snapshot))
+    |> Base.url_encode64(padding: false)
   end
 
   defp validate_type_attrs(attrs, interval_minutes) when is_map(attrs) do

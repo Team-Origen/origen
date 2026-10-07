@@ -802,6 +802,27 @@ defmodule Origen.ConsultationTypesTest do
     end
   end
 
+  describe "preview_agenda_interval/2" do
+    test "returns read-only consultation type effects" do
+      principal = professional_principal!()
+      type = create_type!(principal, %{name: "Follow-up", interval_count: 2})
+
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+      assert preview.current_interval_minutes == 30
+      assert preview.proposed_interval_minutes == 60
+      assert is_binary(preview.stale_token)
+
+      assert [effect] = preview.consultation_type_effects
+      assert effect.id == type.id
+      assert effect.current_duration_minutes == 60
+      assert effect.proposed_duration_minutes == 120
+      assert effect.compatible
+
+      assert {:ok, %{agenda_interval_minutes: 30, consultation_types: [^type]}} =
+               ConsultationTypes.get_own_configuration(principal)
+    end
+  end
+
   defp professional_principal! do
     :professional
     |> insert_active_account!()
