@@ -37,10 +37,10 @@ A single product contract prevents the future implementation from inventing beha
 - Touching windows are treated as one continuous period.
 - Overlapping windows are merged automatically and a brief notification reports the merge.
 - A professional may leave the entire weekly schedule empty.
-- Changes apply immediately to new reservations.
-- Existing appointments remain intact, do not block saving, and produce no conflict warning.
-- Existing appointments must be cancelled manually through the separate appointment flow when required.
-- An agenda-interval change is rejected when existing availability boundaries would become misaligned.
+- Ordinary availability changes apply immediately to new reservations under their own save contract.
+- An Agenda Interval proposal keeps one global midnight-anchored grid, previews incompatible weekly boundaries and future active appointment conflicts, and never silently rounds or resets availability.
+- The Professional must explicitly review and adjust the complete resulting week; a future active appointment that no longer fits blocks final interval confirmation with privacy-minimized evidence.
+- Existing appointments remain intact and must be reprogrammed or cancelled manually through their separate flows; an interval change never moves, resizes, or cancels them automatically.
 
 ### Booking boundaries
 
@@ -62,7 +62,7 @@ A single product contract prevents the future implementation from inventing beha
 
 - The complete configuration is saved atomically; any invalid value rejects the entire save.
 - One notice presents all detected validation errors.
-- Concurrent edits use last-write-wins behavior.
+- Ordinary standalone availability edits use last-write-wins behavior; an Agenda Interval confirmation rejects a stale preview and requires a fresh review.
 - Every successful save records the actor, timestamp, previous values, and new values.
 - Configuration and its successful-change audit event persist atomically; if either write fails, neither is applied.
 - Rejected attempts are not audited.
@@ -151,7 +151,7 @@ Issue #77 owns the canonical persisted configuration and the rules required to s
 - Allow a completely empty weekly schedule.
 - Replace the complete configuration atomically; invalid input leaves the previous configuration unchanged.
 - Use last-write-wins behavior for concurrent saves.
-- Preserve existing appointments without checking them as blockers or presenting conflict warnings.
+- Preserve existing appointments during ordinary standalone availability replacement. For an Agenda Interval change, preflight future active conflicts against the reviewed complete week and block final confirmation until each conflict is resolved explicitly.
 - Record actor, timestamp, previous values, and new values for successful changes only.
 - Persist the successful-change audit event and configuration in the same transaction.
 - Return normalized configuration and actionable validation details suitable for the frontend's single error notice.
@@ -187,6 +187,9 @@ Issue #78 owns the professional-facing editor for the configuration exposed by I
 - Display the normalized configuration returned by the backend after a successful save.
 - Preserve keyboard operation and usability on narrow screens as already required by Issue #78.
 - Keep fixtures aligned with the Issue #77 contract and remove them before Issue #78 is complete.
+- Before any Agenda Interval review, show an accessible warning that names consultation-duration and weekly-availability effects and states that nothing changes before final confirmation.
+- Use a read-only preflight, allow explicit complete-week adjustment without rounding or reset, and submit one stale-safe final confirmation for the interval, derived type durations, reviewed availability, and audit event.
+- Keep the patient slot-grid interval independent from consultation duration: the persisted Agenda Interval determines candidate starts, while duration determines the contiguous span that must fit.
 
 #### Frontend verification focus
 

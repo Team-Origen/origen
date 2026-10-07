@@ -6,7 +6,24 @@ defmodule Origen.ConsultationTypes do
   server-created internal session principal; ownership is always resolved again from persistence.
   """
 
+  alias Origen.Audit.{Events, Writer}
+  alias Origen.Availability
   alias Origen.Repo
+
+  @audit_decision {:allow, :sys_01}
+  @default_interval_minutes 30
+  @default_booking_horizon_days 30
+  @default_minimum_lead_minutes 30
+  @default_week Map.merge(
+                  Map.new(~w(monday tuesday wednesday thursday friday), fn day ->
+                    {day,
+                     [
+                       %{"start" => "08:00", "end" => "12:00"},
+                       %{"start" => "14:00", "end" => "18:00"}
+                     ]}
+                  end),
+                  %{"saturday" => [], "sunday" => []}
+                )
 
   @type configuration :: %{
           agenda_interval_minutes: pos_integer(),
@@ -231,6 +248,87 @@ defmodule Origen.ConsultationTypes do
   def preview_agenda_interval(_principal, _proposed_interval, _reviewed_availability),
     do: {:error, :unauthorized}
 
+  @spec confirm_agenda_interval(map(), map()) ::
+          {:ok, map()}
+          | {:error,
+             :unauthorized
+             | :unavailable
+             | :stale
+             | {:validation, map()}
+             | {:incompatible, map()}
+             | {:future_appointment_conflicts, [map()]}}
+  def confirm_agenda_interval(
+        %{session_id: session_id, account_id: account_id},
+        attributes
+      )
+      when is_integer(session_id) and is_integer(account_id) and is_map(attributes) do
+    Repo.transaction(fn ->
+      owner_account_id = resolve_owner!(session_id, account_id)
+      {settings, stale_settings} = locked_agenda_settings_snapshot!(owner_account_id)
+      active_types = active_types_locked_snapshot!(owner_account_id)
+      Repo.query!("LOCK TABLE appointments IN SHARE MODE")
+      appointments = future_appointments_snapshot!(owner_account_id)
+
+      proposed_interval = fetch_attr(attributes, :proposed_interval_minutes)
+      reviewed_availability = fetch_attr(attributes, :reviewed_availability)
+      stale_token = fetch_attr(attributes, :stale_token)
+
+      with {:ok, interval_minutes} <- validate_confirmed_interval(proposed_interval),
+           :ok <-
+             reject_stale_state(
+               stale_token,
+               interval_state_token(owner_account_id, stale_settings, active_types, appointments)
+             ),
+           :ok <-
+             reject_incompatible_types(active_types, settings.interval_minutes, interval_minutes),
+           {:ok, validated_availability} <-
+             validate_confirmed_availability(reviewed_availability, interval_minutes),
+           :ok <-
+             reject_future_appointment_conflicts(
+               appointments,
+               validated_availability.weekly_availability
+             ) do
+        persist_interval_review!(owner_account_id, interval_minutes, validated_availability)
+        append_interval_audit!(owner_account_id)
+
+        %{
+          agenda_interval_minutes: interval_minutes,
+          consultation_types: list_consultation_types!(owner_account_id),
+          reviewed_availability:
+            availability_for_preview(validated_availability, interval_minutes)
+        }
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+    |> case do
+      {:ok, configuration} ->
+        {:ok, configuration}
+
+      {:error, :unauthorized} ->
+        {:error, :unauthorized}
+
+      {:error, :stale} ->
+        {:error, :stale}
+
+      {:error, {:validation, errors}} ->
+        {:error, {:validation, errors}}
+
+      {:error, {:incompatible, evidence}} ->
+        {:error, {:incompatible, evidence}}
+
+      {:error, {:future_appointment_conflicts, conflicts}} ->
+        {:error, {:future_appointment_conflicts, conflicts}}
+
+      {:error, _reason} ->
+        {:error, :unavailable}
+    end
+  rescue
+    _error -> {:error, :unavailable}
+  end
+
+  def confirm_agenda_interval(_principal, _attributes), do: {:error, :unauthorized}
+
   @spec apply_agenda_interval(map(), integer() | String.t()) ::
           {:error,
            :unauthorized
@@ -331,6 +429,35 @@ defmodule Origen.ConsultationTypes do
     end)
   end
 
+  defp locked_agenda_settings_snapshot!(owner_account_id) do
+    case select_agenda_settings_snapshot(owner_account_id, " FOR UPDATE") do
+      [row] ->
+        settings = settings_snapshot(row, true)
+        {settings, settings}
+
+      [] ->
+        Repo.query!(
+          """
+          INSERT INTO agenda_settings (owner_account_id)
+          VALUES ($1)
+          ON CONFLICT (owner_account_id) DO NOTHING
+          RETURNING interval_minutes, weekly_availability, booking_horizon_days,
+                    minimum_lead_minutes, updated_at
+          """,
+          [owner_account_id]
+        ).rows
+        |> case do
+          [inserted_row] ->
+            {settings_snapshot(inserted_row, true), absent_settings_snapshot()}
+
+          [] ->
+            [concurrent_row] = select_agenda_settings_snapshot(owner_account_id, " FOR UPDATE")
+            settings = settings_snapshot(concurrent_row, true)
+            {settings, settings}
+        end
+    end
+  end
+
   defp select_agenda_settings_snapshot(owner_account_id, lock_clause \\ "") do
     Repo.query!(
       """
@@ -363,6 +490,27 @@ defmodule Origen.ConsultationTypes do
       minimum_lead_minutes: @default_minimum_lead_minutes,
       updated_at: nil
     }
+  end
+
+  defp active_types_locked_snapshot!(owner_account_id) do
+    Repo.query!(
+      """
+      SELECT id, name, interval_count, updated_at
+      FROM consultation_types
+      WHERE owner_account_id = $1 AND status = 'active'
+      ORDER BY created_at, id
+      FOR UPDATE
+      """,
+      [owner_account_id]
+    ).rows
+    |> Enum.map(fn [id, name, interval_count, updated_at] ->
+      %{
+        id: Ecto.UUID.load!(id),
+        name: name,
+        interval_count: interval_count,
+        updated_at: updated_at
+      }
+    end)
   end
 
   defp future_appointments_snapshot!(owner_account_id) do
@@ -586,6 +734,84 @@ defmodule Origen.ConsultationTypes do
     |> Base.url_encode64(padding: false)
   end
 
+  defp validate_confirmed_interval(value) do
+    case validate_agenda_interval(value) do
+      {:ok, interval} -> {:ok, interval}
+      :error -> {:error, {:validation, %{agenda_interval_minutes: :invalid}}}
+    end
+  end
+
+  defp reject_stale_state(stale_token, current_token)
+       when is_binary(stale_token) and stale_token == current_token,
+       do: :ok
+
+  defp reject_stale_state(_stale_token, _current_token), do: {:error, :stale}
+
+  defp reject_incompatible_types(active_types, current_interval, proposed_interval) do
+    effects =
+      Enum.map(active_types, &consultation_type_effect(&1, current_interval, proposed_interval))
+
+    case Enum.reject(effects, & &1.compatible) do
+      [] -> :ok
+      blockers -> {:error, {:incompatible, %{consultation_type_effects: blockers}}}
+    end
+  end
+
+  defp validate_confirmed_availability(availability, interval_minutes)
+       when is_map(availability) do
+    availability
+    |> availability_attributes()
+    |> Availability.validate_configuration(interval_minutes)
+    |> case do
+      {:ok, validated} -> {:ok, validated}
+      {:error, errors} -> {:error, {:validation, errors}}
+    end
+  end
+
+  defp validate_confirmed_availability(_availability, _interval_minutes),
+    do: {:error, {:validation, %{weekly_availability: :invalid_shape}}}
+
+  defp reject_future_appointment_conflicts(appointments, week) do
+    conflicts =
+      future_appointment_conflicts(
+        appointments,
+        week,
+        Application.fetch_env!(:origen, :organization_timezone)
+      )
+
+    if conflicts == [], do: :ok, else: {:error, {:future_appointment_conflicts, conflicts}}
+  end
+
+  defp persist_interval_review!(owner_account_id, interval_minutes, availability) do
+    Repo.query!(
+      """
+      UPDATE agenda_settings
+      SET interval_minutes = $2, weekly_availability = $3,
+          booking_horizon_days = $4, minimum_lead_minutes = $5,
+          updated_at = clock_timestamp()
+      WHERE owner_account_id = $1
+      """,
+      [
+        owner_account_id,
+        interval_minutes,
+        availability.weekly_availability,
+        availability.booking_horizon_days,
+        availability.minimum_lead_minutes
+      ]
+    )
+  end
+
+  defp append_interval_audit!(owner_account_id) do
+    reference = Integer.to_string(owner_account_id)
+
+    with {:ok, event} <- Events.agenda_interval_changed({:professional, reference}, reference),
+         {:ok, _audit} <- Writer.append(event, @audit_decision) do
+      :ok
+    else
+      _failure -> Repo.rollback(:audit_unavailable)
+    end
+  end
+
   defp validate_type_attrs(attrs, interval_minutes) when is_map(attrs) do
     if Enum.any?(@protected_fields, &Map.has_key?(attrs, &1)) do
       {:error, %{base: :protected_fields}}
@@ -767,81 +993,9 @@ defmodule Origen.ConsultationTypes do
     end
   end
 
-  defp lock_active_owned_types!(owner_account_id) do
-    Repo.query!(
-      """
-      SELECT id, name, interval_count
-      FROM consultation_types
-      WHERE owner_account_id = $1 AND status = 'active'
-      ORDER BY created_at, id
-      FOR UPDATE
-      """,
-      [owner_account_id]
-    ).rows
-    |> Enum.map(fn [id, name, interval_count] ->
-      %{id: Ecto.UUID.load!(id), name: name, interval_count: interval_count}
-    end)
-  end
-
-  defp interval_blockers(active_types, interval_minutes) do
-    active_types
-    |> Enum.map(fn type ->
-      Map.put(type, :prospective_duration_minutes, type.interval_count * interval_minutes)
-    end)
-    |> Enum.filter(&(&1.prospective_duration_minutes > 240))
-  end
-
-  defp availability_interval_blockers!(owner_account_id, interval_minutes) do
-    [[week]] =
-      Repo.query!(
-        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
-        [owner_account_id]
-      ).rows
-
-    ~w(monday tuesday wednesday thursday friday saturday sunday)
-    |> Enum.flat_map(fn day ->
-      week
-      |> Map.fetch!(day)
-      |> Enum.flat_map(fn window ->
-        [Map.fetch!(window, "start"), Map.fetch!(window, "end")]
-        |> Enum.filter(&(rem(time_to_minutes(&1), interval_minutes) != 0))
-        |> Enum.map(&"#{day} #{&1}")
-      end)
-    end)
-  end
-
   defp time_to_minutes(value) do
     [hour, minute] = value |> String.split(":") |> Enum.map(&String.to_integer/1)
     hour * 60 + minute
-  end
-
-  defp maybe_put_type_blockers(evidence, [], _interval_minutes), do: evidence
-
-  defp maybe_put_type_blockers(evidence, blockers, interval_minutes) do
-    Map.merge(evidence, %{
-      maximum_interval_count: min(10, div(240, interval_minutes)),
-      blockers: blockers
-    })
-  end
-
-  defp maybe_put_availability_boundaries(evidence, []), do: evidence
-
-  defp maybe_put_availability_boundaries(evidence, boundaries),
-    do: Map.put(evidence, :availability_boundaries, boundaries)
-
-  defp apply_interval_if_changed!(_owner_account_id, interval_minutes, interval_minutes), do: :ok
-
-  defp apply_interval_if_changed!(owner_account_id, _current_interval, interval_minutes) do
-    Repo.query!(
-      """
-      UPDATE agenda_settings
-      SET interval_minutes = $2, updated_at = clock_timestamp()
-      WHERE owner_account_id = $1
-      """,
-      [owner_account_id, interval_minutes]
-    )
-
-    :ok
   end
 
   defp update_consultation_type!(owner_account_id, persisted_id, attrs) do

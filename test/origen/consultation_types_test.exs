@@ -796,6 +796,54 @@ defmodule Origen.ConsultationTypesTest do
   end
 
   describe "preview_agenda_interval/2" do
+    test "keeps an absent settings row read-only until the authorized confirmation" do
+      principal = professional_principal!()
+
+      assert agenda_settings_count(principal.account_id) == 0
+      assert interval_audit_count(principal.account_id) == 0
+
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+
+      assert preview.current_interval_minutes == 30
+      assert preview.reviewed_availability.booking_horizon_days == 30
+      assert preview.reviewed_availability.minimum_lead_minutes == 30
+      assert agenda_settings_count(principal.account_id) == 0
+      assert interval_audit_count(principal.account_id) == 0
+
+      assert {:ok, %{agenda_interval_minutes: 60}} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: preview.reviewed_availability,
+                 stale_token: preview.stale_token
+               })
+
+      assert agenda_settings_count(principal.account_id) == 1
+      assert interval_audit_count(principal.account_id) == 1
+    end
+
+    test "treats a concurrently materialized default row as stale after an absent-row preview" do
+      principal = professional_principal!()
+
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+      assert agenda_settings_count(principal.account_id) == 0
+
+      insert_agenda_settings!(principal.account_id, 30)
+
+      assert {:error, :stale} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: preview.reviewed_availability,
+                 stale_token: preview.stale_token
+               })
+
+      assert agenda_settings_count(principal.account_id) == 1
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert interval_audit_count(principal.account_id) == 0
+    end
+
     test "returns read-only type, availability, appointment, and stale-state evidence" do
       principal = professional_principal!()
       type = create_type!(principal, %{name: "Follow-up", interval_count: 2})
@@ -863,6 +911,113 @@ defmodule Origen.ConsultationTypesTest do
                ConsultationTypes.preview_agenda_interval(principal, 60, reviewed)
 
       assert preview.future_appointment_conflicts == []
+    end
+  end
+
+  describe "confirm_agenda_interval/2" do
+    test "atomically applies the interval, reviewed week, type effects, and one audit event" do
+      principal = professional_principal!()
+      type = create_type!(principal, %{name: "Follow-up", interval_count: 2})
+      reviewed = reviewed_availability_attrs("08:00", "12:00")
+
+      assert {:ok, preview} =
+               ConsultationTypes.preview_agenda_interval(principal, 60, reviewed)
+
+      assert {:ok, result} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: reviewed,
+                 stale_token: preview.stale_token
+               })
+
+      assert result.agenda_interval_minutes == 60
+      assert [%{id: type_id, interval_count: 2}] = result.consultation_types
+      assert type_id == type.id
+
+      assert result.reviewed_availability.weekly_availability.monday == [
+               %{start: "08:00", end: "12:00"}
+             ]
+
+      assert {:ok, %{agenda_interval_minutes: 60}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, availability} = Availability.get_own_configuration(principal)
+      assert availability.weekly_availability.monday == [%{start: "08:00", end: "12:00"}]
+      assert availability.booking_horizon_days == 45
+      assert availability.minimum_lead_minutes == 60
+      assert interval_audit_count(principal.account_id) == 1
+    end
+
+    test "rejects a stale preview and rolls back every proposed effect" do
+      principal = professional_principal!()
+      create_type!(principal, %{interval_count: 2})
+      reviewed = reviewed_availability_attrs("08:00", "12:00")
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60, reviewed)
+
+      Repo.query!(
+        "UPDATE agenda_settings SET minimum_lead_minutes = 35, updated_at = clock_timestamp() WHERE owner_account_id = $1",
+        [principal.account_id]
+      )
+
+      assert {:error, :stale} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: reviewed,
+                 stale_token: preview.stale_token
+               })
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, availability} = Availability.get_own_configuration(principal)
+      assert availability.minimum_lead_minutes == 35
+      refute availability.weekly_availability.monday == [%{start: "08:00", end: "12:00"}]
+      assert interval_audit_count(principal.account_id) == 0
+    end
+
+    test "blocks future appointments that do not fit and returns no patient identity" do
+      principal = professional_principal!()
+      type = create_type!(principal)
+      appointment = insert_future_appointment!(principal.account_id, type.id)
+      reviewed = reviewed_availability_attrs("08:00", "12:00")
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60, reviewed)
+
+      assert {:error, {:future_appointment_conflicts, [conflict]}} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: reviewed,
+                 stale_token: preview.stale_token
+               })
+
+      assert conflict.appointment_id == appointment.id
+      refute Map.has_key?(conflict, :patient_profile_id)
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert interval_audit_count(principal.account_id) == 0
+    end
+
+    test "rolls back interval and reviewed availability when the audit append fails" do
+      principal = professional_principal!()
+      create_type!(principal)
+      assert {:ok, before} = Availability.get_own_configuration(principal)
+      reviewed = reviewed_availability_attrs("08:00", "12:00")
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60, reviewed)
+      install_interval_audit_rejection_trigger!()
+
+      assert {:error, :unavailable} =
+               ConsultationTypes.confirm_agenda_interval(principal, %{
+                 proposed_interval_minutes: 60,
+                 reviewed_availability: reviewed,
+                 stale_token: preview.stale_token
+               })
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, ^before} = Availability.get_own_configuration(principal)
+      assert interval_audit_count(principal.account_id) == 0
     end
   end
 
@@ -940,6 +1095,13 @@ defmodule Origen.ConsultationTypesTest do
     consultation_type
   end
 
+  defp deactivate_type!(principal, consultation_type_id) do
+    {:ok, consultation_type} =
+      ConsultationTypes.deactivate_type(principal, consultation_type_id)
+
+    consultation_type
+  end
+
   defp insert_future_appointment!(
          professional_id,
          consultation_type_id,
@@ -999,11 +1161,36 @@ defmodule Origen.ConsultationTypesTest do
     }
   end
 
-  defp deactivate_type!(principal, consultation_type_id) do
-    {:ok, consultation_type} =
-      ConsultationTypes.deactivate_type(principal, consultation_type_id)
+  defp interval_audit_count(account_id) do
+    Repo.query!(
+      "SELECT count(*) FROM audit_events WHERE event = 'agenda_interval_changed' AND actor_ref = $1",
+      [Integer.to_string(account_id)]
+    ).rows
+    |> hd()
+    |> hd()
+  end
 
-    consultation_type
+  defp agenda_settings_count(account_id) do
+    Repo.query!("SELECT count(*) FROM agenda_settings WHERE owner_account_id = $1", [account_id]).rows
+    |> hd()
+    |> hd()
+  end
+
+  defp install_interval_audit_rejection_trigger! do
+    Repo.query!("""
+    CREATE FUNCTION pg_temp.reject_interval_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.event = 'agenda_interval_changed' THEN
+        RAISE EXCEPTION 'test interval audit rejection';
+      END IF;
+      RETURN NEW;
+    END $$
+    """)
+
+    Repo.query!("""
+    CREATE TRIGGER test_reject_interval_audit BEFORE INSERT ON audit_events
+    FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_interval_audit()
+    """)
   end
 end
 
@@ -1050,7 +1237,7 @@ defmodule Origen.ConsultationTypesConcurrencyTest do
     finish_concurrency_fixture!(fixture)
   end
 
-  test "Agenda Interval application serializes behind Consultation Type creation" do
+  test "Agenda Interval confirmation rejects a stale preview after Consultation Type creation" do
     fixture = start_concurrency_fixture!()
     blocker = install_mutation_blocker!(:insert, fixture.account_id)
 
@@ -1059,15 +1246,13 @@ defmodule Origen.ConsultationTypesConcurrencyTest do
         ConsultationTypes.create_type(fixture.principal, valid_concurrent_type_attrs())
       end)
 
-    assert {:ok, created} = Task.await(create_task, 5_000)
-
-    assert {:ok, %{agenda_interval_minutes: 60, consultation_types: [^created]}} =
-             Task.await(apply_task, 5_000)
+    assert {:ok, _created} = Task.await(create_task, 5_000)
+    assert {:error, :stale} = Task.await(apply_task, 5_000)
 
     finish_concurrency_fixture!(fixture, blocker)
   end
 
-  test "Agenda Interval application serializes behind Consultation Type update" do
+  test "Agenda Interval confirmation rejects a stale preview after Consultation Type update" do
     fixture = start_concurrency_fixture!()
 
     {:ok, consultation_type} =
@@ -1086,16 +1271,11 @@ defmodule Origen.ConsultationTypesConcurrencyTest do
 
     assert {:ok, %{interval_count: 5}} = Task.await(update_task, 5_000)
 
-    assert {:error,
-            {:incompatible,
-             %{maximum_interval_count: 4, blockers: [%{id: blocker_id, interval_count: 5}]}}} =
-             Task.await(apply_task, 5_000)
-
-    assert blocker_id == consultation_type.id
+    assert {:error, :stale} = Task.await(apply_task, 5_000)
     finish_concurrency_fixture!(fixture, blocker)
   end
 
-  test "Agenda Interval application serializes behind Consultation Type reactivation" do
+  test "Agenda Interval confirmation rejects a stale preview after Consultation Type reactivation" do
     fixture = start_concurrency_fixture!()
 
     {:ok, consultation_type} =
@@ -1117,12 +1297,7 @@ defmodule Origen.ConsultationTypesConcurrencyTest do
     assert {:ok, %{status: :active, interval_count: 5}} =
              Task.await(reactivate_task, 5_000)
 
-    assert {:error,
-            {:incompatible,
-             %{maximum_interval_count: 4, blockers: [%{id: blocker_id, interval_count: 5}]}}} =
-             Task.await(apply_task, 5_000)
-
-    assert blocker_id == consultation_type.id
+    assert {:error, :stale} = Task.await(apply_task, 5_000)
     finish_concurrency_fixture!(fixture, blocker)
   end
 
@@ -1156,6 +1331,13 @@ defmodule Origen.ConsultationTypesConcurrencyTest do
 
   defp serialize_mutation_before_interval!(principal, blocker, mutation) do
     parent = self()
+    {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+
+    confirmation = %{
+      proposed_interval_minutes: 60,
+      reviewed_availability: preview.reviewed_availability,
+      stale_token: preview.stale_token
+    }
 
     {:ok, tasks} =
       Repo.transaction(fn ->
@@ -1168,7 +1350,7 @@ defmodule Origen.ConsultationTypesConcurrencyTest do
 
         apply_task =
           start_database_task(parent, :apply, fn ->
-            ConsultationTypes.apply_agenda_interval(principal, 60)
+            ConsultationTypes.confirm_agenda_interval(principal, confirmation)
           end)
 
         apply_backend = await_backend!(:apply)
