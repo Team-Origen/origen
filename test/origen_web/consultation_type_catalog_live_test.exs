@@ -93,6 +93,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     end
   end
 
+  defmodule RejectingIntervalConfirmation do
+    def get_own_configuration(principal),
+      do: Origen.ConsultationTypes.get_own_configuration(principal)
+
+    def preview_agenda_interval(principal, interval, availability),
+      do: Origen.ConsultationTypes.preview_agenda_interval(principal, interval, availability)
+
+    def confirm_agenda_interval(_principal, _attributes), do: {:error, :unavailable}
+  end
+
   setup %{conn: conn} do
     previous_context = Application.get_env(:origen, :consultation_types_context)
 
@@ -218,17 +228,22 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> render_change()
 
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
-    assert has_element?(view, "#interval-change-warning[role=alert]")
+    assert has_element?(view, "#open-interval-change-modal", "Revisar cambios")
+    refute has_element?(view, "#agenda-interval-change-modal")
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
 
     assert has_element?(
              view,
-             "#interval-change-warning",
+             "#agenda-interval-change-modal",
              "Las cantidades de intervalos no cambiarán"
            )
 
-    assert has_element?(view, "#interval-change-warning", "Consulta general")
-    assert has_element?(view, "#interval-change-warning", "30 a 60 minutos")
-    refute has_element?(view, "#interval-change-warning", "TC-001")
+    assert has_element?(view, "#agenda-interval-change-modal", "Consulta general")
+    assert has_element?(view, "#agenda-interval-change-modal", "30 a 60 minutos")
+    refute has_element?(view, "#agenda-interval-change-modal", "TC-001")
 
     assert has_element?(
              view,
@@ -237,6 +252,266 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
            )
   end
 
+  test "warns before a read-only interval review with all impact categories", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "25")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "Cambiar el intervalo de la agenda"
+           )
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "afecta las duraciones de los tipos de consulta y la disponibilidad semanal"
+           )
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "Nada cambiará antes de la confirmación final"
+           )
+
+    assert has_element?(view, "#agenda-interval-change-modal", "Revisar cambios")
+    assert has_element?(view, "#agenda-interval-change-modal", "Cancelar")
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-review", "Revisión del cambio de intervalo")
+    assert has_element?(view, "#interval-type-effects", "Consulta general")
+    assert has_element?(view, "#interval-type-effects", "30 a 50 minutos")
+    assert has_element?(view, "#interval-boundary-conflicts", "Lunes 08:00")
+    assert has_element?(view, "#interval-appointment-conflicts")
+
+    for day <- ~w(monday tuesday wednesday thursday friday saturday sunday) do
+      assert has_element?(view, "#interval-review-day-#{day}")
+
+      assert has_element?(
+               view,
+               ~s(#interval-review-day-#{day} button[phx-click="add_interval_review_window"])
+             )
+    end
+
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    refute has_element?(view, "#interval-apply-success")
+  end
+
+  test "offers only the proposed grid and marks preserved incompatible review boundaries", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    Origen.Repo.query!(
+      """
+      UPDATE agenda_settings
+      SET weekly_availability = jsonb_set(
+            jsonb_set(
+              weekly_availability,
+              '{monday,0,start}',
+              to_jsonb('08:30'::text)
+            ),
+            '{tuesday,0,start}',
+            to_jsonb('08:30'::text)
+          ),
+          updated_at = clock_timestamp()
+      WHERE owner_account_id = $1
+      """,
+      [professional.id]
+    )
+
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "40")
+
+    start_selector = "#interval-review-monday-0-start"
+    end_selector = "#interval-review-monday-0-end"
+    start_error = "interval-review-monday-0-start-error"
+    tuesday_start_selector = "#interval-review-tuesday-0-start"
+
+    assert has_element?(view, "select#{start_selector}")
+    assert has_element?(view, "select#{end_selector}")
+    refute has_element?(view, "#interval-review-form input[type=time]")
+
+    assert has_element?(
+             view,
+             ~s(#{start_selector}[aria-invalid="true"][aria-describedby="#{start_error}"][class*="border-danger"])
+           )
+
+    assert has_element?(
+             view,
+             "##{start_error}",
+             "Seleccione un horario compatible con el intervalo propuesto de 40 minutos."
+           )
+
+    assert has_element?(
+             view,
+             ~s(#{start_selector} option[value="08:30"][disabled][selected]),
+             "08:30 — incompatible con 40 minutos"
+           )
+
+    expected_grid = Enum.map(0..1439//40, &format_test_time/1)
+    start_options = rendered_option_states(view, "#{start_selector} option")
+    end_options = rendered_option_states(view, "#{end_selector} option")
+
+    assert Enum.map(Enum.reject(start_options, & &1.disabled), & &1.value) == expected_grid
+
+    assert Enum.map(Enum.reject(end_options, & &1.disabled), & &1.value) ==
+             expected_grid ++ ["24:00"]
+
+    refute Enum.any?(start_options, &(&1.value == "24:00"))
+    assert Enum.any?(end_options, &(&1.value == "24:00" and not &1.disabled))
+
+    assert [%{value: "08:30", disabled: true, selected: true}] =
+             Enum.filter(start_options, & &1.selected)
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => interval_review_params("08:00", nil)
+    })
+
+    refute has_element?(view, ~s(#{start_selector}[aria-invalid="true"]))
+    refute has_element?(view, "##{start_error}")
+    assert has_element?(view, ~s(#{tuesday_start_selector}[aria-invalid="true"]))
+
+    assert has_element?(
+             view,
+             ~s(#{tuesday_start_selector} option[value="08:30"][disabled][selected])
+           )
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => interval_review_params("08:00", "08:00")
+    })
+
+    refute has_element?(view, ~s(#{tuesday_start_selector}[aria-invalid="true"]))
+    assert has_element?(view, "#interval-boundary-conflicts", "Todos los límites coinciden")
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+  end
+
+  test "marks every over-limit consultation type effect as an accessible danger", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    compatible = Enum.at(@expected_types, 0) |> Map.merge(%{count: 4, duration: 60})
+
+    blockers = [
+      Enum.at(@expected_types, 1) |> Map.merge(%{count: 5, duration: 75}),
+      Enum.at(@expected_types, 2) |> Map.merge(%{count: 7, duration: 105})
+    ]
+
+    replace_catalog!(professional.id, 15, [compatible | blockers])
+
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "60")
+
+    compatible_selector = "#interval-type-effect-#{compatible.id}"
+
+    assert has_element?(view, ~s(#{compatible_selector}[data-compatible="true"]))
+    refute has_element?(view, ~s(#{compatible_selector}[class*="text-danger"]))
+    refute has_element?(view, compatible_selector, "Bloqueo")
+
+    for blocker <- blockers do
+      selector = "#interval-type-effect-#{blocker.id}"
+
+      assert has_element?(
+               view,
+               ~s(#{selector}[data-compatible="false"][class*="text-danger"]),
+               "Bloqueo: la duración propuesta supera el máximo permitido de 240 minutos."
+             )
+    end
+
+    assert rendered_element_count(view, ~s(#interval-type-effects [data-compatible="false"])) ==
+             2
+
+    assert has_element?(view, "#confirm-interval-change[disabled]", "Confirmar cambio")
+  end
+
+  test "marks a reviewed closing time at or before opening and recovers without losing values", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    end_selector = "#interval-review-monday-0-end"
+    ordering_error = "interval-review-monday-0-end-ordering-error"
+
+    invalid_params =
+      interval_review_params("12:00", "08:00")
+      |> put_in(["weekly_availability", "monday", "0", "end"], "11:30")
+      |> put_in(["weekly_availability", "tuesday", "1", "start"], "15:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => invalid_params})
+
+    assert has_element?(
+             view,
+             ~s(#{end_selector}[data-order-invalid="true"][aria-invalid="true"][aria-describedby="#{ordering_error}"][class*="border-danger"])
+           )
+
+    assert has_element?(
+             view,
+             "##{ordering_error}",
+             "La hora de cierre debe ser posterior a la hora de apertura."
+           )
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    equal_params =
+      put_in(invalid_params, ["weekly_availability", "monday", "0", "end"], "12:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => equal_params})
+
+    assert has_element?(view, ~s(#{end_selector}[data-order-invalid="true"]))
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    corrected_params =
+      put_in(equal_params, ["weekly_availability", "monday", "0", "end"], "12:30")
+
+    render_change(view, "change_interval_review", %{"interval_review" => corrected_params})
+
+    refute has_element?(view, ~s(#{end_selector}[data-order-invalid="true"]))
+    refute has_element?(view, ~s(#{end_selector}[aria-invalid="true"]))
+    refute has_element?(view, "##{ordering_error}")
+    assert has_element?(view, ~s(#interval-review-monday-0-start option[value="12:00"][selected]))
+    assert has_element?(view, ~s(#{end_selector} option[value="12:30"][selected]))
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-tuesday-1-start option[value="15:00"][selected])
+           )
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+  end
+
+  test "gives repeated weekday review selectors unambiguous accessible names", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    expected_controls = [
+      {"interval-review-monday-0-start", "Lunes, horario 1, desde"},
+      {"interval-review-monday-0-end", "Lunes, horario 1, hasta"},
+      {"interval-review-monday-1-start", "Lunes, horario 2, desde"},
+      {"interval-review-monday-1-end", "Lunes, horario 2, hasta"}
+    ]
+
+    assert rendered_element_count(view, "#interval-review-day-monday select") == 4
+    assert expected_controls |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 4
+
+    for {id, accessible_name} <- expected_controls do
+      assert has_element?(view, ~s(select##{id}[aria-label="#{accessible_name}"]))
+    end
+  end
   test "a compatible apply recalculates durations and preserves counts", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 

@@ -2,6 +2,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   use OrigenWeb, :live_component
 
   alias Origen.Availability
+  alias OrigenWeb.TimeGrid
 
   @days [
     {:monday, "Lunes"},
@@ -12,6 +13,30 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     {:saturday, "Sábado"},
     {:sunday, "Domingo"}
   ]
+
+  @impl true
+  def update(%{refresh_after_interval_change: true}, socket) do
+    case socket.assigns.availability_context.get_own_configuration(socket.assigns.principal) do
+      {:ok, configuration} ->
+        {:ok,
+         socket
+         |> assign(
+           configuration: configuration,
+           editing: false,
+           draft: nil,
+           local_errors: %{},
+           copy_source: nil,
+           copy_targets: [],
+           feedback: nil,
+           validation_errors: nil,
+           load_error: false
+         )
+         |> notify_parent(false, false)}
+
+      {:error, _reason} ->
+        {:ok, socket |> assign(load_error: true) |> notify_parent(false, false)}
+    end
+  end
 
   @impl true
   def update(%{principal: principal} = assigns, socket) do
@@ -31,6 +56,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
          |> assign(
            configuration: configuration,
            editing: false,
+           dirty: false,
            draft: nil,
            local_errors: %{},
            feedback: nil,
@@ -45,6 +71,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
          |> assign(
            configuration: nil,
            editing: false,
+           dirty: false,
            draft: nil,
            local_errors: %{},
            feedback: nil,

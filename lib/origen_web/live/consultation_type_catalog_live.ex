@@ -4,8 +4,18 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
 
   alias Origen.ConsultationTypes
+  alias OrigenWeb.TimeGrid
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
+  @availability_days [
+    {:monday, "Lunes"},
+    {:tuesday, "Martes"},
+    {:wednesday, "Miércoles"},
+    {:thursday, "Jueves"},
+    {:friday, "Viernes"},
+    {:saturday, "Sábado"},
+    {:sunday, "Domingo"}
+  ]
   @type_form_defaults %{
     "name" => "",
     "currency" => "ARS",
@@ -27,9 +37,14 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         show_inactive: false,
         type_modal_open: false,
         editing_type_id: nil,
-        type_form_params: @type_form_defaults,
-        type_form_errors: %{},
-        reactivation_feedback: nil
+         type_form_params: @type_form_defaults,
+         type_form_errors: %{},
+         reactivation_feedback: nil,
+          interval_review: nil,
+          interval_modal_open: false,
+          interval_modal_step: :warning,
+          availability_editing: false,
+          availability_dirty: false
       )
 
     case consultation_types().get_own_configuration(socket.assigns.current_internal_session) do
@@ -58,9 +73,12 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       {:ok, selected_interval} ->
         {:noreply,
          assign(socket,
-           selected_interval: selected_interval,
-           interval_feedback: nil,
-           reactivation_feedback: nil
+            selected_interval: selected_interval,
+             interval_feedback: nil,
+             interval_review: nil,
+             interval_modal_open: false,
+             interval_modal_step: :warning,
+             reactivation_feedback: nil
          )}
 
       :error ->

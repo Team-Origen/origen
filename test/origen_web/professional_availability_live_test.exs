@@ -114,8 +114,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
              )
     end
 
-    assert has_element?(view, ~s(#availability-monday-0-start[type="time"][step="1800"]))
-    assert has_element?(view, ~s(#availability-monday-0-end[type="time"][step="1800"]))
+    assert has_element?(
+             view,
+             ~s(select#availability-monday-0-start[aria-label="Lunes, horario 1, desde"])
+           )
+
+    assert has_element?(
+             view,
+             ~s(select#availability-monday-0-end[aria-label="Lunes, horario 1, hasta"])
+           )
 
     assert has_element?(
              view,
@@ -146,16 +153,16 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
              "Cada horario debe respetar el intervalo de Agenda de 30 minutos."
            )
 
-    assert has_element?(view, ~s(#availability-monday-0-start[step="1800"]))
-    assert has_element?(view, ~s(#availability-monday-0-end[step="1800"]))
+    assert has_element?(view, ~s(#availability-monday-0-start option[value="00:30"]))
+    assert has_element?(view, ~s(#availability-monday-0-end option[value="24:00"]))
     assert has_element?(view, ~s(#minimum-lead-minutes[step="5"]))
 
     invalid =
       put_in(replacement_params(), ["weekly_availability", "monday", "0", "start"], "08:10")
 
     view
-    |> form("#availability-form", availability: invalid)
-    |> render_change()
+    |> element("#availability-form")
+    |> render_change(%{"availability" => invalid})
 
     assert has_element?(
              view,
