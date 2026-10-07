@@ -641,6 +641,39 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert persisted_weekly_availability(professional.id) == persisted_before
   end
 
+  test "ignores malformed interval review change payloads without losing the draft", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    current_params = interval_review_params("09:00", "08:00")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => current_params,
+      "interval_review_copy" => %{"source" => "monday", "targets" => ["friday"]}
+    })
+
+    current_draft = render(view)
+
+    malformed_payloads = [
+      %{"interval_review_copy" => %{"source" => "tuesday", "targets" => ["sunday"]}},
+      %{
+        "interval_review" => "invalid",
+        "interval_review_copy" => %{"source" => "tuesday", "targets" => ["sunday"]}
+      },
+      %{
+        "interval_review" => interval_review_params("10:00", "08:00"),
+        "interval_review_copy" => "invalid"
+      }
+    ]
+
+    for payload <- malformed_payloads do
+      render_change(view, "change_interval_review", payload)
+
+      assert Process.alive?(view.pid)
+      assert render(view) == current_draft
+    end
+  end
+
   test "gives repeated weekday review selectors unambiguous accessible names", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
     open_interval_review(view, "30")

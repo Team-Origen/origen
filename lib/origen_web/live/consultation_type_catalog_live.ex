@@ -183,6 +183,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     end
   end
 
+  def handle_event("change_interval_review", _params, socket), do: {:noreply, socket}
+
   @impl true
   def handle_event("add_interval_review_window", %{"day" => day_name}, socket) do
     with {:ok, day} <- availability_day(day_name),
