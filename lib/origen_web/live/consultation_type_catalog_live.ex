@@ -1486,6 +1486,110 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     week_params = Map.get(params, "weekly_availability", %{})
 
     week =
+      Map.new(@availability_days, fn {day, _label} ->
+        day_params = Map.get(week_params, Atom.to_string(day), %{})
+        current_windows = Map.fetch!(current.weekly_availability, day)
+
+        windows =
+          day_params
+          |> Enum.reject(fn {key, _value} -> key == "_present" end)
+          |> Enum.sort_by(fn {key, _value} -> parse_review_index(key) end)
+          |> Enum.map(fn {index_text, window} ->
+            current_window = Enum.at(current_windows, parse_review_index(index_text), %{})
+
+            %{
+              start: Map.get(window, "start", Map.get(current_window, :start, "")),
+              end: Map.get(window, "end", Map.get(current_window, :end, ""))
+            }
+          end)
+
+        {day, windows}
+      end)
+
+    %{
+      weekly_availability: week,
+      booking_horizon_days:
+        parse_review_integer(Map.get(params, "booking_horizon_days"), current.booking_horizon_days),
+      minimum_lead_minutes:
+        parse_review_integer(Map.get(params, "minimum_lead_minutes"), current.minimum_lead_minutes)
+    }
+  end
+
+  defp availability_attrs(availability, week) do
+    %{
+      weekly_availability: week,
+      booking_horizon_days: availability.booking_horizon_days,
+      minimum_lead_minutes: availability.minimum_lead_minutes
+    }
+  end
+
+  defp availability_day(day_name) do
+    case Enum.find(@availability_days, fn {day, _label} -> Atom.to_string(day) == day_name end) do
+      {day, _label} -> {:ok, day}
+      nil -> :error
+    end
+  end
+
+  defp parse_review_index(value) do
+    case Integer.parse(value) do
+      {index, ""} -> index
+      _invalid -> 1_000_000
+    end
+  end
+
+  defp parse_review_integer(value, fallback) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _invalid -> fallback
+    end
+  end
+
+  defp parse_review_integer(_value, fallback), do: fallback
+
+  defp format_interval_time(minutes), do: TimeGrid.format(minutes)
+
+  defp format_review_boundary(%{day: day, time: time}) do
+    label = @availability_days |> Keyword.fetch!(day)
+    "#{label} #{time}"
+  end
+
+  defp interval_review_order_invalid?(start_value, end_value)
+       when is_binary(start_value) and is_binary(end_value),
+       do: start_value != "" and end_value != "" and end_value <= start_value
+
+  defp interval_review_order_invalid?(_start_value, _end_value), do: false
+
+  defp interval_review_described_by(
+         grid_invalid?,
+         grid_error_id,
+         ordering_invalid?,
+         ordering_error_id
+       ) do
+    [grid_invalid? && grid_error_id, ordering_invalid? && ordering_error_id]
+    |> Enum.filter(& &1)
+    |> Enum.join(" ")
+    |> case do
+      "" -> nil
+      ids -> ids
+    end
+  end
+
+  defp interval_review_order_blocked?(weekly_availability) do
+    Enum.any?(weekly_availability, fn {_day, windows} ->
+      Enum.any?(windows, fn window ->
+        interval_review_order_invalid?(window.start, window.end)
+      end)
+    end)
+  end
+
+  defp interval_review_blocked?(review) do
+    Enum.any?(review.consultation_type_effects, &(not &1.compatible)) or
+      review.incompatible_availability_boundaries != [] or
+      review.future_appointment_conflicts != [] or
+      map_size(review.availability_validation_errors) > 0 or
+      interval_review_order_blocked?(review.reviewed_availability.weekly_availability)
+  end
+
   defp backend_type_errors(errors) do
     Map.new(errors, fn {field, reason} -> {field, [backend_type_error(field, reason)]} end)
   end
