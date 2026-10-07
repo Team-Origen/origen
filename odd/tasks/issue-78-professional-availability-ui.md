@@ -106,7 +106,7 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] ODD-78-23 — Add a keyboard-operable interval-review copy action that copies a source day's complete draft windows to selected destination days without early persistence.
 - [x] ODD-78-24 — Reject malformed or incomplete interval-review change payloads without crashing the LiveView or mutating the current review draft.
 - [x] ODD-78-25 — Render the Professional settings route inside an explicit light-theme boundary so its page, surfaces, controls, and modal remain legible when the global preference is dark.
-- [ ] ODD-78-26 — Replace the non-autonomous draft PR chain with complete CI-valid work units, correct Issue-link metadata, and make the final Issue #78 tree pass the repository formatter and Dialyzer gates.
+- [x] ODD-78-26 — Replace the non-autonomous draft PR chain with complete CI-valid work units, correct Issue-link metadata, and make the final Issue #78 tree pass the repository formatter and Dialyzer gates.
 
 ## Acceptance criteria
 
@@ -312,7 +312,7 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] ODD-78-26 final-tree corrections are GREEN: the repository formatter normalized the complete reported catalog LiveView source, and the precise `Events.agenda_interval_changed/2` constructor spec now exposes `Origen.Audit.Events.t()` without changing runtime behavior or adding a Dialyzer ignore.
 - [x] ODD-78-26 final-tree static gates passed: `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix sobelow --skip --threshold medium --exit`, and `mix dialyzer --format short`. Sobelow exited successfully while still reporting the existing ignored local-only database passwords in `config/dev.local.exs` and `config/test.local.exs`; neither file is part of the tracked candidate.
 - [x] ODD-78-26 final-tree regression checks passed: the combined consultation-type, availability, catalog LiveView, Professional availability LiveView, booking-calendar, and integration command passed 159/159 (seed 111720); `mix test` passed 678/678 with 29 skipped and 8 PostgreSQL-security tests excluded (seed 252348); `mix assets.build` passed with Tailwind v4.3.0 and esbuild; and `git diff --check` passed with no output.
-- [ ] ODD-78-26 remains open because replacement-chain construction and per-child autonomy have not been completed; this correction records final-tree evidence only.
+- [x] ODD-78-26 replacement-chain verification passed: tracker PR #214 and child PRs #234–#260 are open drafts with correct immediate-parent bases; every current head passes Build y Tests, branch/Issue validation, and secret scanning. Superseded PRs #215–#232 are closed and unmerged, Issue #78 remains open, PR #245 retains the sole 555/556 size exception, and the final remote tree equals the source tree at `b6761c64f28d45fcbadecbd5b6880ae7f5abd9e4`.
 
 ## Pending WSL manual checklist
 
@@ -329,4 +329,4 @@ ODD-78-05 remains pending. When WSL browser authorization is available in a futu
 
 ## Next step
 
-Construct and verify the autonomous replacement chain for ODD-78-26, then complete the pending ODD-78-05 authenticated browser verification. Keep merges as a separate decision.
+Complete the pending ODD-78-05 authenticated browser verification. Keep all PR merges as a separate maintainer decision.
