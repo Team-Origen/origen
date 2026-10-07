@@ -556,6 +556,34 @@ defmodule Origen.ConsultationTypes do
   defp weekday_atom(1), do: :monday
   defp weekday_atom(2), do: :tuesday
   defp weekday_atom(3), do: :wednesday
+  defp weekday_atom(4), do: :thursday
+  defp weekday_atom(5), do: :friday
+  defp weekday_atom(6), do: :saturday
+  defp weekday_atom(7), do: :sunday
+
+  defp safe_time_to_minutes(value) when is_binary(value) do
+    case Regex.run(~r/\A(?:[01]\d|2[0-3]):[0-5]\d\z|\A24:00\z/, value) do
+      nil -> :error
+      _match -> {:ok, time_to_minutes(value)}
+    end
+  end
+
+  defp safe_time_to_minutes(_value), do: :error
+
+  defp validation_errors({:ok, _configuration}), do: %{}
+  defp validation_errors({:error, errors}), do: errors
+
+  defp interval_state_token(owner_account_id, settings, active_types, appointments) do
+    snapshot = %{
+      owner_account_id: owner_account_id,
+      settings: settings,
+      active_types: active_types,
+      appointments: appointments
+    }
+
+    :sha256
+    |> :crypto.hash(:erlang.term_to_binary(snapshot))
+    |> Base.url_encode64(padding: false)
   end
 
   defp validate_type_attrs(attrs, interval_minutes) when is_map(attrs) do

@@ -733,26 +733,15 @@ defmodule Origen.ConsultationTypesTest do
       assert {:ok, before_configuration} =
                ConsultationTypes.get_own_configuration(principal)
 
-      expected_blockers =
-        before_configuration.consultation_types
-        |> Enum.filter(&(&1.id in [first_blocker.id, second_blocker.id]))
-        |> Enum.map(fn type ->
-          %{
-            id: type.id,
-            name: type.name,
-            interval_count: type.interval_count,
-            prospective_duration_minutes: type.interval_count * 60
-          }
-        end)
+      assert {:error, {:confirmation_required, preview}} =
+               ConsultationTypes.apply_agenda_interval(principal, 60)
 
-      assert {:error,
-              {:incompatible,
-               %{
-                 maximum_interval_count: 4,
-                 blockers: ^expected_blockers
-               }}} = ConsultationTypes.apply_agenda_interval(principal, 60)
+      expected_blockers =
+        Enum.filter(preview.consultation_type_effects, &(not &1.compatible))
 
       assert length(expected_blockers) == 2
+      assert Enum.map(expected_blockers, & &1.id) == [first_blocker.id, second_blocker.id]
+      assert Enum.map(expected_blockers, & &1.proposed_duration_minutes) == [300, 420]
       assert {:ok, ^before_configuration} = ConsultationTypes.get_own_configuration(principal)
 
       assert Enum.find(before_configuration.consultation_types, &(&1.id == compatible.id)) ==
@@ -777,8 +766,10 @@ defmodule Origen.ConsultationTypesTest do
                  minimum_lead_minutes: 30
                })
 
-      assert {:error, {:incompatible, %{availability_boundaries: ["monday 08:30"]}}} =
+      assert {:error, {:confirmation_required, preview}} =
                ConsultationTypes.apply_agenda_interval(principal, 60)
+
+      assert %{day: :monday, boundary: :start, time: "08:30"} in preview.incompatible_availability_boundaries
 
       assert {:ok, %{agenda_interval_minutes: 30}} =
                ConsultationTypes.get_own_configuration(principal)
@@ -801,6 +792,77 @@ defmodule Origen.ConsultationTypesTest do
 
       assert {:ok, %{agenda_interval_minutes: 30}} =
                ConsultationTypes.get_own_configuration(principal)
+    end
+  end
+
+  describe "preview_agenda_interval/2" do
+    test "returns read-only type, availability, appointment, and stale-state evidence" do
+      principal = professional_principal!()
+      type = create_type!(principal, %{name: "Follow-up", interval_count: 2})
+
+      week =
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), fn day ->
+          {day, [%{"start" => "08:30", "end" => "12:00"}]}
+        end)
+
+      assert {:ok, availability_before} =
+               Availability.replace_own_configuration(principal, %{
+                 weekly_availability: week,
+                 booking_horizon_days: 30,
+                 minimum_lead_minutes: 30
+               })
+
+      appointment = insert_future_appointment!(principal.account_id, type.id)
+      audit_count_before = audit_count(principal.account_id)
+
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+      assert preview.current_interval_minutes == 30
+      assert preview.proposed_interval_minutes == 60
+      assert is_binary(preview.stale_token)
+
+      assert [effect] = preview.consultation_type_effects
+      assert effect.name == "Follow-up"
+      assert effect.current_duration_minutes == 60
+      assert effect.proposed_duration_minutes == 120
+      assert effect.compatible
+
+      assert %{day: :monday, boundary: :start, time: "08:30"} in preview.incompatible_availability_boundaries
+
+      assert [%{appointment_id: appointment_id, date: appointment_date}] =
+               preview.future_appointment_conflicts
+
+      assert appointment_id == appointment.id
+      assert appointment_date == appointment.date
+      refute Map.has_key?(hd(preview.future_appointment_conflicts), :patient_profile_id)
+      refute Map.has_key?(hd(preview.future_appointment_conflicts), :patient_name)
+
+      assert preview.reviewed_availability == availability_before
+
+      assert {:ok, %{agenda_interval_minutes: 30}} =
+               ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, ^availability_before} = Availability.get_own_configuration(principal)
+      assert audit_count(principal.account_id) == audit_count_before
+    end
+
+    test "treats an appointment ending at midnight as fitting a 24:00 weekly boundary" do
+      principal = professional_principal!()
+      type = create_type!(principal)
+      appointment = insert_future_appointment!(principal.account_id, type.id, ~T[23:00:00], 60)
+      day = appointment.date |> Date.day_of_week() |> weekday_name()
+
+      reviewed =
+        reviewed_availability_attrs("08:00", "12:00")
+        |> put_in(
+          [:weekly_availability],
+          Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []})
+          |> Map.put(day, [%{"start" => "23:00", "end" => "24:00"}])
+        )
+
+      assert {:ok, preview} =
+               ConsultationTypes.preview_agenda_interval(principal, 60, reviewed)
+
+      assert preview.future_appointment_conflicts == []
     end
   end
 
@@ -876,6 +938,65 @@ defmodule Origen.ConsultationTypesTest do
       ConsultationTypes.create_type(principal, valid_type_attrs(overrides))
 
     consultation_type
+  end
+
+  defp insert_future_appointment!(
+         professional_id,
+         consultation_type_id,
+         start_clock \\ ~T[13:00:00],
+         duration_minutes \\ 60
+       ) do
+    [[patient_id]] =
+      Repo.query!(
+        "INSERT INTO patient_profiles (email) VALUES ($1) RETURNING id",
+        ["interval-preview-#{System.unique_integer([:positive])}@example.test"]
+      ).rows
+
+    date = Date.utc_today() |> Date.add(7)
+    start_time = DateTime.new!(date, start_clock, "Etc/UTC")
+    end_time = DateTime.add(start_time, duration_minutes, :minute)
+
+    [[id]] =
+      Repo.query!(
+        """
+        INSERT INTO appointments
+          (patient_profile_id, professional_account_id, consultation_type_id,
+           start_time, end_time, status, snapshot_consultation_type_name,
+           snapshot_duration_minutes, snapshot_exact_price_ars)
+        VALUES ($1, $2, $3, $4, $5, 'reserved', 'Follow-up', 60, 18000.00)
+        RETURNING id
+        """,
+        [patient_id, professional_id, Ecto.UUID.dump!(consultation_type_id), start_time, end_time]
+      ).rows
+
+    %{id: id, date: date}
+  end
+
+  defp weekday_name(1), do: "monday"
+  defp weekday_name(2), do: "tuesday"
+  defp weekday_name(3), do: "wednesday"
+  defp weekday_name(4), do: "thursday"
+  defp weekday_name(5), do: "friday"
+  defp weekday_name(6), do: "saturday"
+  defp weekday_name(7), do: "sunday"
+
+  defp audit_count(account_id) do
+    Repo.query!("SELECT count(*) FROM audit_events WHERE actor_ref = $1", [
+      Integer.to_string(account_id)
+    ]).rows
+    |> hd()
+    |> hd()
+  end
+
+  defp reviewed_availability_attrs(start_time, end_time) do
+    empty_week = Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []})
+
+    %{
+      weekly_availability:
+        Map.put(empty_week, "monday", [%{"start" => start_time, "end" => end_time}]),
+      booking_horizon_days: 45,
+      minimum_lead_minutes: 60
+    }
   end
 
   defp deactivate_type!(principal, consultation_type_id) do
