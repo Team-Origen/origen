@@ -61,8 +61,7 @@ defmodule OrigenWeb.Router do
   scope "/configuracion", OrigenWeb do
     pipe_through [:browser, :require_internal_session, :require_professional]
 
-      live "/profesional", ConsultationTypeCatalogLive
-    end
+    live "/profesional", ConsultationTypeCatalogLive
   end
 
   scope "/api/bootstrap", OrigenWeb do

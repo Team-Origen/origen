@@ -613,7 +613,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                 <output
                   id="new-consultation-type-duration"
                   for="new-consultation-type-count"
-                  class="block rounded-md bg-gray-50 p-4 text-sm font-semibold text-gray-700"
+                  class="block rounded-md bg-surface-muted p-4 text-sm font-semibold text-text-muted dark:bg-gray-800 dark:text-gray-200"
                   aria-live="polite"
                 >
                   <%= if duration = duration_preview(@type_form_params, @current_interval) do %>
