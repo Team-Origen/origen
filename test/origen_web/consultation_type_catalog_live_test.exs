@@ -342,6 +342,41 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     refute has_element?(view, "#professional-settings-content[inert]")
   end
 
+  test "copies reviewed hours to explicit destinations without persisting", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    persisted_before = persisted_weekly_availability(professional.id)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view |> element("#open-interval-change-modal") |> render_click()
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    view
+    |> form("#interval-review-form",
+      interval_review_copy: %{source: "monday", targets: ["friday"]}
+    )
+    |> render_change()
+
+    assert has_element?(view, "#interval-review-copy-source option[value=monday][selected]")
+    assert has_element?(view, "#interval-review-copy-friday[checked]")
+
+    view
+    |> element("#copy-interval-review-hours")
+    |> render_click()
+
+    assert has_element?(view, "#interval-review-friday-0-start option[value='08:00'][selected]")
+    assert has_element?(view, "#interval-review-friday-1-end option[value='18:00'][selected]")
+    assert persisted_weekly_availability(professional.id) == persisted_before
+  end
+
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{
     conn: conn
   } do
@@ -1593,6 +1628,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> String.replace(".", "")
     |> String.replace(",", ".")
     |> Decimal.new()
+  end
+
+  defp persisted_weekly_availability(account_id) do
+    [[weekly_availability]] =
+      Origen.Repo.query!(
+        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
+        [account_id]
+      ).rows
+
+    weekly_availability
   end
 
   defp insert_active_internal_account!(role) do
