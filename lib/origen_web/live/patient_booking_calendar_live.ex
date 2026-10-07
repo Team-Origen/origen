@@ -10,7 +10,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     ready? = profile != nil and Patients.ready_for_booking?(profile)
     {:ok, profs} = Calendar.list_professionals()
     default_prof = hd(profs)
-    types = fetch_types(default_prof.id)
+    {types, agenda_interval_minutes} = fetch_catalog(default_prof.id)
     default_type = hd(types)
 
     {:ok,
@@ -23,6 +23,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        consultation_types: types,
        selected_type_id: default_type.id,
        selected_type: default_type,
+       agenda_interval_minutes: agenda_interval_minutes,
        date: next_weekday(Date.utc_today()),
        selected_slot: nil,
        confirmed?: false,
@@ -33,7 +34,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   @impl true
   def handle_event("change_prof", %{"prof_id" => id}, socket) do
-    types = fetch_types(id)
+    {types, agenda_interval_minutes} = fetch_catalog(id)
     type = hd(types)
 
     {:noreply,
@@ -42,6 +43,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        consultation_types: types,
        selected_type_id: type.id,
        selected_type: type,
+       agenda_interval_minutes: agenda_interval_minutes,
        selected_slot: nil,
        confirmed?: false
      )
@@ -104,7 +106,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         slot: socket.assigns.selected_slot,
         snapshot_override: %{
           name: socket.assigns.selected_type.name,
-          duration_minutes: socket.assigns.selected_type.interval_count * 15,
+          duration_minutes:
+            socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes,
           exact_price_ars: socket.assigns.selected_type.exact_price_ars
         }
       }
@@ -137,25 +140,26 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   defp load_schedule(socket) do
     duration =
-      (socket.assigns[:selected_type] && socket.assigns.selected_type.interval_count * 15) || 30
+      (socket.assigns[:selected_type] &&
+         socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes) ||
+        30
 
     case Calendar.get_daily_schedule(socket.assigns.prof_id, socket.assigns.date,
-           duration_minutes: duration,
-           agenda_interval_minutes: duration
+           duration_minutes: duration
          ) do
       {:ok, s} -> assign(socket, schedule: s, error: nil)
       {:error, r} -> assign(socket, schedule: nil, error: r)
     end
   end
 
-  defp fetch_types(prof_id) do
+  defp fetch_catalog(prof_id) do
     case ConsultationTypes.Catalog.execute({:list, %{professional_reference: prof_id}}) do
-      {:ok, %{consultation_types: list}} ->
+      {:ok, %{consultation_types: list, agenda_interval_minutes: interval}} ->
         active = Enum.filter(list, &(&1.status == :active))
-        if active == [], do: default_type_list(), else: active
+        {if(active == [], do: default_type_list(), else: active), interval}
 
       _ ->
-        default_type_list()
+        {default_type_list(), 15}
     end
   end
 
@@ -267,7 +271,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                       selected={t.id == @selected_type_id}
                       class="bg-white text-stone-900"
                     >
-                      {t.name} ({t.interval_count * 15} min)
+                      {t.name} ({t.interval_count * @agenda_interval_minutes} min)
                     </option>
                   <% end %>
                 </select>

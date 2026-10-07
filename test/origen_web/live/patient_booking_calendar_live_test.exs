@@ -6,7 +6,55 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
   @email "ana_cal@example.test"
 
+  defmodule PersistedCatalog do
+    def execute({:list, %{professional_reference: professional_reference}}) do
+      {professional_id, ""} = Integer.parse(professional_reference)
+
+      [[interval]] =
+        Origen.Repo.query!(
+          "SELECT interval_minutes FROM agenda_settings WHERE owner_account_id = $1",
+          [professional_id]
+        ).rows
+
+      types =
+        Origen.Repo.query!(
+          """
+          SELECT id, name, interval_count, exact_price_ars, status
+          FROM consultation_types
+          WHERE owner_account_id = $1
+          ORDER BY created_at, id
+          """,
+          [professional_id]
+        ).rows
+        |> Enum.map(fn [id, name, interval_count, exact_price_ars, status] ->
+          %{
+            id: Ecto.UUID.load!(id),
+            name: name,
+            interval_count: interval_count,
+            exact_price_ars: exact_price_ars,
+            status: String.to_existing_atom(status)
+          }
+        end)
+
+      {:ok,
+       %{
+         source: :database,
+         professional_reference: professional_reference,
+         agenda_interval_minutes: interval,
+         consultation_types: types
+       }}
+    end
+  end
+
   setup %{conn: conn} do
+    previous_calendar = Application.get_env(:origen, :appointments_calendar_adapter)
+    previous_catalog = Application.get_env(:origen, :consultation_type_catalog_adapter)
+
+    on_exit(fn ->
+      Application.put_env(:origen, :appointments_calendar_adapter, previous_calendar)
+      Application.put_env(:origen, :consultation_type_catalog_adapter, previous_catalog)
+    end)
+
     Enum.each([PatientProfile, Persona], &Repo.delete_all/1)
     Repo.query!("DELETE FROM appointments")
     Repo.query!("DELETE FROM consultation_types")
@@ -69,6 +117,53 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert render_click(view, "nav_date", %{"step" => "1"}) =~ "Horarios Disponibles para"
       assert render_click(view, "nav_date", %{"step" => "-1"}) =~ "Horarios Disponibles para"
     end
+
+    test "uses a persisted non-default slot grid while keeping duration contiguous", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        Origen.Appointments.DatabaseCalendar
+      )
+
+      Application.put_env(:origen, :consultation_type_catalog_adapter, PersistedCatalog)
+
+      friday = next_weekday(Date.utc_today(), 5)
+
+      week =
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []})
+        |> Map.put("friday", [%{"start" => "09:00", "end" => "12:00"}])
+
+      Repo.query!(
+        """
+        INSERT INTO agenda_settings
+          (owner_account_id, interval_minutes, weekly_availability,
+           booking_horizon_days, minimum_lead_minutes)
+        VALUES ($1, 20, $2, 30, 0)
+        """,
+        [prof_id, week]
+      )
+
+      Repo.query!(
+        "UPDATE consultation_types SET interval_count = 3 WHERE owner_account_id = $1",
+        [prof_id]
+      )
+
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      assert html =~ "Consulta general (60 min)"
+
+      html = render_change(view, "change_date", %{"date" => Date.to_iso8601(friday)})
+      assert html =~ "09:20"
+      assert html =~ "10:20"
+
+      view
+      |> element(~s(button[phx-value-slot_id="SLOT-#{Date.to_iso8601(friday)}-0920"]))
+      |> render_click()
+
+      assert render(view) =~ "09:20 a 10:20"
+    end
   end
 
   describe "slot selection, policies and booking confirmation" do
@@ -124,5 +219,10 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert html_control =~ "Control"
       assert html_control =~ "09:00"
     end
+  end
+
+  defp next_weekday(date, target_day) do
+    offset = rem(target_day - Date.day_of_week(date) + 7, 7)
+    Date.add(date, if(offset == 0, do: 7, else: offset))
   end
 end
