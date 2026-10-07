@@ -339,6 +339,12 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               </.card>
             </section>
 
+            <.live_component
+              module={OrigenWeb.ProfessionalAvailabilityComponent}
+              id="professional-availability"
+              principal={@current_internal_session}
+            />
+
             <section aria-labelledby="consultation-types-heading">
               <.card variant="basic">
                 <.card_header>

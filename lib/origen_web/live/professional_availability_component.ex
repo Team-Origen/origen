@@ -740,3 +740,283 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
       >
         {render_slot(@inner_block)}
       </div>
+    </div>
+    """
+  end
+
+  defp windows_summary([]), do: "Sin disponibilidad"
+
+  defp windows_summary(windows) do
+    Enum.map_join(windows, ", ", &"#{&1.start} a #{&1.end}")
+  end
+
+  defp configuration_to_draft(configuration) do
+    %{
+      weekly_availability: configuration.weekly_availability,
+      booking_horizon_days: Integer.to_string(configuration.booking_horizon_days),
+      minimum_lead_minutes: Integer.to_string(configuration.minimum_lead_minutes)
+    }
+  end
+
+  defp params_to_draft(params) do
+    week_params = Map.get(params, "weekly_availability", %{})
+
+    week =
+      Map.new(@days, fn {day, _label} ->
+        day_params = Map.get(week_params, Atom.to_string(day), %{})
+
+        windows =
+          day_params
+          |> Enum.reject(fn {key, _value} -> key == "_present" end)
+          |> Enum.sort_by(fn {key, _value} -> parse_index(key) end)
+          |> Enum.map(fn {_key, window} ->
+            %{start: Map.get(window, "start", ""), end: Map.get(window, "end", "")}
+          end)
+
+        {day, windows}
+      end)
+
+    %{
+      weekly_availability: week,
+      booking_horizon_days: Map.get(params, "booking_horizon_days", ""),
+      minimum_lead_minutes: Map.get(params, "minimum_lead_minutes", "")
+    }
+  end
+
+  defp draft_to_attributes(draft) do
+    %{
+      weekly_availability: draft.weekly_availability,
+      booking_horizon_days: parse_integer(draft.booking_horizon_days),
+      minimum_lead_minutes: parse_integer(draft.minimum_lead_minutes)
+    }
+  end
+
+  defp update_draft_day(socket, day, update_windows) do
+    draft = socket.assigns.draft
+    windows = draft.weekly_availability |> Map.fetch!(day) |> update_windows.()
+    week = Map.put(draft.weekly_availability, day, windows)
+    updated_draft = %{draft | weekly_availability: week}
+
+    assign(socket,
+      draft: updated_draft,
+      local_errors: local_time_errors(updated_draft, socket.assigns.configuration)
+    )
+  end
+
+  defp day_atom(day_name) do
+    case Enum.find(@days, fn {day, _label} -> Atom.to_string(day) == day_name end) do
+      {day, _label} -> {:ok, day}
+      nil -> :error
+    end
+  end
+
+  defp copy_selection(params, socket) do
+    source =
+      case day_atom(Map.get(params, "source", "")) do
+        {:ok, day} -> day
+        :error -> socket.assigns.copy_source
+      end
+
+    targets =
+      params
+      |> Map.get("targets", [])
+      |> List.wrap()
+      |> Enum.flat_map(fn day_name ->
+        case day_atom(day_name) do
+          {:ok, ^source} -> []
+          {:ok, day} -> [day]
+          :error -> []
+        end
+      end)
+      |> Enum.uniq()
+
+    {source, targets}
+  end
+
+  defp format_minutes(minutes) do
+    hours = div(minutes, 60)
+    remaining_minutes = rem(minutes, 60)
+
+    String.pad_leading(Integer.to_string(hours), 2, "0") <>
+      ":" <>
+      String.pad_leading(Integer.to_string(remaining_minutes), 2, "0")
+  end
+
+  defp parse_index(value) do
+    case Integer.parse(value) do
+      {index, ""} -> index
+      _invalid -> 1_000_000
+    end
+  end
+
+  defp parse_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _invalid -> value
+    end
+  end
+
+  defp parse_integer(value), do: value
+
+  defp availability do
+    Application.get_env(:origen, :availability_context, Availability)
+  end
+
+  defp invalid_day?(%{weekly_availability: day_errors}, day) when is_map(day_errors),
+    do: Map.has_key?(day_errors, day)
+
+  defp invalid_day?(_errors, _day), do: false
+
+  defp invalid_field?(errors, field) when is_map(errors), do: Map.has_key?(errors, field)
+  defp invalid_field?(_errors, _field), do: false
+
+  defp local_time_errors(draft, configuration) do
+    interval = configuration.agenda_interval_minutes
+
+    Enum.reduce(@days, %{}, fn {day, _label}, errors ->
+      draft.weekly_availability
+      |> Map.fetch!(day)
+      |> Enum.with_index()
+      |> Enum.reduce(errors, fn {window, index}, field_errors ->
+        validate_local_window(field_errors, day, index, window, interval)
+      end)
+    end)
+  end
+
+  defp validate_local_window(errors, day, index, window, interval) do
+    start_result = validate_time_boundary(window.start, interval)
+    end_result = validate_time_boundary(window.end, interval)
+
+    errors
+    |> put_time_error(day, index, :start, start_result, interval)
+    |> put_time_error(day, index, :end, end_result, interval)
+    |> put_window_order_error(day, index, start_result, end_result, interval)
+  end
+
+  defp validate_time_boundary(value, interval) do
+    case parse_time_minutes(value) do
+      {:ok, minutes} when rem(minutes, interval) == 0 -> {:ok, minutes}
+      {:ok, _minutes} -> :misaligned
+      :error -> :invalid
+    end
+  end
+
+  defp parse_time_minutes(value) when is_binary(value) do
+    case Regex.run(~r/\A([01]\d|2[0-3]):([0-5]\d)\z/, value) do
+      [_, hours, minutes] ->
+        {:ok, String.to_integer(hours) * 60 + String.to_integer(minutes)}
+
+      nil ->
+        :error
+    end
+  end
+
+  defp parse_time_minutes(_value), do: :error
+
+  defp put_time_error(errors, _day, _index, _boundary, {:ok, _minutes}, _interval),
+    do: errors
+
+  defp put_time_error(errors, day, index, boundary, :misaligned, interval) do
+    Map.put(
+      errors,
+      {day, index, boundary},
+      "Debe coincidir con intervalos de #{interval} minutos."
+    )
+  end
+
+  defp put_time_error(errors, day, index, boundary, :invalid, _interval) do
+    Map.put(errors, {day, index, boundary}, "Ingrese una hora válida.")
+  end
+
+  defp put_window_order_error(errors, day, index, {:ok, start}, {:ok, finish}, interval) do
+    cond do
+      finish <= start ->
+        Map.put(errors, {day, index, :end}, "Debe ser posterior a la hora de inicio.")
+
+      finish - start < interval ->
+        Map.put(errors, {day, index, :end}, "Debe abarcar al menos un intervalo de Agenda.")
+
+      true ->
+        errors
+    end
+  end
+
+  defp put_window_order_error(errors, _day, _index, _start, _finish, _interval), do: errors
+
+  defp local_time_error(errors, day, index, boundary),
+    do: Map.get(errors, {day, index, boundary})
+
+  defp local_time_error?(errors, day, index, boundary),
+    do: Map.has_key?(errors, {day, index, boundary})
+
+  defp time_input_invalid?(local_errors, validation_errors, day, index, boundary) do
+    local_time_error?(local_errors, day, index, boundary) ||
+      invalid_day?(validation_errors, day)
+  end
+
+  defp time_input_described_by(local_errors, validation_errors, day, index, boundary) do
+    cond do
+      local_time_error?(local_errors, day, index, boundary) ->
+        "availability-#{day}-#{index}-#{boundary}-error"
+
+      invalid_day?(validation_errors, day) ->
+        "availability-validation-error"
+
+      true ->
+        nil
+    end
+  end
+
+  defp validation_messages(errors) do
+    day_messages =
+      case Map.get(errors, :weekly_availability) do
+        day_errors when is_map(day_errors) ->
+          Enum.flat_map(@days, fn {day, label} ->
+            case Map.fetch(day_errors, day) do
+              {:ok, reason} -> [day_validation_message(label, reason)]
+              :error -> []
+            end
+          end)
+
+        nil ->
+          []
+
+        _reason ->
+          ["Disponibilidad semanal: revise los siete días."]
+      end
+
+    day_messages
+    |> maybe_add_message(
+      errors,
+      :booking_horizon_days,
+      "Período de reserva: ingrese entre 7 y 90 días."
+    )
+    |> maybe_add_message(
+      errors,
+      :minimum_lead_minutes,
+      "Anticipación mínima: ingrese entre 0 y 1.440 minutos, en pasos de 5."
+    )
+  end
+
+  defp maybe_add_message(messages, errors, field, message) do
+    if Map.has_key?(errors, field), do: messages ++ [message], else: messages
+  end
+
+  defp day_validation_message(label, :overlap),
+    do: "#{label}: los horarios se superponen."
+
+  defp day_validation_message(label, reason)
+       when reason in [:invalid_time, :invalid_window, :invalid_windows],
+       do: "#{label}: ingrese horarios válidos en formato HH:MM."
+
+  defp day_validation_message(label, :overnight_or_empty),
+    do: "#{label}: el horario de fin debe ser posterior al inicio y dentro del mismo día."
+
+  defp day_validation_message(label, :misaligned),
+    do: "#{label}: los límites deben coincidir con el intervalo de Agenda."
+
+  defp day_validation_message(label, :too_short),
+    do: "#{label}: cada horario debe durar al menos un intervalo de Agenda."
+
+  defp day_validation_message(label, _reason), do: "#{label}: revise los horarios."
+end
