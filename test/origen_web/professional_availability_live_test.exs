@@ -5,7 +5,22 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
 
   @path "/configuracion/profesional"
 
+  defmodule RejectingAvailability do
+    def get_own_configuration(principal), do: Origen.Availability.get_own_configuration(principal)
+    def replace_own_configuration(_principal, _attributes), do: {:error, :unavailable}
+  end
+
   setup %{conn: conn} do
+    previous_context = Application.get_env(:origen, :availability_context)
+
+    on_exit(fn ->
+      if previous_context do
+        Application.put_env(:origen, :availability_context, previous_context)
+      else
+        Application.delete_env(:origen, :availability_context)
+      end
+    end)
+
     professional = insert_active_internal_account!(:professional)
 
     {:ok, conn: log_in_internal_account(conn, professional), professional_account: professional}
@@ -119,10 +134,58 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, ~s(#minimum-lead-minutes[value="60"]))
   end
 
+  test "saves one complete replacement and adopts backend-normalized touching windows", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    view
+    |> form("#availability-form", availability: replacement_params())
+    |> render_submit()
+
+    refute has_element?(view, "#availability-form")
+    assert has_element?(view, "#availability-save-success[role=status]")
+    assert has_element?(view, "#availability-summary-monday", "08:00 a 10:00")
+    assert has_element?(view, "#booking-rules-summary", "45 días")
+    assert has_element?(view, "#booking-rules-summary", "60 minutos")
+  end
+
+  test "keeps the draft open when saving is temporarily unavailable", %{conn: conn} do
+    Application.put_env(:origen, :availability_context, RejectingAvailability)
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    view
+    |> form("#availability-form", availability: replacement_params())
+    |> render_submit()
+
+    assert has_element?(view, "#availability-form")
+    assert has_element?(view, "#availability-save-error[role=alert]", "No se pudo guardar")
+  end
+
   defp open_editor(view) do
     view
     |> element(~s(button[phx-click="edit_availability"]), "Editar disponibilidad")
     |> render_click()
+  end
+
+  defp replacement_params do
+    empty_days =
+      Map.new(~w(tuesday wednesday thursday friday saturday sunday), fn day ->
+        {day, %{"_present" => "true"}}
+      end)
+
+    %{
+      "weekly_availability" =>
+        Map.put(empty_days, "monday", %{
+          "_present" => "true",
+          "0" => %{"start" => "08:00", "end" => "09:00"},
+          "1" => %{"start" => "09:00", "end" => "10:00"}
+        }),
+      "booking_horizon_days" => "45",
+      "minimum_lead_minutes" => "60"
+    }
   end
 
   defp insert_active_internal_account!(role) do

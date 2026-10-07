@@ -125,6 +125,47 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   end
 
   @impl true
+  def handle_event("save_availability", %{"availability" => params}, socket) do
+    save_valid_draft(socket, params_to_draft(params, socket.assigns.draft))
+  end
+
+  defp save_valid_draft(socket, draft) do
+    case socket.assigns.availability_context.replace_own_configuration(
+           socket.assigns.principal,
+           draft_to_attributes(draft)
+         ) do
+      {:ok, configuration} ->
+        {:noreply,
+         assign(socket,
+           configuration: configuration,
+           editing: false,
+           draft: nil,
+           local_errors: %{},
+           feedback: :saved,
+           validation_errors: nil
+         )}
+
+      {:error, {:validation, errors}} ->
+        {:noreply,
+         assign(socket,
+           editing: true,
+           draft: draft,
+           feedback: nil,
+           validation_errors: errors
+         )}
+
+      {:error, _reason} ->
+        {:noreply,
+         assign(socket,
+           feedback: :unavailable,
+           editing: true,
+           draft: draft,
+           local_errors: %{}
+         )}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     assigns = assign(assigns, days: @days)
 
@@ -138,6 +179,27 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
         with_icon
       >
         <strong>No se pudo cargar la disponibilidad.</strong> Intente nuevamente más tarde.
+      </.alert>
+
+      <.alert
+        :if={@feedback == :saved}
+        id="availability-save-success"
+        color="success"
+        variant="callout"
+        with_icon
+      >
+        La disponibilidad se guardó correctamente.
+      </.alert>
+
+      <.alert
+        :if={@feedback == :unavailable}
+        id="availability-save-error"
+        color="danger"
+        variant="callout"
+        with_icon
+      >
+        <strong>No se pudo guardar la disponibilidad.</strong>
+        El borrador se conserva para que pueda intentarlo nuevamente.
       </.alert>
 
       <%= if @configuration do %>
@@ -198,9 +260,19 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
             :if={@editing}
             id="availability-form"
             phx-change="change_availability"
+            phx-submit="save_availability"
             phx-target={@myself}
             class="flex flex-col gap-6"
           >
+            <.alert
+              :if={@validation_errors}
+              id="availability-validation-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se guardaron los cambios.</strong> Revise los datos ingresados.
+            </.alert>
             <section id="availability-section" aria-labelledby="weekly-availability-heading">
               <.card variant="basic">
                 <.card_header>
@@ -357,6 +429,9 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   >
                     Cancelar
                   </.button>
+                  <.button id="availability-save-button" type="submit" color="primary">
+                    Guardar disponibilidad
+                  </.button>
                 </.card_footer>
               </.card>
             </section>
@@ -427,6 +502,14 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     }
   end
 
+  defp draft_to_attributes(draft) do
+    %{
+      weekly_availability: draft.weekly_availability,
+      booking_horizon_days: parse_integer(draft.booking_horizon_days),
+      minimum_lead_minutes: parse_integer(draft.minimum_lead_minutes)
+    }
+  end
+
   defp update_draft_day(socket, day, update_windows) do
     draft = socket.assigns.draft
     windows = draft.weekly_availability |> Map.fetch!(day) |> update_windows.()
@@ -456,6 +539,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
       _invalid -> 1_000_000
     end
   end
+
+  defp parse_integer(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _invalid -> value
+    end
+  end
+
+  defp parse_integer(value), do: value
 
   defp availability do
     Application.get_env(:origen, :availability_context, Availability)
