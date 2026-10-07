@@ -167,8 +167,41 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(
              view,
              "#availability-monday-0-start-error",
-             "Debe coincidir con intervalos de 30 minutos."
+             "Seleccione un horario compatible con el intervalo actual de 30 minutos."
            )
+  end
+
+  test "uses current-grid selectors and preserves unresolved incompatible draft values", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    insert_grid_configuration!(professional.id, 40)
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    monday_start = "#availability-monday-0-start"
+    monday_end = "#availability-monday-0-end"
+    tuesday_start = "#availability-tuesday-0-start"
+    monday_error = "availability-monday-0-start-error"
+
+    refute has_element?(view, "#availability-form input[type=time]")
+
+    assert has_element?(
+             view,
+             ~s(#{monday_start}[aria-label="Lunes, horario 1, desde"][aria-invalid="true"][aria-describedby="#{monday_error}"][class*="border-danger"])
+           )
+
+    assert has_element?(view, ~s(#{monday_end}[aria-label="Lunes, horario 1, hasta"]))
+
+    assert has_element?(
+             view,
+             "##{monday_error}",
+             "Seleccione un horario compatible con el intervalo actual de 40 minutos."
+           )
+
+    assert has_element?(
+             view,
+             ~s(#{monday_start} option[value="08:30"][disabled][selected]),
   end
 
   test "uses the Origen palette and keeps the atomic editor in one visual section", %{conn: conn} do

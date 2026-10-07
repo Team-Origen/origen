@@ -92,7 +92,126 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
            socket.assigns.current_internal_session,
            interval
          ) do
+      {:error, {:confirmation_required, preview}} ->
+        {:noreply,
+         socket
+         |> assign(
+           selected_interval:
+             parsed_interval_or_current(interval, socket.assigns.current_interval),
+           interval_feedback: nil,
+           interval_review: preview,
+           reactivation_feedback: nil
+         )}
+
+      {:error, {:validation, _errors}} ->
+        {:noreply, assign(socket, interval_feedback: :invalid)}
+
+      {:error, reason} when reason in [:unauthorized, :unavailable] ->
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
+
+      _unexpected ->
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
+    end
+  end
+
+  def handle_event("apply_interval", _params, socket) do
+    {:noreply, assign(socket, interval_feedback: :invalid)}
+  end
+
+  @impl true
+  def handle_event("open_interval_change", _params, socket) do
+    if socket.assigns.availability_dirty do
+      {:noreply,
+       assign(socket,
+         interval_feedback: :availability_dirty,
+         interval_modal_open: false,
+         interval_review: nil
+       )}
+    else
+      {:noreply,
+       assign(socket,
+         interval_feedback: nil,
+         interval_modal_open: true,
+         interval_modal_step: :warning,
+         interval_review: nil
+       )}
+    end
+  end
+
+  @impl true
+  def handle_event("review_agenda_interval", _params, socket) do
+    {:noreply,
+     socket
+     |> load_interval_review(nil)
+     |> assign(interval_modal_step: :review)}
+  end
+
+  @impl true
+  def handle_event("cancel_interval_change", _params, socket) do
+    {:noreply,
+     assign(socket,
+       selected_interval: socket.assigns.current_interval,
+       interval_feedback: nil,
+       interval_review: nil,
+       interval_modal_open: false,
+       interval_modal_step: :warning
+     )}
+  end
+
+  def handle_event("cancel_interval_warning", params, socket),
+    do: handle_event("cancel_interval_change", params, socket)
+
+  @impl true
+  def handle_event("change_interval_review", %{"interval_review" => params}, socket) do
+    {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+  end
+
+  @impl true
+  def handle_event("add_interval_review_window", %{"day" => day_name}, socket) do
+    with {:ok, day} <- availability_day(day_name),
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      window = %{start: "00:00", end: format_interval_time(socket.assigns.selected_interval)}
+      week = Map.update!(availability.weekly_availability, day, &(&1 ++ [window]))
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event(
+        "remove_interval_review_window",
+        %{"day" => day_name, "index" => index_text},
+        socket
+      ) do
+    with {:ok, day} <- availability_day(day_name),
+         {index, ""} when index >= 0 <- Integer.parse(index_text),
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      week = Map.update!(availability.weekly_availability, day, &List.delete_at(&1, index))
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("confirm_interval_review", %{"interval_review" => params}, socket) do
+    reviewed_availability = interval_review_attributes(params, socket)
+
+    case consultation_types().confirm_agenda_interval(
+           socket.assigns.current_internal_session,
+           %{
+             proposed_interval_minutes: socket.assigns.selected_interval,
+             reviewed_availability: reviewed_availability,
+             stale_token: socket.assigns.interval_review.stale_token
+           }
+         ) do
       {:ok, configuration} ->
+        send_update(OrigenWeb.ProfessionalAvailabilityComponent,
+          id: "professional-availability",
+          refresh_after_interval_change: true
+        )
+
         {:noreply,
          socket
          |> assign_configuration(configuration)

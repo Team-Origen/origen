@@ -512,12 +512,235 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
       assert has_element?(view, ~s(select##{id}[aria-label="#{accessible_name}"]))
     end
   end
-  test "a compatible apply recalculates durations and preserves counts", %{conn: conn} do
+
+  test "contains warning and review steps in one modal with an inert background", %{
+    conn: conn,
+    professional_account: professional
+  } do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 
     view
     |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal [role=dialog]",
+             "Cambiar el intervalo de la agenda"
+           )
+
+    assert has_element?(view, "#professional-settings-content[inert]")
+    assert has_element?(view, "#interval-modal-warning", "Nada cambiará antes")
+    assert has_element?(view, "#interval-modal-warning", "Revisar cambios")
+    refute has_element?(view, "#agenda-interval-review")
+    refute has_element?(view, "#professional-settings-content #interval-review-form")
+
+    assert has_element?(
+             view,
+             ~s(#agenda-interval-change-modal[data-cancel*="cancel_interval_change"])
+           )
+
+    assert has_element?(view, "#agenda-interval-change-modal .pc-modal__header__button")
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    assert rendered_element_count(view, "#agenda-interval-change-modal") == 1
+    assert has_element?(view, "#agenda-interval-change-modal #agenda-interval-review")
+    assert has_element?(view, "#agenda-interval-change-modal #interval-review-form")
+    refute has_element?(view, "#professional-settings-content #interval-review-form")
+
+    view
+    |> element(
+      ~s(#agenda-interval-change-modal button[phx-click="cancel_interval_change"]),
+      "Cancelar"
+    )
+    |> render_click()
+
+    refute has_element?(view, "#agenda-interval-change-modal")
+    refute has_element?(view, "#professional-settings-content[inert]")
+    assert persisted_interval(professional.id) == 15
+  end
+
+  test "refuses the interval modal over a dirty weekly draft until cancel clears the gate", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_availability_editor(view)
+
+    view
+    |> element(~s(button[phx-click="clear_availability_day"][phx-value-day="monday"]))
+    |> render_click()
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    refute has_element?(view, "#agenda-interval-change-modal")
+
+    assert has_element?(
+             view,
+             "#interval-availability-draft-warning[role=alert]",
+             "Guarde o cancele"
+           )
+
+    assert has_element?(view, "#availability-form")
+    refute has_element?(view, "#availability-monday-0-start")
+
+    view
+    |> element(~s(button[phx-click="cancel_availability"]), "Cancelar")
+    |> render_click()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-change-modal [role=dialog]")
+  end
+
+  test "allows a clean open weekly editor and preserves it when interval modal is cancelled", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_availability_editor(view)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "30")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-change-modal [role=dialog]")
+    assert has_element?(view, "#professional-settings-content[inert] #availability-form")
+
+    view
+    |> element(
+      ~s(#agenda-interval-change-modal button[phx-click="cancel_interval_change"]),
+      "Cancelar"
+    )
+    |> render_click()
+
+    refute has_element?(view, "#agenda-interval-change-modal")
+    assert has_element?(view, "#availability-form")
+    assert has_element?(view, ~s(#availability-monday-0-start option[value="08:00"][selected]))
+  end
+
+  test "refreshes and collapses weekly availability after successful modal confirmation", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_availability_editor(view)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "40")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
     |> render_submit()
+
+    assert has_element?(view, "#current-agenda-interval", "40 minutos")
+    refute has_element?(view, "#agenda-interval-change-modal")
+    refute has_element?(view, "#availability-form")
+
+    open_availability_editor(view)
+    assert has_element?(view, ~s(#availability-monday-0-start option[value="00:40"]))
+    refute has_element?(view, ~s(#availability-monday-0-start option[value="00:30"]))
+  end
+
+  test "final confirmation atomically applies a fresh compatible review", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    open_interval_review(view, "30")
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#current-agenda-interval", "30 minutos")
+    assert has_element?(view, "#interval-apply-success[role=status]")
+    refute has_element?(view, "#agenda-interval-review")
+  end
+
+  test "a stale final confirmation keeps the loaded settings and review visible", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    Origen.Repo.query!(
+      "UPDATE agenda_settings SET minimum_lead_minutes = 35, updated_at = clock_timestamp() WHERE owner_account_id = $1",
+      [professional.id]
+    )
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal #interval-apply-error[role=alert]",
+             "No se aplicó el intervalo"
+           )
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal #interval-apply-error",
+             "cambió desde la revisión"
+           )
+
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(view, "#agenda-interval-review")
+    assert has_element?(view, "#consultation-types-heading")
+    refute has_element?(view, "#configuration-load-error")
+  end
+
+  test "a failed final persistence remains a targeted rejection instead of a load failure", %{
+    conn: conn
+  } do
+    Application.put_env(:origen, :consultation_types_context, RejectingIntervalConfirmation)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#interval-apply-error[role=alert]", "No se aplicó el intervalo")
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(view, "#agenda-interval-review")
+    assert has_element?(view, "#consultation-types-heading")
+    refute has_element?(view, "#configuration-load-error")
+  end
+
+  test "a compatible apply recalculates durations and preserves counts", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    confirm_interval_change(view, "30")
 
     row = "#consultation-type-018f4a5b-0d62-7a44-8e32-2f608bfcb001"
 

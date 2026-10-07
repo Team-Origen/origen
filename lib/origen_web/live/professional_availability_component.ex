@@ -83,8 +83,11 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
   @impl true
   def handle_event("edit_availability", _params, socket) do
+    draft = configuration_to_draft(socket.assigns.configuration)
+
     {:noreply,
-     assign(socket,
+     socket
+     |> assign(
        editing: true,
        draft: configuration_to_draft(socket.assigns.configuration),
        local_errors: %{},
