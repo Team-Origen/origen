@@ -42,6 +42,72 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     end
   end
 
+  test "opens a complete seven-day interval-aware draft editor", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    refute has_element?(view, "#availability-summary")
+
+    for day <- ~w(monday tuesday wednesday thursday friday saturday sunday) do
+      assert has_element?(view, "#availability-day-#{day}")
+
+      assert has_element?(
+               view,
+               ~s(button[phx-click="add_availability_window"][phx-value-day="#{day}"])
+             )
+
+      assert has_element?(
+               view,
+               ~s(button[phx-click="clear_availability_day"][phx-value-day="#{day}"])
+             )
+    end
+
+    assert has_element?(view, ~s(#availability-monday-0-start[type="time"][step="1800"]))
+    assert has_element?(view, ~s(#availability-monday-0-end[type="time"][step="1800"]))
+  end
+
+  test "adds, removes, clears, and cancels weekly draft windows without changing persisted state",
+       %{
+         conn: conn
+       } do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    refute has_element?(view, "#availability-saturday-0-start")
+
+    view
+    |> element(~s(button[phx-click="add_availability_window"][phx-value-day="saturday"]))
+    |> render_click()
+
+    assert has_element?(view, "#availability-saturday-0-start")
+
+    view
+    |> element(
+      ~s(button[phx-click="remove_availability_window"][phx-value-day="saturday"][phx-value-index="0"])
+    )
+    |> render_click()
+
+    refute has_element?(view, "#availability-saturday-0-start")
+
+    view
+    |> element(~s(button[phx-click="clear_availability_day"][phx-value-day="monday"]))
+    |> render_click()
+
+    refute has_element?(view, "#availability-monday-0-start")
+
+    view
+    |> element(~s(button[phx-click="cancel_availability"]), "Cancelar")
+    |> render_click()
+
+    assert has_element?(view, "#availability-summary-monday", "08:00 a 12:00")
+  end
+
+  defp open_editor(view) do
+    view
+    |> element(~s(button[phx-click="edit_availability"]), "Editar disponibilidad")
+    |> render_click()
+  end
+
   defp insert_active_internal_account!(role) do
     %{rows: [[account_id]]} =
       Origen.Repo.query!(
