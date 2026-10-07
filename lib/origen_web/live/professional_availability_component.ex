@@ -116,6 +116,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   end
 
   @impl true
+  def handle_event("change_availability", %{"availability" => params}, socket) do
+    {:noreply,
+     assign(socket,
+       draft: params_to_draft(params, socket.assigns.draft),
+       validation_errors: nil
+     )}
+  end
+
+  @impl true
   def render(assigns) do
     assigns = assign(assigns, days: @days)
 
@@ -185,125 +194,173 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
         </section>
 
         <div id="availability-editor-region" hidden={not @editing}>
-          <section
+          <form
             :if={@editing}
-            id="availability-section"
-            aria-labelledby="weekly-availability-heading"
+            id="availability-form"
+            phx-change="change_availability"
+            phx-target={@myself}
+            class="flex flex-col gap-6"
           >
-            <.card variant="basic">
-              <.card_header>
-                <.h2 id="weekly-availability-heading" no_margin>Disponibilidad semanal</.h2>
-                <:action>
+            <section id="availability-section" aria-labelledby="weekly-availability-heading">
+              <.card variant="basic">
+                <.card_header>
+                  <.h2 id="weekly-availability-heading" no_margin>Disponibilidad semanal</.h2>
+                  <:action>
+                    <.button
+                      type="button"
+                      color="gray"
+                      variant="outline"
+                      size="sm"
+                      phx-click="cancel_availability"
+                      phx-target={@myself}
+                    >
+                      Cerrar edición
+                    </.button>
+                  </:action>
+                </.card_header>
+                <.card_content>
+                  <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                    <fieldset
+                      :for={{day, label} <- @days}
+                      id={"availability-day-#{day}"}
+                      class="rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800"
+                    >
+                      <legend class="px-1 font-semibold">{label}</legend>
+                      <input
+                        type="hidden"
+                        name={"availability[weekly_availability][#{day}][_present]"}
+                        value="true"
+                      />
+                      <p
+                        :if={Map.fetch!(@draft.weekly_availability, day) == []}
+                        class="mb-3 text-sm text-text-muted dark:text-gray-300"
+                      >
+                        Sin disponibilidad
+                      </p>
+                      <div class="space-y-3">
+                        <div
+                          :for={
+                            {window, index} <-
+                              Enum.with_index(Map.fetch!(@draft.weekly_availability, day))
+                          }
+                          class="grid grid-cols-2 gap-3 rounded-md border border-border bg-surface p-3 dark:border-gray-700 dark:bg-gray-900"
+                        >
+                          <label
+                            class="text-sm font-medium"
+                            for={"availability-#{day}-#{index}-start"}
+                          >
+                            Desde
+                            <input
+                              id={"availability-#{day}-#{index}-start"}
+                              class="pc-input mt-1"
+                              type="time"
+                              step={@configuration.agenda_interval_minutes * 60}
+                              name={"availability[weekly_availability][#{day}][#{index}][start]"}
+                              value={window.start}
+                            />
+                          </label>
+                          <label class="text-sm font-medium" for={"availability-#{day}-#{index}-end"}>
+                            Hasta
+                            <input
+                              id={"availability-#{day}-#{index}-end"}
+                              class="pc-input mt-1"
+                              type="time"
+                              step={@configuration.agenda_interval_minutes * 60}
+                              name={"availability[weekly_availability][#{day}][#{index}][end]"}
+                              value={window.end}
+                            />
+                          </label>
+                          <div class="col-span-2">
+                            <.button
+                              type="button"
+                              color="danger"
+                              variant="outline"
+                              size="xs"
+                              phx-click="remove_availability_window"
+                              phx-value-day={day}
+                              phx-value-index={index}
+                              phx-target={@myself}
+                            >
+                              Eliminar horario
+                            </.button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="mt-4 flex flex-wrap gap-2">
+                        <.button
+                          type="button"
+                          color="secondary"
+                          variant="outline"
+                          size="xs"
+                          phx-click="add_availability_window"
+                          phx-value-day={day}
+                          phx-target={@myself}
+                        >
+                          Agregar horario
+                        </.button>
+                        <.button
+                          type="button"
+                          color="gray"
+                          variant="outline"
+                          size="xs"
+                          phx-click="clear_availability_day"
+                          phx-value-day={day}
+                          phx-target={@myself}
+                        >
+                          Limpiar día
+                        </.button>
+                      </div>
+                    </fieldset>
+                  </div>
+
+                  <div id="booking-rules-editor" class="mt-6 border-t border-border pt-6">
+                    <h3 class="font-semibold text-text dark:text-gray-100">Período de reserva</h3>
+                    <div class="mt-4 grid gap-5 sm:grid-cols-2">
+                      <label class="font-medium" for="booking-horizon-days">
+                        Anticipación máxima en días
+                        <input
+                          id="booking-horizon-days"
+                          class="pc-input mt-1"
+                          type="number"
+                          min="7"
+                          max="90"
+                          step="1"
+                          name="availability[booking_horizon_days]"
+                          value={@draft.booking_horizon_days}
+                          required
+                        />
+                      </label>
+                      <label class="font-medium" for="minimum-lead-minutes">
+                        Anticipación mínima en minutos
+                        <input
+                          id="minimum-lead-minutes"
+                          class="pc-input mt-1"
+                          type="number"
+                          min="0"
+                          max="1440"
+                          step="5"
+                          name="availability[minimum_lead_minutes]"
+                          value={@draft.minimum_lead_minutes}
+                          required
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </.card_content>
+                <.card_footer>
                   <.button
                     type="button"
                     color="gray"
                     variant="outline"
-                    size="sm"
                     phx-click="cancel_availability"
                     phx-target={@myself}
                   >
-                    Cerrar edición
+                    Cancelar
                   </.button>
-                </:action>
-              </.card_header>
-              <.card_content>
-                <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                  <fieldset
-                    :for={{day, label} <- @days}
-                    id={"availability-day-#{day}"}
-                    class="rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800"
-                  >
-                    <legend class="px-1 font-semibold">{label}</legend>
-                    <p
-                      :if={Map.fetch!(@draft.weekly_availability, day) == []}
-                      class="mb-3 text-sm text-text-muted dark:text-gray-300"
-                    >
-                      Sin disponibilidad
-                    </p>
-                    <div class="space-y-3">
-                      <div
-                        :for={
-                          {window, index} <-
-                            Enum.with_index(Map.fetch!(@draft.weekly_availability, day))
-                        }
-                        class="grid grid-cols-2 gap-3 rounded-md border border-border bg-surface p-3 dark:border-gray-700 dark:bg-gray-900"
-                      >
-                        <label class="text-sm font-medium" for={"availability-#{day}-#{index}-start"}>
-                          Desde
-                          <input
-                            id={"availability-#{day}-#{index}-start"}
-                            class="pc-input mt-1"
-                            type="time"
-                            step={@configuration.agenda_interval_minutes * 60}
-                            value={window.start}
-                          />
-                        </label>
-                        <label class="text-sm font-medium" for={"availability-#{day}-#{index}-end"}>
-                          Hasta
-                          <input
-                            id={"availability-#{day}-#{index}-end"}
-                            class="pc-input mt-1"
-                            type="time"
-                            step={@configuration.agenda_interval_minutes * 60}
-                            value={window.end}
-                          />
-                        </label>
-                        <div class="col-span-2">
-                          <.button
-                            type="button"
-                            color="danger"
-                            variant="outline"
-                            size="xs"
-                            phx-click="remove_availability_window"
-                            phx-value-day={day}
-                            phx-value-index={index}
-                            phx-target={@myself}
-                          >
-                            Eliminar horario
-                          </.button>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="mt-4 flex flex-wrap gap-2">
-                      <.button
-                        type="button"
-                        color="secondary"
-                        variant="outline"
-                        size="xs"
-                        phx-click="add_availability_window"
-                        phx-value-day={day}
-                        phx-target={@myself}
-                      >
-                        Agregar horario
-                      </.button>
-                      <.button
-                        type="button"
-                        color="gray"
-                        variant="outline"
-                        size="xs"
-                        phx-click="clear_availability_day"
-                        phx-value-day={day}
-                        phx-target={@myself}
-                      >
-                        Limpiar día
-                      </.button>
-                    </div>
-                  </fieldset>
-                </div>
-              </.card_content>
-              <.card_footer>
-                <.button
-                  type="button"
-                  color="gray"
-                  variant="outline"
-                  phx-click="cancel_availability"
-                  phx-target={@myself}
-                >
-                  Cancelar
-                </.button>
-              </.card_footer>
-            </.card>
-          </section>
+                </.card_footer>
+              </.card>
+            </section>
+          </form>
         </div>
 
         <section aria-labelledby="timezone-heading">
@@ -337,6 +394,39 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     }
   end
 
+  defp params_to_draft(params, current_draft) do
+    week_params = Map.get(params, "weekly_availability", %{})
+
+    week =
+      Map.new(@days, fn {day, _label} ->
+        day_params = Map.get(week_params, Atom.to_string(day), %{})
+        current_windows = Map.fetch!(current_draft.weekly_availability, day)
+
+        windows =
+          day_params
+          |> Enum.reject(fn {key, _value} -> key == "_present" end)
+          |> Enum.sort_by(fn {key, _value} -> parse_index(key) end)
+          |> Enum.map(fn {index_text, window} ->
+            current_window = Enum.at(current_windows, parse_index(index_text), %{})
+
+            %{
+              start: Map.get(window, "start", Map.get(current_window, :start, "")),
+              end: Map.get(window, "end", Map.get(current_window, :end, ""))
+            }
+          end)
+
+        {day, windows}
+      end)
+
+    %{
+      weekly_availability: week,
+      booking_horizon_days:
+        Map.get(params, "booking_horizon_days", current_draft.booking_horizon_days),
+      minimum_lead_minutes:
+        Map.get(params, "minimum_lead_minutes", current_draft.minimum_lead_minutes)
+    }
+  end
+
   defp update_draft_day(socket, day, update_windows) do
     draft = socket.assigns.draft
     windows = draft.weekly_availability |> Map.fetch!(day) |> update_windows.()
@@ -358,6 +448,13 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     String.pad_leading(Integer.to_string(hours), 2, "0") <>
       ":" <>
       String.pad_leading(Integer.to_string(remaining_minutes), 2, "0")
+  end
+
+  defp parse_index(value) do
+    case Integer.parse(value) do
+      {index, ""} -> index
+      _invalid -> 1_000_000
+    end
   end
 
   defp availability do

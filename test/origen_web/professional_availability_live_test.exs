@@ -102,6 +102,23 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#availability-summary-monday", "08:00 a 12:00")
   end
 
+  test "edits booking controls inside the weekly availability form", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    assert has_element?(view, ~s(#booking-horizon-days[value="30"][min="7"][max="90"]))
+    assert has_element?(view, ~s(#minimum-lead-minutes[value="30"][step="5"]))
+
+    view
+    |> element("#availability-form")
+    |> render_change(%{
+      "availability" => %{"booking_horizon_days" => "45", "minimum_lead_minutes" => "60"}
+    })
+
+    assert has_element?(view, ~s(#booking-horizon-days[value="45"]))
+    assert has_element?(view, ~s(#minimum-lead-minutes[value="60"]))
+  end
+
   defp open_editor(view) do
     view
     |> element(~s(button[phx-click="edit_availability"]), "Editar disponibilidad")
