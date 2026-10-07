@@ -363,12 +363,18 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_change()
 
-    assert has_element?(view, "#interval-change-warning", "Control")
-    assert has_element?(view, "#interval-change-warning", "15 a 30 minutos")
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-change-modal", "Control")
+    assert has_element?(view, "#agenda-interval-change-modal", "15 a 30 minutos")
 
     view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    |> element("#agenda-interval-change-modal button", "Cancelar")
+    |> render_click()
+
+    confirm_interval_change(view, "30")
 
     assert has_element?(view, "#current-agenda-interval", "30 minutos")
     assert has_element?(view, row, "Duración: 30 minutos")
@@ -387,10 +393,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, row, "Activo")
   end
 
-  test "an incompatible apply is rejected without inferring a replacement count", %{
-    conn: conn,
-    professional_account: professional
-  } do
+  test "an incompatible final confirmation remains read-only without inferring a replacement count",
+       %{
+         conn: conn,
+         professional_account: professional
+       } do
     replace_catalog!(professional.id, 15, [
       %{
         id: @incompatible_inactive_type.id,
@@ -405,16 +412,17 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "60")
-    |> render_submit()
+    open_interval_review(view, "60")
 
     row = "#consultation-type-018f4a5b-0d62-7a44-8e32-2f608bfcb008"
 
-    assert has_element?(view, "#interval-apply-error[role=alert]", "No se aplicó el intervalo")
-    assert has_element?(view, "#interval-apply-error", "máximo de 4")
-    assert has_element?(view, "#interval-apply-error", "Consulta prolongada")
-    refute has_element?(view, "#interval-apply-error", "TC-008")
+    assert has_element?(view, "#agenda-interval-review", "Todavía no se aplicó ningún cambio")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#agenda-interval-review")
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
     assert has_element?(view, row, "Cantidad de intervalos 8")
     assert has_element?(view, row, "Duración: 120 minutos")
@@ -547,9 +555,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     row = "#consultation-type-#{@incompatible_inactive_type.id}"
     initial_item_count = rendered_catalog_item_count(view)
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    confirm_interval_change(view, "30")
 
     assert has_element?(view, row, "Duración: 180 minutos")
 
@@ -1109,9 +1115,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     )
     |> render_click()
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    confirm_interval_change(view, "30")
 
     {:ok, remounted_view, _html} = live(conn, @professional_configuration_path)
     show_inactive(remounted_view)
@@ -1392,9 +1396,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> element("#new-consultation-type-modal button", "Cancelar")
     |> render_click()
 
-    view
-    |> form("#agenda-interval-form", interval_minutes: "60")
-    |> render_submit()
+    confirm_interval_change(view, "60")
 
     assert has_element?(view, "#current-agenda-interval", "60 minutos")
     open_new_type_modal(view)
@@ -1552,6 +1554,28 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
+  end
+
+  defp open_interval_review(view, interval) do
+    view
+    |> form("#agenda-interval-form", interval_minutes: interval)
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+  end
+
+  defp confirm_interval_change(view, interval) do
+    open_interval_review(view, interval)
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
   end
 
   defp replace_catalog!(account_id, interval_minutes, consultation_types) do
