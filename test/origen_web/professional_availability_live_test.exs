@@ -251,7 +251,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
 
     assert has_element?(
              view,
-             ~s|main[class~="bg-page"][class~="text-text"][class~="dark:bg-gray-950"][class~="dark:text-gray-100"]|
+             ~s|main[data-theme="light"][class~="bg-page"][class~="text-text"]|
            )
 
     open_editor(view)

@@ -411,7 +411,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
-    <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
+    <main data-theme="light" class="min-h-screen bg-page py-6 text-text sm:py-10">
       <.container max_width="xl">
         <div
           id="professional-settings-content"
