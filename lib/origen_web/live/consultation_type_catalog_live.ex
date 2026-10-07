@@ -731,7 +731,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       role="img"
       aria-label={"Color asignado a #{@name}"}
       title={"Color asignado a #{@name}"}
-      class="inline-block size-4 shrink-0 rounded-sm border border-gray-500"
+      class="inline-block size-4 shrink-0 rounded-sm border border-border dark:border-gray-600"
       style={"background-color: #{@color}"}
     />
     """
