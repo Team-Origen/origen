@@ -396,6 +396,299 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, "#confirm-interval-change:not([disabled])")
   end
 
+  test "marks every over-limit consultation type effect as an accessible danger", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    compatible = Enum.at(@expected_types, 0) |> Map.merge(%{count: 4, duration: 60})
+
+    blockers = [
+      Enum.at(@expected_types, 1) |> Map.merge(%{count: 5, duration: 75}),
+      Enum.at(@expected_types, 2) |> Map.merge(%{count: 7, duration: 105})
+    ]
+
+    replace_catalog!(professional.id, 15, [compatible | blockers])
+
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "60")
+
+    compatible_selector = "#interval-type-effect-#{compatible.id}"
+
+    assert has_element?(view, ~s(#{compatible_selector}[data-compatible="true"]))
+    refute has_element?(view, ~s(#{compatible_selector}[class*="text-danger"]))
+    refute has_element?(view, compatible_selector, "Bloqueo")
+
+    for blocker <- blockers do
+      selector = "#interval-type-effect-#{blocker.id}"
+
+      assert has_element?(
+               view,
+               ~s(#{selector}[data-compatible="false"][class*="text-danger"]),
+               "Bloqueo: la duración propuesta supera el máximo permitido de 240 minutos."
+             )
+    end
+
+    assert rendered_element_count(view, ~s(#interval-type-effects [data-compatible="false"])) ==
+             2
+
+    assert has_element?(view, "#confirm-interval-change[disabled]", "Confirmar cambio")
+  end
+
+  test "marks a reviewed closing time at or before opening and recovers without losing values", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    end_selector = "#interval-review-monday-0-end"
+    ordering_error = "interval-review-monday-0-end-ordering-error"
+
+    invalid_params =
+      interval_review_params("12:00", "08:00")
+      |> put_in(["weekly_availability", "monday", "0", "end"], "11:30")
+      |> put_in(["weekly_availability", "tuesday", "1", "start"], "15:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => invalid_params})
+
+    assert has_element?(
+             view,
+             ~s(#{end_selector}[data-order-invalid="true"][aria-invalid="true"][aria-describedby="#{ordering_error}"][class*="border-danger"])
+           )
+
+    assert has_element?(
+             view,
+             "##{ordering_error}",
+             "La hora de cierre debe ser posterior a la hora de apertura."
+           )
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    equal_params =
+      put_in(invalid_params, ["weekly_availability", "monday", "0", "end"], "12:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => equal_params})
+
+    assert has_element?(view, ~s(#{end_selector}[data-order-invalid="true"]))
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    corrected_params =
+      put_in(equal_params, ["weekly_availability", "monday", "0", "end"], "12:30")
+
+    render_change(view, "change_interval_review", %{"interval_review" => corrected_params})
+
+    refute has_element?(view, ~s(#{end_selector}[data-order-invalid="true"]))
+    refute has_element?(view, ~s(#{end_selector}[aria-invalid="true"]))
+    refute has_element?(view, "##{ordering_error}")
+    assert has_element?(view, ~s(#interval-review-monday-0-start option[value="12:00"][selected]))
+    assert has_element?(view, ~s(#{end_selector} option[value="12:30"][selected]))
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-tuesday-1-start option[value="15:00"][selected])
+           )
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+  end
+
+  test "marks every truly overlapping reviewed window and accepts touching normalization", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    overlapping_params =
+      interval_review_params("10:00", "08:00")
+      |> put_in(["weekly_availability", "monday", "1", "start"], "11:30")
+      |> put_in(["weekly_availability", "monday", "1", "end"], "17:00")
+      |> put_in(["weekly_availability", "tuesday", "1", "start"], "15:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => overlapping_params})
+
+    for index <- 0..1 do
+      window_selector = "#interval-review-monday-#{index}-window"
+      overlap_error = "interval-review-monday-#{index}-overlap-error"
+
+      assert has_element?(
+               view,
+               ~s(#{window_selector}[data-overlap-invalid="true"][aria-describedby="#{overlap_error}"][class*="border-danger"])
+             )
+
+      assert has_element?(
+               view,
+               "##{overlap_error}",
+               "Este horario se superpone con otro horario del lunes."
+             )
+
+      for boundary <- ~w(start end) do
+        assert has_element?(
+                 view,
+                 ~s(#interval-review-monday-#{index}-#{boundary}[aria-invalid="true"][aria-describedby*="#{overlap_error}"][class*="border-danger"])
+               )
+      end
+    end
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    touching_params =
+      put_in(overlapping_params, ["weekly_availability", "monday", "1", "start"], "12:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => touching_params})
+
+    refute has_element?(view, ~s([data-overlap-invalid="true"]))
+    refute has_element?(view, ~s([id$="-overlap-error"]))
+    assert rendered_element_count(view, "#interval-review-day-monday select") == 4
+    assert has_element?(view, ~s(#interval-review-monday-0-start option[value="10:00"][selected]))
+    assert has_element?(view, ~s(#interval-review-monday-0-end option[value="12:00"][selected]))
+    assert has_element?(view, ~s(#interval-review-monday-1-start option[value="12:00"][selected]))
+    assert has_element?(view, ~s(#interval-review-monday-1-end option[value="17:00"][selected]))
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-tuesday-1-start option[value="15:00"][selected])
+           )
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert persisted_interval(professional.id) == 30
+
+    assert %{
+             "monday" => [%{"start" => "10:00", "end" => "17:00"}],
+             "tuesday" => [_, %{"start" => "15:00", "end" => "18:00"}]
+           } = persisted_weekly_availability(professional.id)
+  end
+
+  test "copies complete reviewed hours to explicit destinations without persisting", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    persisted_before = persisted_weekly_availability(professional.id)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    reviewed_params =
+      interval_review_params("09:00", "08:00")
+      |> put_in(["weekly_availability", "monday", "0", "end"], "12:00")
+      |> put_in(["weekly_availability", "monday", "1", "start"], "13:00")
+      |> put_in(["weekly_availability", "monday", "1", "end"], "16:00")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => reviewed_params,
+      "interval_review_copy" => %{
+        "source" => "monday",
+        "targets" => ["tuesday", "friday"]
+      }
+    })
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-copy-source[name="interval_review_copy[source]"] option[value="monday"][selected])
+           )
+
+    assert has_element?(view, ~s(#interval-review-copy-tuesday[type="checkbox"][checked]))
+    assert has_element?(view, ~s(#interval-review-copy-friday[type="checkbox"][checked]))
+
+    assert has_element?(
+             view,
+             ~s|#copy-interval-review-hours[type="button"]:not([disabled])|,
+             "Copiar horarios revisados"
+           )
+
+    view
+    |> element("#copy-interval-review-hours")
+    |> render_click()
+
+    for day <- ~w(tuesday friday) do
+      assert has_element?(
+               view,
+               ~s(#interval-review-#{day}-0-start option[value="09:00"][selected])
+             )
+
+      assert has_element?(view, ~s(#interval-review-#{day}-1-end option[value="16:00"][selected]))
+    end
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-wednesday-0-start option[value="08:00"][selected])
+           )
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-wednesday-1-end option[value="18:00"][selected])
+           )
+
+    assert persisted_weekly_availability(professional.id) == persisted_before
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => interval_review_params("09:00", "08:00"),
+      "interval_review_copy" => %{"source" => "saturday", "targets" => ["sunday"]}
+    })
+
+    view
+    |> element("#copy-interval-review-hours")
+    |> render_click()
+
+    assert has_element?(view, "#interval-review-day-sunday", "Sin disponibilidad")
+    refute has_element?(view, "#interval-review-day-sunday select")
+    assert persisted_weekly_availability(professional.id) == persisted_before
+  end
+
+  test "ignores malformed interval review change payloads without losing the draft", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    current_params = interval_review_params("09:00", "08:00")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => current_params,
+      "interval_review_copy" => %{"source" => "monday", "targets" => ["friday"]}
+    })
+
+    current_draft = render(view)
+
+    malformed_payloads = [
+      %{"interval_review_copy" => %{"source" => "tuesday", "targets" => ["sunday"]}},
+      %{
+        "interval_review" => "invalid",
+        "interval_review_copy" => %{"source" => "tuesday", "targets" => ["sunday"]}
+      },
+      %{
+        "interval_review" => interval_review_params("10:00", "08:00"),
+        "interval_review_copy" => "invalid"
+      }
+    ]
+
+    for payload <- malformed_payloads do
+      render_change(view, "change_interval_review", payload)
+
+      assert Process.alive?(view.pid)
+      assert render(view) == current_draft
+    end
+  end
+
+  test "gives repeated weekday review selectors unambiguous accessible names", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    expected_controls = [
+      {"interval-review-monday-0-start", "Lunes, horario 1, desde"},
+      {"interval-review-monday-0-end", "Lunes, horario 1, hasta"},
+      {"interval-review-monday-1-start", "Lunes, horario 2, desde"},
+      {"interval-review-monday-1-end", "Lunes, horario 2, hasta"}
+    ]
+
+    assert rendered_element_count(view, "#interval-review-day-monday select") == 4
+    assert expected_controls |> Enum.map(&elem(&1, 1)) |> Enum.uniq() |> length() == 4
+
+    for {id, accessible_name} <- expected_controls do
+      assert has_element?(view, ~s(select##{id}[aria-label="#{accessible_name}"]))
+    end
+  end
+
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{
     conn: conn
   } do
