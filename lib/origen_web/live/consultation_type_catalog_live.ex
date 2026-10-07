@@ -29,7 +29,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         editing_type_id: nil,
         type_form_params: @type_form_defaults,
         type_form_errors: %{},
-        reactivation_feedback: nil
+        reactivation_feedback: nil,
+        availability_editing: false,
+        availability_dirty: false
       )
 
     case consultation_types().get_own_configuration(socket.assigns.current_internal_session) do
@@ -205,6 +207,15 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   def handle_event("reactivate_type", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_info({:availability_editor_state, state}, socket) do
+    {:noreply,
+     assign(socket,
+       availability_editing: state.editing,
+       availability_dirty: state.dirty
+     )}
+  end
 
   @impl true
   def render(assigns) do

@@ -104,8 +104,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
              )
     end
 
-    assert has_element?(view, ~s(#availability-monday-0-start[type="time"][step="1800"]))
-    assert has_element?(view, ~s(#availability-monday-0-end[type="time"][step="1800"]))
+    assert has_element?(view, ~s(select#availability-monday-0-start))
+    assert has_element?(view, ~s(select#availability-monday-0-end))
   end
 
   test "adds, removes, clears, and cancels weekly draft windows without changing persisted state",
@@ -244,7 +244,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(
              view,
              "#availability-monday-0-start-error",
-             "Debe coincidir con intervalos de 30 minutos."
+             "Seleccione un horario compatible con el intervalo actual de 30 minutos."
            )
 
     assert has_element?(view, "#availability-save-button[disabled]")
@@ -282,9 +282,9 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     |> element(~s(button[phx-click="copy_availability_day"]), "Copiar horarios")
     |> render_click()
 
-    assert has_element?(view, ~s(#availability-saturday-0-start[value="08:00"]))
-    assert has_element?(view, ~s(#availability-saturday-1-start[value="14:00"]))
-    assert has_element?(view, ~s(#availability-sunday-0-start[value="08:00"]))
+    assert has_element?(view, ~s(#availability-saturday-0-start option[value="08:00"][selected]))
+    assert has_element?(view, ~s(#availability-saturday-1-start option[value="14:00"][selected]))
+    assert has_element?(view, ~s(#availability-sunday-0-start option[value="08:00"][selected]))
     refute has_element?(view, ~s([name="availability[weekday_group]"]))
   end
 
