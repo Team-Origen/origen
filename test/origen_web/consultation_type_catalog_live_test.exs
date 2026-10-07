@@ -247,6 +247,14 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
     assert has_element?(view, "#interval-review-ready", "Todavía no se aplicó ningún cambio")
     refute has_element?(view, "#interval-apply-success")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert has_element?(view, "#current-agenda-interval", "30 minutos")
+    assert has_element?(view, "#interval-apply-success[role=status]")
+    refute has_element?(view, "#interval-review-form")
   end
 
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{

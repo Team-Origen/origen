@@ -4,8 +4,18 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
 
   alias Origen.ConsultationTypes
+  alias OrigenWeb.TimeGrid
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
+  @availability_days [
+    {:monday, "Lunes"},
+    {:tuesday, "Martes"},
+    {:wednesday, "Miércoles"},
+    {:thursday, "Jueves"},
+    {:friday, "Viernes"},
+    {:saturday, "Sábado"},
+    {:sunday, "Domingo"}
+  ]
   @type_form_defaults %{
     "name" => "",
     "currency" => "ARS",
@@ -149,6 +159,96 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   @impl true
+  def handle_event("change_interval_review", %{"interval_review" => params}, socket)
+      when is_map(params) do
+    {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+  end
+
+  def handle_event("change_interval_review", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("add_interval_review_window", %{"day" => day_name}, socket) do
+    with {:ok, day} <- availability_day(day_name),
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      window = %{start: "00:00", end: TimeGrid.format(socket.assigns.selected_interval)}
+      week = Map.update!(availability.weekly_availability, day, &(&1 ++ [window]))
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event(
+        "remove_interval_review_window",
+        %{"day" => day_name, "index" => index_text},
+        socket
+      ) do
+    with {:ok, day} <- availability_day(day_name),
+         {index, ""} when index >= 0 <- Integer.parse(index_text),
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      week = Map.update!(availability.weekly_availability, day, &List.delete_at(&1, index))
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("confirm_interval_review", %{"interval_review" => params}, socket) do
+    reviewed_availability = interval_review_attributes(params, socket)
+
+    case consultation_types().confirm_agenda_interval(
+           socket.assigns.current_internal_session,
+           %{
+             proposed_interval_minutes: socket.assigns.selected_interval,
+             reviewed_availability: reviewed_availability,
+             stale_token: socket.assigns.interval_review.stale_token
+           }
+         ) do
+      {:ok, configuration} ->
+        send_update(OrigenWeb.ProfessionalAvailabilityComponent,
+          id: "professional-availability",
+          refresh_after_interval_change: true
+        )
+
+        {:noreply,
+         socket
+         |> assign_configuration(configuration)
+         |> assign(
+           interval_feedback: :applied,
+           interval_review: nil,
+           interval_modal_open: false,
+           interval_modal_step: :warning,
+           reactivation_feedback: nil,
+           availability_editing: false,
+           availability_dirty: false
+         )}
+
+      {:error, :stale} ->
+        {:noreply, assign(socket, interval_feedback: :stale)}
+
+      {:error, {:validation, errors}} ->
+        review = Map.put(socket.assigns.interval_review, :availability_validation_errors, errors)
+        {:noreply, assign(socket, interval_feedback: :validation, interval_review: review)}
+
+      {:error, {:future_appointment_conflicts, conflicts}} ->
+        review = Map.put(socket.assigns.interval_review, :future_appointment_conflicts, conflicts)
+        {:noreply, assign(socket, interval_feedback: :future_conflicts, interval_review: review)}
+
+      {:error, {:incompatible, _evidence}} ->
+        {:noreply, assign(socket, interval_feedback: :incompatible_review)}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
+    end
+  end
+
+  def handle_event("confirm_interval_review", _params, socket) do
+    {:noreply, assign(socket, interval_feedback: :validation)}
+  end
+
+  @impl true
   def handle_event("open_new_type", _params, socket) do
     {:noreply,
      assign(socket,
@@ -262,7 +362,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
+    assigns =
+      assign(assigns,
+        visible_catalog: visible_catalog(assigns),
+        availability_days: @availability_days
+      )
 
     ~H"""
     <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
@@ -398,6 +502,52 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                         Aplicar intervalo
                       </.button>
                     </div>
+                  </form>
+
+                  <form
+                    :if={@interval_review}
+                    id="interval-review-form"
+                    phx-change="change_interval_review"
+                    phx-submit="confirm_interval_review"
+                    class="space-y-4"
+                  >
+                    <input
+                      type="hidden"
+                      name="interval_review[booking_horizon_days]"
+                      value={@interval_review.reviewed_availability.booking_horizon_days}
+                    />
+                    <input
+                      type="hidden"
+                      name="interval_review[minimum_lead_minutes]"
+                      value={@interval_review.reviewed_availability.minimum_lead_minutes}
+                    />
+                    <fieldset :for={{day, label} <- @availability_days}>
+                      <legend>{label}</legend>
+                      <input
+                        type="hidden"
+                        name={"interval_review[weekly_availability][#{day}][_present]"}
+                        value="true"
+                      />
+                      <div :for={
+                        {window, index} <-
+                          Enum.with_index(
+                            Map.fetch!(
+                              @interval_review.reviewed_availability.weekly_availability,
+                              day
+                            )
+                          )
+                      }>
+                        <select name={"interval_review[weekly_availability][#{day}][#{index}][start]"}>
+                          <option value={window.start} selected>{window.start}</option>
+                        </select>
+                        <select name={"interval_review[weekly_availability][#{day}][#{index}][end]"}>
+                          <option value={window.end} selected>{window.end}</option>
+                        </select>
+                      </div>
+                    </fieldset>
+                    <.button id="confirm-interval-change" type="submit" color="primary">
+                      Confirmar cambio
+                    </.button>
                   </form>
                 </.card_content>
               </.card>
@@ -1106,6 +1256,77 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         assign(socket, interval_feedback: :unavailable, interval_review: nil)
     end
   end
+
+  defp interval_review_attributes(params, socket) do
+    current = socket.assigns.interval_review.reviewed_availability
+    week_params = Map.get(params, "weekly_availability", %{})
+
+    week =
+      Map.new(@availability_days, fn {day, _label} ->
+        day_params = Map.get(week_params, Atom.to_string(day), %{})
+        current_windows = Map.fetch!(current.weekly_availability, day)
+
+        windows =
+          day_params
+          |> Enum.reject(fn {key, _value} -> key == "_present" end)
+          |> Enum.sort_by(fn {key, _value} -> parse_review_index(key) end)
+          |> Enum.map(fn {index_text, window} ->
+            current_window = Enum.at(current_windows, parse_review_index(index_text), %{})
+
+            %{
+              start: Map.get(window, "start", Map.get(current_window, :start, "")),
+              end: Map.get(window, "end", Map.get(current_window, :end, ""))
+            }
+          end)
+
+        {day, windows}
+      end)
+
+    %{
+      weekly_availability: week,
+      booking_horizon_days:
+        parse_review_integer(
+          Map.get(params, "booking_horizon_days"),
+          current.booking_horizon_days
+        ),
+      minimum_lead_minutes:
+        parse_review_integer(
+          Map.get(params, "minimum_lead_minutes"),
+          current.minimum_lead_minutes
+        )
+    }
+  end
+
+  defp availability_attrs(availability, week) do
+    %{
+      weekly_availability: week,
+      booking_horizon_days: availability.booking_horizon_days,
+      minimum_lead_minutes: availability.minimum_lead_minutes
+    }
+  end
+
+  defp availability_day(day_name) do
+    case Enum.find(@availability_days, fn {day, _label} -> Atom.to_string(day) == day_name end) do
+      {day, _label} -> {:ok, day}
+      nil -> :error
+    end
+  end
+
+  defp parse_review_index(value) do
+    case Integer.parse(value) do
+      {index, ""} -> index
+      _invalid -> 1_000_000
+    end
+  end
+
+  defp parse_review_integer(value, fallback) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _invalid -> fallback
+    end
+  end
+
+  defp parse_review_integer(_value, fallback), do: fallback
 
   defp backend_type_errors(errors) do
     Map.new(errors, fn {field, reason} -> {field, [backend_type_error(field, reason)]} end)
