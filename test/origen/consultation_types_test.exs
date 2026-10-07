@@ -666,7 +666,7 @@ defmodule Origen.ConsultationTypesTest do
   end
 
   describe "apply_agenda_interval/2" do
-    test "accepts interval boundaries and canonical integer strings" do
+    test "validates interval inputs but requires the separate confirmed command" do
       principal = professional_principal!()
 
       empty_week =
@@ -682,8 +682,13 @@ defmodule Origen.ConsultationTypesTest do
       for interval <- [5, "240", "30"] do
         expected = if is_binary(interval), do: String.to_integer(interval), else: interval
 
-        assert {:ok, %{agenda_interval_minutes: ^expected, consultation_types: []}} =
+        assert {:error,
+                {:confirmation_required,
+                 %{current_interval_minutes: 30, proposed_interval_minutes: ^expected}}} =
                  ConsultationTypes.apply_agenda_interval(principal, interval)
+
+        assert {:ok, %{agenda_interval_minutes: 30, consultation_types: []}} =
+                 ConsultationTypes.get_own_configuration(principal)
       end
 
       for invalid <- [0, 7, 245, "05", "+30", " 30", "30.0", nil] do
@@ -695,7 +700,7 @@ defmodule Origen.ConsultationTypesTest do
       end
     end
 
-    test "applies a compatible interval and preserves all type identity and history" do
+    test "does not bypass explicit review for a compatible interval" do
       principal = professional_principal!()
       other_principal = professional_principal!()
       active = create_type!(principal, %{name: "Exact boundary", interval_count: 4})
@@ -703,21 +708,18 @@ defmodule Origen.ConsultationTypesTest do
       inactive = deactivate_type!(principal, inactive.id)
       foreign = create_type!(other_principal, %{name: "Foreign consultation"})
 
-      assert {:ok, applied} = ConsultationTypes.apply_agenda_interval(principal, 60)
+      assert {:error, {:confirmation_required, preview}} =
+               ConsultationTypes.apply_agenda_interval(principal, 60)
 
-      assert applied == %{
-               agenda_interval_minutes: 60,
-               consultation_types: [active, inactive]
-             }
-
-      assert active.interval_count * applied.agenda_interval_minutes == 240
+      assert preview.proposed_interval_minutes == 60
+      assert Enum.find(preview.consultation_type_effects, &(&1.id == active.id)).compatible
       assert inactive.inactive_duration_minutes == 60
-      assert {:ok, ^applied} = ConsultationTypes.get_own_configuration(principal)
+
+      assert {:ok, %{agenda_interval_minutes: 30, consultation_types: [^active, ^inactive]}} =
+               ConsultationTypes.get_own_configuration(principal)
 
       assert {:ok, %{agenda_interval_minutes: 30, consultation_types: [^foreign]}} =
                ConsultationTypes.get_own_configuration(other_principal)
-
-      assert {:ok, ^applied} = ConsultationTypes.apply_agenda_interval(principal, "60")
     end
 
     test "returns every blocker deterministically and rejects without mutation" do
