@@ -920,7 +920,12 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   attr :proposed_interval, :integer, required: true
 
   defp interval_review(assigns) do
-    assigns = assign(assigns, days: @availability_days)
+    overlap_indexes =
+      Map.new(assigns.review.reviewed_availability.weekly_availability, fn {day, windows} ->
+        {day, interval_review_overlap_indexes(windows)}
+      end)
+
+    assigns = assign(assigns, days: @availability_days, overlap_indexes: overlap_indexes)
 
     ~H"""
     <section id="agenda-interval-review" class="border-t border-border pt-6" aria-labelledby="agenda-interval-review-heading">
@@ -997,7 +1002,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               </p>
               <div
                 :for={{window, index} <- Enum.with_index(Map.fetch!(@review.reviewed_availability.weekly_availability, day))}
-                class="mb-3 grid grid-cols-2 gap-3"
+                id={"interval-review-#{day}-#{index}-window"}
+                class={[
+                  "mb-3 grid grid-cols-2 gap-3 rounded-lg border p-2",
+                  if(MapSet.member?(Map.fetch!(@overlap_indexes, day), index),
+                    do: "border-danger-500",
+                    else: "border-transparent"
+                  )
+                ]}
+                data-overlap-invalid={MapSet.member?(Map.fetch!(@overlap_indexes, day), index) && "true"}
+                aria-describedby={MapSet.member?(Map.fetch!(@overlap_indexes, day), index) && "interval-review-#{day}-#{index}-overlap-error"}
               >
                 <input
                   type="hidden"
@@ -1010,6 +1024,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   boundary={:start}
                   value={window.start}
                   proposed_interval={@proposed_interval}
+                  overlap_invalid?={MapSet.member?(Map.fetch!(@overlap_indexes, day), index)}
                 />
                 <.interval_review_time_select
                   day={day}
@@ -1018,7 +1033,15 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   value={window.end}
                   start_value={window.start}
                   proposed_interval={@proposed_interval}
+                  overlap_invalid?={MapSet.member?(Map.fetch!(@overlap_indexes, day), index)}
                 />
+                <p
+                  :if={MapSet.member?(Map.fetch!(@overlap_indexes, day), index)}
+                  id={"interval-review-#{day}-#{index}-overlap-error"}
+                  class="col-span-2 text-sm text-danger-600 dark:text-danger-400"
+                >
+                  Este horario se superpone con otro horario del {String.downcase(label)}.
+                </p>
                 <div class="col-span-2">
                   <.button type="button" color="danger" variant="outline" size="xs" phx-click="remove_interval_review_window" phx-value-day={day} phx-value-index={index}>
                     Eliminar horario
@@ -1047,17 +1070,19 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   attr :value, :string, required: true
   attr :start_value, :string, default: nil
   attr :proposed_interval, :integer, required: true
+  attr :overlap_invalid?, :boolean, default: false
 
   defp interval_review_time_select(assigns) do
     options = TimeGrid.options(assigns.proposed_interval, assigns.boundary)
     grid_invalid? = assigns.value not in options
     ordering_invalid? = interval_review_order_invalid?(assigns.start_value, assigns.value)
-    invalid? = grid_invalid? or ordering_invalid?
+    invalid? = grid_invalid? or ordering_invalid? or assigns.overlap_invalid?
     id = "interval-review-#{assigns.day}-#{assigns.index}-#{assigns.boundary}"
     label = if(assigns.boundary == :start, do: "Desde", else: "Hasta")
     day_label = Keyword.fetch!(@availability_days, assigns.day)
     grid_error_id = "#{id}-error"
     ordering_error_id = "#{id}-ordering-error"
+    overlap_error_id = "interval-review-#{assigns.day}-#{assigns.index}-overlap-error"
 
     assigns =
       assign(assigns,
@@ -1068,15 +1093,19 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         options: options,
         grid_invalid?: grid_invalid?,
         ordering_invalid?: ordering_invalid?,
+        overlap_invalid?: assigns.overlap_invalid?,
         invalid?: invalid?,
         error_id: grid_error_id,
         ordering_error_id: ordering_error_id,
+        overlap_error_id: overlap_error_id,
         described_by:
           interval_review_described_by(
             grid_invalid?,
             grid_error_id,
             ordering_invalid?,
-            ordering_error_id
+            ordering_error_id,
+            assigns.overlap_invalid?,
+            overlap_error_id
           )
       )
 
@@ -1559,13 +1588,45 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   defp interval_review_order_invalid?(_start_value, _end_value), do: false
 
+  defp interval_review_overlap_indexes(windows) do
+    indexed_windows = Enum.with_index(windows)
+
+    Enum.reduce(indexed_windows, MapSet.new(), fn {window, index}, overlaps ->
+      if Enum.any?(indexed_windows, fn {other, other_index} ->
+           index != other_index and interval_review_windows_overlap?(window, other)
+         end) do
+        MapSet.put(overlaps, index)
+      else
+        overlaps
+      end
+    end)
+  end
+
+  defp interval_review_windows_overlap?(
+         %{start: left_start, end: left_end},
+         %{start: right_start, end: right_end}
+       )
+       when is_binary(left_start) and is_binary(left_end) and is_binary(right_start) and
+              is_binary(right_end) do
+    left_start < left_end and right_start < right_end and left_start < right_end and
+      right_start < left_end
+  end
+
+  defp interval_review_windows_overlap?(_left, _right), do: false
+
   defp interval_review_described_by(
          grid_invalid?,
          grid_error_id,
          ordering_invalid?,
-         ordering_error_id
+         ordering_error_id,
+         overlap_invalid?,
+         overlap_error_id
        ) do
-    [grid_invalid? && grid_error_id, ordering_invalid? && ordering_error_id]
+    [
+      grid_invalid? && grid_error_id,
+      ordering_invalid? && ordering_error_id,
+      overlap_invalid? && overlap_error_id
+    ]
     |> Enum.filter(& &1)
     |> Enum.join(" ")
     |> case do
@@ -1587,7 +1648,10 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       review.incompatible_availability_boundaries != [] or
       review.future_appointment_conflicts != [] or
       map_size(review.availability_validation_errors) > 0 or
-      interval_review_order_blocked?(review.reviewed_availability.weekly_availability)
+      interval_review_order_blocked?(review.reviewed_availability.weekly_availability) or
+      Enum.any?(review.reviewed_availability.weekly_availability, fn {_day, windows} ->
+        MapSet.size(interval_review_overlap_indexes(windows)) > 0
+      end)
   end
 
   defp backend_type_errors(errors) do

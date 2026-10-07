@@ -494,6 +494,78 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, "#confirm-interval-change:not([disabled])")
   end
 
+  test "marks every truly overlapping reviewed window and accepts touching normalization", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    overlapping_params =
+      interval_review_params("10:00", "08:00")
+      |> put_in(["weekly_availability", "monday", "1", "start"], "11:30")
+      |> put_in(["weekly_availability", "monday", "1", "end"], "17:00")
+      |> put_in(["weekly_availability", "tuesday", "1", "start"], "15:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => overlapping_params})
+
+    for index <- 0..1 do
+      window_selector = "#interval-review-monday-#{index}-window"
+      overlap_error = "interval-review-monday-#{index}-overlap-error"
+
+      assert has_element?(
+               view,
+               ~s(#{window_selector}[data-overlap-invalid="true"][aria-describedby="#{overlap_error}"][class*="border-danger"])
+             )
+
+      assert has_element?(
+               view,
+               "##{overlap_error}",
+               "Este horario se superpone con otro horario del lunes."
+             )
+
+      for boundary <- ~w(start end) do
+        assert has_element?(
+                 view,
+                 ~s(#interval-review-monday-#{index}-#{boundary}[aria-invalid="true"][aria-describedby*="#{overlap_error}"][class*="border-danger"])
+               )
+      end
+    end
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    touching_params =
+      put_in(overlapping_params, ["weekly_availability", "monday", "1", "start"], "12:00")
+
+    render_change(view, "change_interval_review", %{"interval_review" => touching_params})
+
+    refute has_element?(view, ~s([data-overlap-invalid="true"]))
+    refute has_element?(view, ~s([id$="-overlap-error"]))
+    assert rendered_element_count(view, "#interval-review-day-monday select") == 4
+    assert has_element?(view, ~s(#interval-review-monday-0-start option[value="10:00"][selected]))
+    assert has_element?(view, ~s(#interval-review-monday-0-end option[value="12:00"][selected]))
+    assert has_element?(view, ~s(#interval-review-monday-1-start option[value="12:00"][selected]))
+    assert has_element?(view, ~s(#interval-review-monday-1-end option[value="17:00"][selected]))
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-tuesday-1-start option[value="15:00"][selected])
+           )
+
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
+
+    view
+    |> form("#interval-review-form")
+    |> render_submit()
+
+    assert persisted_interval(professional.id) == 30
+
+    assert %{
+             "monday" => [%{"start" => "10:00", "end" => "17:00"}],
+             "tuesday" => [_, %{"start" => "15:00", "end" => "18:00"}]
+           } = persisted_weekly_availability(professional.id)
+  end
+
   test "gives repeated weekday review selectors unambiguous accessible names", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
     open_interval_review(view, "30")
@@ -1958,6 +2030,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
       ).rows
 
     interval
+  end
+
+  defp persisted_weekly_availability(account_id) do
+    [[weekly_availability]] =
+      Origen.Repo.query!(
+        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
+        [account_id]
+      ).rows
+
+    weekly_availability
   end
 
   defp confirm_interval_change(view, interval) do
