@@ -237,6 +237,62 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
            )
   end
 
+  test "warns before a read-only interval review with all impact categories", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
+    view
+    |> form("#agenda-interval-form", interval_minutes: "25")
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "Cambiar el intervalo de la agenda"
+           )
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "afecta las duraciones de los tipos de consulta y la disponibilidad semanal"
+           )
+
+    assert has_element?(
+             view,
+             "#agenda-interval-change-modal",
+             "Nada cambiará antes de la confirmación final"
+           )
+
+    assert has_element?(view, "#agenda-interval-change-modal", "Revisar cambios")
+    assert has_element?(view, "#agenda-interval-change-modal", "Cancelar")
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+
+    assert has_element?(view, "#agenda-interval-review", "Revisión del cambio de intervalo")
+    assert has_element?(view, "#interval-type-effects", "Consulta general")
+    assert has_element?(view, "#interval-type-effects", "30 a 50 minutos")
+    assert has_element?(view, "#interval-boundary-conflicts", "Lunes 08:00")
+    assert has_element?(view, "#interval-appointment-conflicts")
+
+    for day <- ~w(monday tuesday wednesday thursday friday saturday sunday) do
+      assert has_element?(view, "#interval-review-day-#{day}")
+
+      assert has_element?(
+               view,
+               ~s(#interval-review-day-#{day} button[phx-click="add_interval_review_window"])
+             )
+    end
+
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    refute has_element?(view, "#interval-apply-success")
+  end
+
   test "a compatible interval request is reviewed and confirmed in the modal", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 

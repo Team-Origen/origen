@@ -353,10 +353,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def handle_info({:availability_editor_state, state}, socket) do
+    interval_feedback =
+      if not state.dirty and socket.assigns.interval_feedback == :availability_dirty,
+        do: nil,
+        else: socket.assigns.interval_feedback
+
     {:noreply,
      assign(socket,
        availability_editing: state.editing,
-       availability_dirty: state.dirty
+       availability_dirty: state.dirty,
+       interval_feedback: interval_feedback
      )}
   end
 
@@ -846,6 +852,39 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
           </div>
 
           <div :if={@interval_modal_step == :review} class="space-y-5">
+            <.alert
+              :if={@interval_feedback == :stale}
+              id="interval-apply-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se aplicó el intervalo.</strong>
+              La configuración cambió desde la revisión. Vuelva a revisar los efectos antes de confirmar. La configuración cargada continúa visible y no se aplicó ningún efecto de esta propuesta.
+            </.alert>
+
+            <.alert
+              :if={@interval_feedback in [:validation, :future_conflicts, :incompatible_review]}
+              id="interval-apply-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se aplicó el intervalo.</strong>
+              Revise los bloqueos indicados. La configuración cargada continúa visible y no se aplicó ningún efecto de esta propuesta.
+            </.alert>
+
+            <.alert
+              :if={@interval_feedback == :unavailable}
+              id="interval-apply-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se aplicó el intervalo.</strong>
+              No se pudo completar la confirmación. La configuración cargada continúa visible y no se aplicó ningún efecto.
+            </.alert>
+
             <.interval_review
               :if={@interval_review}
               review={@interval_review}
@@ -902,6 +941,61 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       <p class="mt-2 text-sm text-text-muted dark:text-gray-300">
         Revise el resultado completo antes de confirmar. Todavía no se aplicó ningún cambio.
       </p>
+
+      <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <dt class="font-medium">Intervalo actual</dt><dd>
+            {@review.current_interval_minutes} minutos
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Intervalo propuesto</dt><dd>
+            {@review.proposed_interval_minutes} minutos
+          </dd>
+        </div>
+      </dl>
+
+      <div id="interval-type-effects" class="mt-6">
+        <h4 class="font-semibold">Duraciones de tipos de consulta activos</h4>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li
+            :for={effect <- @review.consultation_type_effects}
+            id={"interval-type-effect-#{effect.id}"}
+            data-compatible={to_string(effect.compatible)}
+            class={not effect.compatible && "text-danger-600 dark:text-danger-400"}
+          >
+            {effect.name}: {effect.current_duration_minutes} a {effect.proposed_duration_minutes} minutos
+            <strong :if={not effect.compatible}>
+              Bloqueo: la duración propuesta supera el máximo permitido de 240 minutos.
+            </strong>
+          </li>
+          <li :if={@review.consultation_type_effects == []}>No hay tipos activos afectados.</li>
+        </ul>
+      </div>
+
+      <div id="interval-boundary-conflicts" class="mt-6">
+        <h4 class="font-semibold">Límites semanales incompatibles</h4>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li :for={boundary <- @review.incompatible_availability_boundaries}>
+            {format_review_boundary(boundary)}
+          </li>
+          <li :if={@review.incompatible_availability_boundaries == []}>
+            Todos los límites coinciden con el intervalo propuesto.
+          </li>
+        </ul>
+      </div>
+
+      <div id="interval-appointment-conflicts" class="mt-6">
+        <h4 class="font-semibold">Conflictos con turnos futuros</h4>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li :for={conflict <- @review.future_appointment_conflicts}>
+            Turno #{conflict.appointment_id}: {Date.to_iso8601(conflict.date)}, {conflict.start_time} a {conflict.end_time}.
+          </li>
+          <li :if={@review.future_appointment_conflicts == []}>
+            No se detectaron conflictos con turnos futuros.
+          </li>
+        </ul>
+      </div>
 
       <form
         id="interval-review-form"
@@ -1542,6 +1636,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   defp parse_review_integer(_value, fallback), do: fallback
+
+  defp format_review_boundary(%{day: day, time: time}) do
+    label = @availability_days |> Keyword.fetch!(day)
+    "#{label} #{time}"
+  end
 
   defp interval_review_order_invalid?(start_value, end_value)
        when is_binary(start_value) and is_binary(end_value),
