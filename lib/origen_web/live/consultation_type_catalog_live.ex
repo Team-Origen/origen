@@ -164,6 +164,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
      )}
   end
 
+  def handle_event("cancel_interval_warning", params, socket),
+    do: handle_event("cancel_interval_change", params, socket)
+
   @impl true
   def handle_event("change_interval_review", %{"interval_review" => params} = all_params, socket)
       when is_map(params) do
@@ -186,7 +189,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   def handle_event("add_interval_review_window", %{"day" => day_name}, socket) do
     with {:ok, day} <- availability_day(day_name),
          %{reviewed_availability: availability} <- socket.assigns.interval_review do
-      window = %{start: "00:00", end: TimeGrid.format(socket.assigns.selected_interval)}
+      window = %{start: "00:00", end: format_interval_time(socket.assigns.selected_interval)}
       week = Map.update!(availability.weekly_availability, day, &(&1 ++ [window]))
       {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
     else
@@ -405,14 +408,10 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def render(assigns) do
-    assigns =
-      assign(assigns,
-        visible_catalog: visible_catalog(assigns),
-        availability_days: @availability_days
-      )
+    assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
-    <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
+    <main data-theme="light" class="min-h-screen bg-page py-6 text-text sm:py-10">
       <.container max_width="xl">
         <div
           id="professional-settings-content"
@@ -1149,6 +1148,13 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                     else: "border-transparent"
                   )
                 ]}
+                data-overlap-invalid={
+                  MapSet.member?(Map.fetch!(@overlap_indexes, day), index) && "true"
+                }
+                aria-describedby={
+                  MapSet.member?(Map.fetch!(@overlap_indexes, day), index) &&
+                    "interval-review-#{day}-#{index}-overlap-error"
+                }
               >
                 <input
                   type="hidden"
@@ -1249,9 +1255,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         options: options,
         grid_invalid?: grid_invalid?,
         ordering_invalid?: ordering_invalid?,
+        overlap_invalid?: assigns.overlap_invalid?,
         invalid?: invalid?,
         error_id: grid_error_id,
         ordering_error_id: ordering_error_id,
+        overlap_error_id: overlap_error_id,
         described_by:
           interval_review_described_by(
             grid_invalid?,
@@ -1759,6 +1767,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   defp parse_review_integer(_value, fallback), do: fallback
+
+  defp format_interval_time(minutes), do: TimeGrid.format(minutes)
 
   defp format_review_boundary(%{day: day, time: time}) do
     label = @availability_days |> Keyword.fetch!(day)

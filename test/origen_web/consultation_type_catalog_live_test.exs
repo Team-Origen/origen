@@ -212,6 +212,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
   test "a pending interval selection warns without applying immediately", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
+    assert has_element?(view, ~s(main[data-theme="light"]))
 
     view
     |> form("#agenda-interval-form", interval_minutes: "30")
