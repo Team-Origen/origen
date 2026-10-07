@@ -277,6 +277,10 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_submit()
 
+    assert {:ok, _configuration} = confirm_interval!(conn, 30)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    show_inactive(view)
+
     assert has_element?(view, "#current-agenda-interval", "30 minutos")
     assert has_element?(view, row, "Duración: 30 minutos")
 
@@ -294,7 +298,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     assert has_element?(view, row, "Activo")
   end
 
-  test "an incompatible apply is rejected without inferring a replacement count", %{
+  test "an incompatible review remains read-only without inferring a replacement count", %{
     conn: conn,
     professional_account: professional
   } do
@@ -318,10 +322,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
     row = "#consultation-type-018f4a5b-0d62-7a44-8e32-2f608bfcb008"
 
-    assert has_element?(view, "#interval-apply-error[role=alert]", "No se aplicó el intervalo")
-    assert has_element?(view, "#interval-apply-error", "máximo de 4")
-    assert has_element?(view, "#interval-apply-error", "Consulta prolongada")
-    refute has_element?(view, "#interval-apply-error", "TC-008")
+    assert has_element?(view, "#interval-review-ready", "Todavía no se aplicó ningún cambio")
+
+    assert {:error, {:incompatible, %{consultation_type_effects: [_blocker]}}} =
+             confirm_interval!(conn, 60)
+
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
     assert has_element?(view, row, "Cantidad de intervalos 8")
     assert has_element?(view, row, "Duración: 120 minutos")
@@ -457,6 +462,10 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     view
     |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_submit()
+
+    assert {:ok, _configuration} = confirm_interval!(conn, 30)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    show_inactive(view)
 
     assert has_element?(view, row, "Duración: 180 minutos")
 
@@ -1020,6 +1029,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_submit()
 
+    assert {:ok, _configuration} = confirm_interval!(conn, 30)
+
     {:ok, remounted_view, _html} = live(conn, @professional_configuration_path)
     show_inactive(remounted_view)
 
@@ -1303,6 +1314,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> form("#agenda-interval-form", interval_minutes: "60")
     |> render_submit()
 
+    assert {:ok, _configuration} = confirm_interval!(conn, 60)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+
     assert has_element?(view, "#current-agenda-interval", "60 minutos")
     open_new_type_modal(view)
 
@@ -1459,6 +1473,13 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
+  end
+
+  defp confirm_interval!(conn, interval) do
+    token = Plug.Conn.get_session(conn, :internal_session_token)
+    {:ok, principal} = Origen.Sessions.fetch_session(token)
+    {:ok, preview} = Origen.ConsultationTypes.preview_agenda_interval(principal, interval)
+    Origen.ConsultationTypes.confirm_agenda_interval(principal, preview)
   end
 
   defp replace_catalog!(account_id, interval_minutes, consultation_types) do
