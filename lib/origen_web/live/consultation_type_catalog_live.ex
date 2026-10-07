@@ -213,13 +213,30 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     ~H"""
     <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
-        <div class="flex flex-col gap-6 sm:gap-8">
-          <header class="space-y-2">
-            <.h1 no_margin>Configuración</.h1>
+        <div id="professional-settings-content" class="flex flex-col gap-6 sm:gap-8">
+          <header
+            id="professional-settings-header"
+            class="flex items-start justify-between gap-4"
+          >
+            <div class="space-y-2">
+              <.h1 no_margin>Ajustes</.h1>
 
-            <.text_muted>
-              Preferencias operativas de la práctica profesional.
-            </.text_muted>
+              <.text_muted>
+                Preferencias operativas de la práctica profesional.
+              </.text_muted>
+            </div>
+
+            <.button
+              id="back-to-agenda-button"
+              type="button"
+              icon="hero-arrow-left"
+              color="gray"
+              variant="outline"
+              disabled
+              aria-disabled="true"
+            >
+              Volver a Agenda
+            </.button>
           </header>
 
           <.alert
