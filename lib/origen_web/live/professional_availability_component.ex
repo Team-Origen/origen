@@ -58,11 +58,13 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
   @impl true
   def handle_event("edit_availability", _params, socket) do
+    draft = configuration_to_draft(socket.assigns.configuration)
+
     {:noreply,
      assign(socket,
        editing: true,
-       draft: configuration_to_draft(socket.assigns.configuration),
-       local_errors: %{},
+       draft: draft,
+       local_errors: local_time_errors(draft, socket.assigns.configuration),
        feedback: nil,
        validation_errors: nil
      )}
@@ -117,16 +119,32 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
   @impl true
   def handle_event("change_availability", %{"availability" => params}, socket) do
+    draft = params_to_draft(params, socket.assigns.draft)
+
     {:noreply,
      assign(socket,
-       draft: params_to_draft(params, socket.assigns.draft),
+       draft: draft,
+       local_errors: local_time_errors(draft, socket.assigns.configuration),
        validation_errors: nil
      )}
   end
 
   @impl true
   def handle_event("save_availability", %{"availability" => params}, socket) do
-    save_valid_draft(socket, params_to_draft(params, socket.assigns.draft))
+    draft = params_to_draft(params, socket.assigns.draft)
+    local_errors = local_time_errors(draft, socket.assigns.configuration)
+
+    if map_size(local_errors) > 0 do
+      {:noreply,
+       assign(socket,
+         editing: true,
+         draft: draft,
+         local_errors: local_errors,
+         validation_errors: nil
+       )}
+    else
+      save_valid_draft(socket, draft)
+    end
   end
 
   defp save_valid_draft(socket, draft) do
@@ -281,7 +299,11 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
               variant="callout"
               with_icon
             >
-              <strong>No se guardaron los cambios.</strong> Revise los datos ingresados.
+              <strong>No se guardaron los cambios.</strong>
+              Revise los siguientes datos:
+              <ul class="mt-2 list-disc pl-5">
+                <li :for={message <- validation_messages(@validation_errors)}>{message}</li>
+              </ul>
             </.alert>
             <section id="availability-section" aria-labelledby="weekly-availability-heading">
               <.card variant="basic">
@@ -338,23 +360,83 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                             Desde
                             <input
                               id={"availability-#{day}-#{index}-start"}
-                              class="pc-input mt-1"
+                              class={[
+                                "pc-input mt-1",
+                                local_time_error?(@local_errors, day, index, :start) &&
+                                  "border-danger-500"
+                              ]}
                               type="time"
                               step={@configuration.agenda_interval_minutes * 60}
                               name={"availability[weekly_availability][#{day}][#{index}][start]"}
                               value={window.start}
+                              aria-invalid={
+                                time_input_invalid?(
+                                  @local_errors,
+                                  @validation_errors,
+                                  day,
+                                  index,
+                                  :start
+                                ) && "true"
+                              }
+                              aria-describedby={
+                                time_input_described_by(
+                                  @local_errors,
+                                  @validation_errors,
+                                  day,
+                                  index,
+                                  :start
+                                )
+                              }
+                              required
                             />
+                            <p
+                              :if={message = local_time_error(@local_errors, day, index, :start)}
+                              id={"availability-#{day}-#{index}-start-error"}
+                              class="mt-1 text-sm text-danger-600 dark:text-danger-400"
+                            >
+                              {message}
+                            </p>
                           </label>
                           <label class="text-sm font-medium" for={"availability-#{day}-#{index}-end"}>
                             Hasta
                             <input
                               id={"availability-#{day}-#{index}-end"}
-                              class="pc-input mt-1"
+                              class={[
+                                "pc-input mt-1",
+                                local_time_error?(@local_errors, day, index, :end) &&
+                                  "border-danger-500"
+                              ]}
                               type="time"
                               step={@configuration.agenda_interval_minutes * 60}
                               name={"availability[weekly_availability][#{day}][#{index}][end]"}
                               value={window.end}
+                              aria-invalid={
+                                time_input_invalid?(
+                                  @local_errors,
+                                  @validation_errors,
+                                  day,
+                                  index,
+                                  :end
+                                ) && "true"
+                              }
+                              aria-describedby={
+                                time_input_described_by(
+                                  @local_errors,
+                                  @validation_errors,
+                                  day,
+                                  index,
+                                  :end
+                                )
+                              }
+                              required
                             />
+                            <p
+                              :if={message = local_time_error(@local_errors, day, index, :end)}
+                              id={"availability-#{day}-#{index}-end-error"}
+                              class="mt-1 text-sm text-danger-600 dark:text-danger-400"
+                            >
+                              {message}
+                            </p>
                           </label>
                           <div class="col-span-2">
                             <.button
@@ -413,6 +495,9 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                           step="1"
                           name="availability[booking_horizon_days]"
                           value={@draft.booking_horizon_days}
+                          aria-invalid={
+                            invalid_field?(@validation_errors, :booking_horizon_days) && "true"
+                          }
                           required
                         />
                       </label>
@@ -427,6 +512,9 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                           step="5"
                           name="availability[minimum_lead_minutes]"
                           value={@draft.minimum_lead_minutes}
+                          aria-invalid={
+                            invalid_field?(@validation_errors, :minimum_lead_minutes) && "true"
+                          }
                           required
                         />
                       </label>
@@ -443,7 +531,12 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   >
                     Cancelar
                   </.button>
-                  <.button id="availability-save-button" type="submit" color="primary">
+                  <.button
+                    id="availability-save-button"
+                    type="submit"
+                    color="primary"
+                    disabled={map_size(@local_errors) > 0}
+                  >
                     Guardar disponibilidad
                   </.button>
                 </.card_footer>
@@ -602,7 +695,12 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     draft = socket.assigns.draft
     windows = draft.weekly_availability |> Map.fetch!(day) |> update_windows.()
     week = Map.put(draft.weekly_availability, day, windows)
-    assign(socket, draft: %{draft | weekly_availability: week})
+    updated_draft = %{draft | weekly_availability: week}
+
+    assign(socket,
+      draft: updated_draft,
+      local_errors: local_time_errors(updated_draft, socket.assigns.configuration)
+    )
   end
 
   defp day_atom(day_name) do
@@ -636,6 +734,145 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   end
 
   defp parse_integer(value), do: value
+
+  defp invalid_day?(%{weekly_availability: day_errors}, day) when is_map(day_errors),
+    do: Map.has_key?(day_errors, day)
+
+  defp invalid_day?(_errors, _day), do: false
+
+  defp invalid_field?(errors, field) when is_map(errors), do: Map.has_key?(errors, field)
+  defp invalid_field?(_errors, _field), do: false
+
+  defp local_time_errors(draft, configuration) do
+    interval = configuration.agenda_interval_minutes
+
+    Enum.reduce(@days, %{}, fn {day, _label}, errors ->
+      draft.weekly_availability
+      |> Map.fetch!(day)
+      |> Enum.with_index()
+      |> Enum.reduce(errors, fn {window, index}, field_errors ->
+        validate_local_window(field_errors, day, index, window, interval)
+      end)
+    end)
+  end
+
+  defp validate_local_window(errors, day, index, window, interval) do
+    start_result = validate_time_boundary(window.start, interval, :start)
+    end_result = validate_time_boundary(window.end, interval, :end)
+
+    errors
+    |> put_time_error(day, index, :start, start_result, interval)
+    |> put_time_error(day, index, :end, end_result, interval)
+    |> put_window_order_error(day, index, start_result, end_result, interval)
+  end
+
+  defp validate_time_boundary(value, interval, boundary) do
+    case parse_time_minutes(value, boundary) do
+      {:ok, minutes} when rem(minutes, interval) == 0 -> {:ok, minutes}
+      {:ok, _minutes} -> :misaligned
+      :error -> :invalid
+    end
+  end
+
+  defp parse_time_minutes("24:00", :end), do: {:ok, 24 * 60}
+
+  defp parse_time_minutes(value, _boundary) when is_binary(value) do
+    case Regex.run(~r/\A([01]\d|2[0-3]):([0-5]\d)\z/, value) do
+      [_, hours, minutes] -> {:ok, String.to_integer(hours) * 60 + String.to_integer(minutes)}
+      nil -> :error
+    end
+  end
+
+  defp parse_time_minutes(_value, _boundary), do: :error
+
+  defp put_time_error(errors, _day, _index, _boundary, {:ok, _minutes}, _interval),
+    do: errors
+
+  defp put_time_error(errors, day, index, boundary, :misaligned, interval) do
+    Map.put(
+      errors,
+      {day, index, boundary},
+      "Seleccione un horario compatible con el intervalo actual de #{interval} minutos."
+    )
+  end
+
+  defp put_time_error(errors, day, index, boundary, :invalid, _interval) do
+    Map.put(errors, {day, index, boundary}, "Ingrese una hora válida.")
+  end
+
+  defp put_window_order_error(errors, day, index, {:ok, start}, {:ok, finish}, interval) do
+    cond do
+      finish <= start ->
+        Map.put(errors, {day, index, :end}, "Debe ser posterior a la hora de inicio.")
+
+      finish - start < interval ->
+        Map.put(errors, {day, index, :end}, "Debe abarcar al menos un intervalo de Agenda.")
+
+      true ->
+        errors
+    end
+  end
+
+  defp put_window_order_error(errors, _day, _index, _start, _finish, _interval), do: errors
+
+  defp local_time_error(errors, day, index, boundary),
+    do: Map.get(errors, {day, index, boundary})
+
+  defp local_time_error?(errors, day, index, boundary),
+    do: Map.has_key?(errors, {day, index, boundary})
+
+  defp time_input_invalid?(local_errors, validation_errors, day, index, boundary) do
+    local_time_error?(local_errors, day, index, boundary) ||
+      invalid_day?(validation_errors, day)
+  end
+
+  defp time_input_described_by(local_errors, validation_errors, day, index, boundary) do
+    cond do
+      local_time_error?(local_errors, day, index, boundary) ->
+        "availability-#{day}-#{index}-#{boundary}-error"
+
+      invalid_day?(validation_errors, day) ->
+        "availability-validation-error"
+
+      true ->
+        nil
+    end
+  end
+
+  defp validation_messages(errors) do
+    day_messages =
+      case Map.get(errors, :weekly_availability) do
+        day_errors when is_map(day_errors) ->
+          Enum.flat_map(@days, fn {day, label} ->
+            case Map.fetch(day_errors, day) do
+              {:ok, reason} -> [day_validation_message(label, reason)]
+              :error -> []
+            end
+          end)
+
+        _other ->
+          []
+      end
+
+    day_messages
+    |> maybe_add_message(
+      errors,
+      :booking_horizon_days,
+      "Período de reserva: ingrese entre 7 y 90 días."
+    )
+    |> maybe_add_message(
+      errors,
+      :minimum_lead_minutes,
+      "Anticipación mínima: ingrese entre 0 y 1.440 minutos, en pasos de 5."
+    )
+  end
+
+  defp maybe_add_message(messages, errors, field, message) do
+    if Map.has_key?(errors, field), do: messages ++ [message], else: messages
+  end
+
+  defp day_validation_message(label, :overlap), do: "#{label}: los horarios se superponen."
+  defp day_validation_message(label, _reason), do: "#{label}: revise los horarios."
 
   defp availability do
     Application.get_env(:origen, :availability_context, Availability)

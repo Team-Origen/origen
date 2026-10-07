@@ -10,6 +10,15 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     def replace_own_configuration(_principal, _attributes), do: {:error, :unavailable}
   end
 
+  defmodule TrackingAvailability do
+    def get_own_configuration(principal), do: Origen.Availability.get_own_configuration(principal)
+
+    def replace_own_configuration(_principal, _attributes) do
+      send(Application.fetch_env!(:origen, :availability_test_pid), :replacement_called)
+      {:error, :unexpected_replacement}
+    end
+  end
+
   setup %{conn: conn} do
     previous_context = Application.get_env(:origen, :availability_context)
 
@@ -192,6 +201,50 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
 
     assert has_element?(view, "#availability-save-success", "Vista previa actualizada")
     assert has_element?(view, "#availability-save-success", "no se guardan")
+  end
+
+  test "blocks an off-interval submitted boundary and recovers when corrected", %{conn: conn} do
+    Application.put_env(:origen, :availability_context, TrackingAvailability)
+    Application.put_env(:origen, :availability_test_pid, self())
+    on_exit(fn -> Application.delete_env(:origen, :availability_test_pid) end)
+
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    invalid =
+      put_in(replacement_params(), ["weekly_availability", "monday", "0", "start"], "08:10")
+
+    view
+    |> element("#availability-form")
+    |> render_change(%{"availability" => invalid})
+
+    assert has_element?(
+             view,
+             ~s(#availability-monday-0-start[aria-invalid="true"][aria-describedby="availability-monday-0-start-error"])
+           )
+
+    assert has_element?(
+             view,
+             "#availability-monday-0-start-error",
+             "Seleccione un horario compatible con el intervalo actual de 30 minutos."
+           )
+
+    assert has_element?(view, "#availability-save-button[disabled]")
+
+    view
+    |> element("#availability-form")
+    |> render_submit(%{"availability" => invalid})
+
+    refute_received :replacement_called
+
+    valid = put_in(invalid, ["weekly_availability", "monday", "0", "start"], "08:00")
+
+    view
+    |> element("#availability-form")
+    |> render_change(%{"availability" => valid})
+
+    refute has_element?(view, "#availability-monday-0-start-error")
+    assert has_element?(view, "#availability-save-button:not([disabled])")
   end
 
   defp open_editor(view) do
