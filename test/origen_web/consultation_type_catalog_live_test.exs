@@ -93,6 +93,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     end
   end
 
+  defmodule RejectingIntervalConfirmation do
+    def get_own_configuration(principal),
+      do: Origen.ConsultationTypes.get_own_configuration(principal)
+
+    def preview_agenda_interval(principal, interval, availability),
+      do: Origen.ConsultationTypes.preview_agenda_interval(principal, interval, availability)
+
+    def confirm_agenda_interval(_principal, _attributes), do: {:error, :unavailable}
+  end
+
   setup %{conn: conn} do
     previous_context = Application.get_env(:origen, :consultation_types_context)
 
@@ -294,88 +304,96 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     refute has_element?(view, "#interval-apply-success")
   end
 
-  test "a compatible interval request is reviewed and confirmed in the modal", %{conn: conn} do
-    {:ok, view, _html} = live(conn, @professional_configuration_path)
-
-    view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_change()
-
-    view
-    |> element("#open-interval-change-modal")
-    |> render_click()
-
-    assert has_element?(view, "#professional-settings-content[inert]")
-    assert has_element?(view, "#interval-modal-warning")
-
-    view
-    |> element("#agenda-interval-change-modal button", "Revisar cambios")
-    |> render_click()
-
-    assert has_element?(view, "#current-agenda-interval", "15 minutos")
-    assert has_element?(view, "#agenda-interval-review", "Todavía no se aplicó ningún cambio")
-    refute has_element?(view, "#professional-settings-content #interval-review-form")
-    refute has_element?(view, "#interval-apply-success")
-    assert has_element?(view, "#interval-review-day-monday")
-    assert has_element?(view, "#interval-review-monday-0-start")
-
-    view
-    |> element(~s(button[phx-click="add_interval_review_window"][phx-value-day="saturday"]))
-    |> render_click()
-
-    assert has_element?(view, "#interval-review-saturday-0-start")
-
-    view
-    |> element(
-      ~s(button[phx-click="remove_interval_review_window"][phx-value-day="saturday"][phx-value-index="0"])
-    )
-    |> render_click()
-
-    refute has_element?(view, "#interval-review-saturday-0-start")
-
-    view
-    |> form("#interval-review-form")
-    |> render_submit()
-
-    assert has_element?(view, "#current-agenda-interval", "30 minutos")
-    assert has_element?(view, "#interval-apply-success[role=status]")
-    refute has_element?(view, "#agenda-interval-change-modal")
-    refute has_element?(view, "#professional-settings-content[inert]")
-  end
-
-  test "copies reviewed hours to explicit destinations without persisting", %{
+  test "offers only the proposed grid and marks preserved incompatible review boundaries", %{
     conn: conn,
     professional_account: professional
   } do
-    persisted_before = persisted_weekly_availability(professional.id)
-    {:ok, view, _html} = live(conn, @professional_configuration_path)
-
-    view
-    |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_change()
-
-    view |> element("#open-interval-change-modal") |> render_click()
-
-    view
-    |> element("#agenda-interval-change-modal button", "Revisar cambios")
-    |> render_click()
-
-    view
-    |> form("#interval-review-form",
-      interval_review_copy: %{source: "monday", targets: ["friday"]}
+    Origen.Repo.query!(
+      """
+      UPDATE agenda_settings
+      SET weekly_availability = jsonb_set(
+            jsonb_set(
+              weekly_availability,
+              '{monday,0,start}',
+              to_jsonb('08:30'::text)
+            ),
+            '{tuesday,0,start}',
+            to_jsonb('08:30'::text)
+          ),
+          updated_at = clock_timestamp()
+      WHERE owner_account_id = $1
+      """,
+      [professional.id]
     )
-    |> render_change()
 
-    assert has_element?(view, "#interval-review-copy-source option[value=monday][selected]")
-    assert has_element?(view, "#interval-review-copy-friday[checked]")
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "40")
 
-    view
-    |> element("#copy-interval-review-hours")
-    |> render_click()
+    start_selector = "#interval-review-monday-0-start"
+    end_selector = "#interval-review-monday-0-end"
+    start_error = "interval-review-monday-0-start-error"
+    tuesday_start_selector = "#interval-review-tuesday-0-start"
 
-    assert has_element?(view, "#interval-review-friday-0-start option[value='08:00'][selected]")
-    assert has_element?(view, "#interval-review-friday-1-end option[value='18:00'][selected]")
-    assert persisted_weekly_availability(professional.id) == persisted_before
+    assert has_element?(view, "select#{start_selector}")
+    assert has_element?(view, "select#{end_selector}")
+    refute has_element?(view, "#interval-review-form input[type=time]")
+
+    assert has_element?(
+             view,
+             ~s(#{start_selector}[aria-invalid="true"][aria-describedby="#{start_error}"][class*="border-danger"])
+           )
+
+    assert has_element?(
+             view,
+             "##{start_error}",
+             "Seleccione un horario compatible con el intervalo propuesto de 40 minutos."
+           )
+
+    assert has_element?(
+             view,
+             ~s(#{start_selector} option[value="08:30"][disabled][selected]),
+             "08:30 — incompatible con 40 minutos"
+           )
+
+    expected_grid = Enum.map(0..1439//40, &format_test_time/1)
+    start_options = rendered_option_states(view, "#{start_selector} option")
+    end_options = rendered_option_states(view, "#{end_selector} option")
+
+    assert Enum.map(Enum.reject(start_options, & &1.disabled), & &1.value) == expected_grid
+
+    assert Enum.map(Enum.reject(end_options, & &1.disabled), & &1.value) ==
+             expected_grid ++ ["24:00"]
+
+    refute Enum.any?(start_options, &(&1.value == "24:00"))
+    assert Enum.any?(end_options, &(&1.value == "24:00" and not &1.disabled))
+
+    assert [%{value: "08:30", disabled: true, selected: true}] =
+             Enum.filter(start_options, & &1.selected)
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => interval_review_params("08:00", nil)
+    })
+
+    refute has_element?(view, ~s(#{start_selector}[aria-invalid="true"]))
+    refute has_element?(view, "##{start_error}")
+    assert has_element?(view, ~s(#{tuesday_start_selector}[aria-invalid="true"]))
+
+    assert has_element?(
+             view,
+             ~s(#{tuesday_start_selector} option[value="08:30"][disabled][selected])
+           )
+
+    assert has_element?(view, "#confirm-interval-change[disabled]")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => interval_review_params("08:00", "08:00")
+    })
+
+    refute has_element?(view, ~s(#{tuesday_start_selector}[aria-invalid="true"]))
+    assert has_element?(view, "#interval-boundary-conflicts", "Todos los límites coinciden")
+    assert has_element?(view, "#confirm-interval-change:not([disabled])")
   end
 
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{
@@ -1588,6 +1606,84 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
+  end
+
+  defp open_interval_review(view, interval) do
+    view
+    |> form("#agenda-interval-form", interval_minutes: interval)
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
+  end
+
+  defp persisted_interval(account_id) do
+    [[interval]] =
+      Origen.Repo.query!(
+        "SELECT interval_minutes FROM agenda_settings WHERE owner_account_id = $1",
+        [account_id]
+      ).rows
+
+    interval
+  end
+
+  defp rendered_option_states(view, selector) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.to_tree()
+    |> Enum.map(fn {"option", attributes, _children} ->
+      attributes = Map.new(attributes)
+
+      %{
+        value: Map.fetch!(attributes, "value"),
+        disabled: Map.has_key?(attributes, "disabled"),
+        selected: Map.has_key?(attributes, "selected")
+      }
+    end)
+  end
+
+  defp interval_review_params(monday_start, tuesday_start) do
+    weekday_windows = fn first_start ->
+      first_window = %{"end" => "12:00"}
+
+      first_window =
+        if is_nil(first_start),
+          do: first_window,
+          else: Map.put(first_window, "start", first_start)
+
+      %{
+        "_present" => "true",
+        "0" => first_window,
+        "1" => %{"start" => "14:00", "end" => "18:00"}
+      }
+    end
+
+    %{
+      "booking_horizon_days" => "30",
+      "minimum_lead_minutes" => "30",
+      "weekly_availability" => %{
+        "monday" => weekday_windows.(monday_start),
+        "tuesday" => weekday_windows.(tuesday_start),
+        "wednesday" => weekday_windows.("08:00"),
+        "thursday" => weekday_windows.("08:00"),
+        "friday" => weekday_windows.("08:00"),
+        "saturday" => %{"_present" => "true"},
+        "sunday" => %{"_present" => "true"}
+      }
+    }
+  end
+
+  defp format_test_time(minutes) do
+    hours = div(minutes, 60) |> Integer.to_string() |> String.pad_leading(2, "0")
+    remaining = rem(minutes, 60) |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{hours}:#{remaining}"
   end
 
   defp replace_catalog!(account_id, interval_minutes, consultation_types) do
