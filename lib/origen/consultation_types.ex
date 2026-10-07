@@ -330,61 +330,17 @@ defmodule Origen.ConsultationTypes do
   def confirm_agenda_interval(_principal, _attributes), do: {:error, :unauthorized}
 
   @spec apply_agenda_interval(map(), integer() | String.t()) ::
-          {:ok, configuration()}
-          | {:error,
-             :unauthorized
-             | :unavailable
-             | {:validation, %{agenda_interval_minutes: :invalid}}
-             | {:incompatible, map()}}
-  def apply_agenda_interval(
-        %{session_id: session_id, account_id: account_id},
-        proposed_interval
-      )
-      when is_integer(session_id) and is_integer(account_id) do
-    Repo.transaction(fn ->
-      owner_account_id = resolve_owner!(session_id, account_id)
-      current_interval = get_or_create_agenda_settings!(owner_account_id, :lock)
-
-      case validate_agenda_interval(proposed_interval) do
-        {:ok, interval_minutes} ->
-          active_types = lock_active_owned_types!(owner_account_id)
-          blockers = interval_blockers(active_types, interval_minutes)
-
-          availability_boundaries =
-            availability_interval_blockers!(owner_account_id, interval_minutes)
-
-          if blockers == [] and availability_boundaries == [] do
-            apply_interval_if_changed!(owner_account_id, current_interval, interval_minutes)
-
-            %{
-              agenda_interval_minutes: interval_minutes,
-              consultation_types: list_consultation_types!(owner_account_id)
-            }
-          else
-            evidence =
-              %{}
-              |> maybe_put_type_blockers(blockers, interval_minutes)
-              |> maybe_put_availability_boundaries(availability_boundaries)
-
-            Repo.rollback({:incompatible, evidence})
-          end
-
-        :error ->
-          Repo.rollback({:validation, %{agenda_interval_minutes: :invalid}})
-      end
-    end)
-    |> case do
-      {:ok, configuration} -> {:ok, configuration}
-      {:error, :unauthorized} -> {:error, :unauthorized}
-      {:error, {:validation, errors}} -> {:error, {:validation, errors}}
-      {:error, {:incompatible, evidence}} -> {:error, {:incompatible, evidence}}
-      {:error, _reason} -> {:error, :unavailable}
+          {:error,
+           :unauthorized
+           | :unavailable
+           | {:validation, %{agenda_interval_minutes: :invalid}}
+           | {:confirmation_required, map()}}
+  def apply_agenda_interval(principal, proposed_interval) do
+    case preview_agenda_interval(principal, proposed_interval) do
+      {:ok, preview} -> {:error, {:confirmation_required, preview}}
+      {:error, reason} -> {:error, reason}
     end
-  rescue
-    _error -> {:error, :unavailable}
   end
-
-  def apply_agenda_interval(_invalid_principal, _proposed_interval), do: {:error, :unauthorized}
 
   defp resolve_owner!(session_id, account_id) do
     query = """
@@ -1035,78 +991,6 @@ defmodule Origen.ConsultationTypes do
     else
       _missing_or_invalid -> Repo.rollback(:not_found)
     end
-  end
-
-  defp lock_active_owned_types!(owner_account_id) do
-    Repo.query!(
-      """
-      SELECT id, name, interval_count
-      FROM consultation_types
-      WHERE owner_account_id = $1 AND status = 'active'
-      ORDER BY created_at, id
-      FOR UPDATE
-      """,
-      [owner_account_id]
-    ).rows
-    |> Enum.map(fn [id, name, interval_count] ->
-      %{id: Ecto.UUID.load!(id), name: name, interval_count: interval_count}
-    end)
-  end
-
-  defp interval_blockers(active_types, interval_minutes) do
-    active_types
-    |> Enum.map(fn type ->
-      Map.put(type, :prospective_duration_minutes, type.interval_count * interval_minutes)
-    end)
-    |> Enum.filter(&(&1.prospective_duration_minutes > 240))
-  end
-
-  defp availability_interval_blockers!(owner_account_id, interval_minutes) do
-    [[week]] =
-      Repo.query!(
-        "SELECT weekly_availability FROM agenda_settings WHERE owner_account_id = $1",
-        [owner_account_id]
-      ).rows
-
-    ~w(monday tuesday wednesday thursday friday saturday sunday)
-    |> Enum.flat_map(fn day ->
-      week
-      |> Map.fetch!(day)
-      |> Enum.flat_map(fn window ->
-        [Map.fetch!(window, "start"), Map.fetch!(window, "end")]
-        |> Enum.filter(&(rem(time_to_minutes(&1), interval_minutes) != 0))
-        |> Enum.map(&"#{day} #{&1}")
-      end)
-    end)
-  end
-
-  defp maybe_put_type_blockers(evidence, [], _interval_minutes), do: evidence
-
-  defp maybe_put_type_blockers(evidence, blockers, interval_minutes) do
-    Map.merge(evidence, %{
-      maximum_interval_count: min(10, div(240, interval_minutes)),
-      blockers: blockers
-    })
-  end
-
-  defp maybe_put_availability_boundaries(evidence, []), do: evidence
-
-  defp maybe_put_availability_boundaries(evidence, boundaries),
-    do: Map.put(evidence, :availability_boundaries, boundaries)
-
-  defp apply_interval_if_changed!(_owner_account_id, interval_minutes, interval_minutes), do: :ok
-
-  defp apply_interval_if_changed!(owner_account_id, _current_interval, interval_minutes) do
-    Repo.query!(
-      """
-      UPDATE agenda_settings
-      SET interval_minutes = $2, updated_at = clock_timestamp()
-      WHERE owner_account_id = $1
-      """,
-      [owner_account_id, interval_minutes]
-    )
-
-    :ok
   end
 
   defp time_to_minutes(value) do
