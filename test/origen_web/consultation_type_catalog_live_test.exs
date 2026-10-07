@@ -566,6 +566,81 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
            } = persisted_weekly_availability(professional.id)
   end
 
+  test "copies complete reviewed hours to explicit destinations without persisting", %{
+    conn: conn,
+    professional_account: professional
+  } do
+    persisted_before = persisted_weekly_availability(professional.id)
+    {:ok, view, _html} = live(conn, @professional_configuration_path)
+    open_interval_review(view, "30")
+
+    reviewed_params =
+      interval_review_params("09:00", "08:00")
+      |> put_in(["weekly_availability", "monday", "0", "end"], "12:00")
+      |> put_in(["weekly_availability", "monday", "1", "start"], "13:00")
+      |> put_in(["weekly_availability", "monday", "1", "end"], "16:00")
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => reviewed_params,
+      "interval_review_copy" => %{
+        "source" => "monday",
+        "targets" => ["tuesday", "friday"]
+      }
+    })
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-copy-source[name="interval_review_copy[source]"] option[value="monday"][selected])
+           )
+
+    assert has_element?(view, ~s(#interval-review-copy-tuesday[type="checkbox"][checked]))
+    assert has_element?(view, ~s(#interval-review-copy-friday[type="checkbox"][checked]))
+
+    assert has_element?(
+             view,
+             ~s|#copy-interval-review-hours[type="button"]:not([disabled])|,
+             "Copiar horarios revisados"
+           )
+
+    view
+    |> element("#copy-interval-review-hours")
+    |> render_click()
+
+    for day <- ~w(tuesday friday) do
+      assert has_element?(
+               view,
+               ~s(#interval-review-#{day}-0-start option[value="09:00"][selected])
+             )
+
+      assert has_element?(view, ~s(#interval-review-#{day}-1-end option[value="16:00"][selected]))
+    end
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-wednesday-0-start option[value="08:00"][selected])
+           )
+
+    assert has_element?(
+             view,
+             ~s(#interval-review-wednesday-1-end option[value="18:00"][selected])
+           )
+
+    assert persisted_weekly_availability(professional.id) == persisted_before
+
+    render_change(view, "change_interval_review", %{
+      "interval_review" => interval_review_params("09:00", "08:00"),
+      "interval_review_copy" => %{"source" => "saturday", "targets" => ["sunday"]}
+    })
+
+    view
+    |> element("#copy-interval-review-hours")
+    |> render_click()
+
+    assert has_element?(view, "#interval-review-day-sunday", "Sin disponibilidad")
+    refute has_element?(view, "#interval-review-day-sunday select")
+    assert persisted_weekly_availability(professional.id) == persisted_before
+  end
+
   test "gives repeated weekday review selectors unambiguous accessible names", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
     open_interval_review(view, "30")

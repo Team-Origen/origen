@@ -41,6 +41,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
          type_form_errors: %{},
          reactivation_feedback: nil,
           interval_review: nil,
+          interval_review_copy_source: nil,
+          interval_review_copy_targets: [],
           interval_modal_open: false,
           interval_modal_step: :warning,
           availability_editing: false,
@@ -76,6 +78,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             selected_interval: selected_interval,
              interval_feedback: nil,
              interval_review: nil,
+             interval_review_copy_source: nil,
+             interval_review_copy_targets: [],
              interval_modal_open: false,
              interval_modal_step: :warning,
              reactivation_feedback: nil
@@ -133,7 +137,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
          interval_feedback: nil,
          interval_modal_open: true,
          interval_modal_step: :warning,
-         interval_review: nil
+         interval_review: nil,
+         interval_review_copy_source: nil,
+         interval_review_copy_targets: []
        )}
     end
   end
@@ -162,8 +168,19 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     do: handle_event("cancel_interval_change", params, socket)
 
   @impl true
-  def handle_event("change_interval_review", %{"interval_review" => params}, socket) do
-    {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+  def handle_event("change_interval_review", %{"interval_review" => params} = all_params, socket)
+      when is_map(params) do
+    case Map.fetch(all_params, "interval_review_copy") do
+      :error ->
+        {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+
+      {:ok, copy_params} when is_map(copy_params) ->
+        socket = update_interval_review_copy(socket, copy_params)
+        {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+
+      _malformed ->
+        {:noreply, socket}
+    end
   end
 
   @impl true
@@ -195,6 +212,25 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   end
 
   @impl true
+  def handle_event("copy_interval_review_hours", _params, socket) do
+    with source when not is_nil(source) <- socket.assigns.interval_review_copy_source,
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      source_windows = Map.fetch!(availability.weekly_availability, source)
+
+      week =
+        Enum.reduce(
+          socket.assigns.interval_review_copy_targets,
+          availability.weekly_availability,
+          &Map.put(&2, &1, source_windows)
+        )
+
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
   def handle_event("confirm_interval_review", %{"interval_review" => params}, socket) do
     reviewed_availability = interval_review_attributes(params, socket)
 
@@ -218,6 +254,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
          |> assign(
            interval_feedback: :applied,
            interval_review: nil,
+           interval_review_copy_source: nil,
+           interval_review_copy_targets: [],
            interval_modal_open: false,
            interval_modal_step: :warning,
            reactivation_feedback: nil,
@@ -885,6 +923,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               :if={@interval_review}
               review={@interval_review}
               proposed_interval={@selected_interval}
+              copy_source={@interval_review_copy_source}
+              copy_targets={@interval_review_copy_targets}
             />
             <div class="flex justify-start">
               <.button
@@ -918,6 +958,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   attr :review, :map, required: true
   attr :proposed_interval, :integer, required: true
+  attr :copy_source, :atom, default: nil
+  attr :copy_targets, :list, default: []
 
   defp interval_review(assigns) do
     overlap_indexes =
@@ -984,6 +1026,60 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       <form id="interval-review-form" phx-change="change_interval_review" phx-submit="confirm_interval_review" class="mt-6 space-y-5">
         <input type="hidden" name="interval_review[booking_horizon_days]" value={@review.reviewed_availability.booking_horizon_days} />
         <input type="hidden" name="interval_review[minimum_lead_minutes]" value={@review.reviewed_availability.minimum_lead_minutes} />
+        <fieldset id="interval-review-copy-action" class="rounded-lg border border-border p-4 dark:border-gray-700">
+          <legend class="px-1 font-semibold">Copiar horarios revisados</legend>
+          <p class="mt-1 text-sm text-text-muted dark:text-gray-300">
+            Elija un día de origen y uno o más destinos. La copia es temporal hasta la confirmación final.
+          </p>
+          <div class="mt-3 grid gap-4 lg:grid-cols-2">
+            <div>
+              <label for="interval-review-copy-source" class="text-sm font-medium">Día de origen</label>
+              <select
+                id="interval-review-copy-source"
+                name="interval_review_copy[source]"
+                class="pc-select mt-1"
+              >
+                <option value="" selected={is_nil(@copy_source)}>Seleccione un día</option>
+                <option
+                  :for={{day, label} <- @days}
+                  value={day}
+                  selected={day == @copy_source}
+                >
+                  {label}
+                </option>
+              </select>
+            </div>
+            <fieldset>
+              <legend class="text-sm font-medium">Días de destino</legend>
+              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                <label :for={{day, label} <- @days} class="flex items-center gap-2 text-sm">
+                  <input
+                    id={"interval-review-copy-#{day}"}
+                    type="checkbox"
+                    name="interval_review_copy[targets][]"
+                    value={day}
+                    checked={day in @copy_targets}
+                    disabled={day == @copy_source}
+                  />
+                  {label}
+                </label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="mt-4">
+            <.button
+              id="copy-interval-review-hours"
+              type="button"
+              color="secondary"
+              variant="outline"
+              size="sm"
+              phx-click="copy_interval_review_hours"
+              disabled={is_nil(@copy_source) or @copy_targets == []}
+            >
+              Copiar horarios revisados
+            </.button>
+          </div>
+        </fieldset>
         <fieldset>
           <legend class="font-semibold">Disponibilidad semanal resultante</legend>
           <p class="mt-1 text-sm text-text-muted dark:text-gray-300">
@@ -1557,6 +1653,31 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       {day, _label} -> {:ok, day}
       nil -> :error
     end
+  end
+
+  defp update_interval_review_copy(socket, params) do
+    source =
+      case availability_day(Map.get(params, "source", "")) do
+        {:ok, day} -> day
+        :error -> nil
+      end
+
+    targets =
+      params
+      |> Map.get("targets", [])
+      |> List.wrap()
+      |> Enum.flat_map(fn day_name ->
+        case availability_day(day_name) do
+          {:ok, day} when day != source -> [day]
+          _invalid -> []
+        end
+      end)
+      |> Enum.uniq()
+
+    assign(socket,
+      interval_review_copy_source: source,
+      interval_review_copy_targets: targets
+    )
   end
 
   defp parse_review_index(value) do
