@@ -199,12 +199,14 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
     if map_size(local_errors) > 0 do
       {:noreply,
-       assign(socket,
+       socket
+       |> assign(
          editing: true,
          draft: draft,
          local_errors: local_errors,
          validation_errors: nil
-       )}
+       )
+       |> notify_parent(true, draft_dirty?(draft, socket.assigns.configuration))}
     else
       save_valid_draft(socket, draft)
     end
@@ -217,7 +219,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
          ) do
       {:ok, configuration} ->
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(
            configuration: configuration,
            editing: false,
            draft: nil,

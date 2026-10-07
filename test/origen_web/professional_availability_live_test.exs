@@ -691,4 +691,63 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
       "minimum_lead_minutes" => "60"
     }
   end
+
+  defp insert_grid_configuration!(account_id, interval) do
+    week =
+      Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []})
+      |> Map.put("monday", [
+        %{"start" => "08:30", "end" => "12:00"},
+        %{"start" => "14:00", "end" => "18:00"}
+      ])
+      |> Map.put("tuesday", [%{"start" => "08:30", "end" => "12:00"}])
+
+    Origen.Repo.query!(
+      """
+      INSERT INTO agenda_settings (owner_account_id, interval_minutes, weekly_availability)
+      VALUES ($1, $2, $3)
+      """,
+      [account_id, interval, week]
+    )
+  end
+
+  defp grid_availability_params(monday_start, tuesday_start) do
+    window_params = fn start_time ->
+      first_window = %{"_present" => "true", "end" => "12:00"}
+
+      if is_nil(start_time),
+        do: first_window,
+        else: Map.put(first_window, "start", start_time)
+    end
+
+    empty_days =
+      Map.new(~w(wednesday thursday friday saturday sunday), fn day ->
+        {day, %{"_present" => "true"}}
+      end)
+
+    %{
+      "weekly_availability" =>
+        empty_days
+        |> Map.put("monday", %{
+          "_present" => "true",
+          "0" => window_params.(monday_start),
+          "1" => %{
+            "_present" => "true",
+            "start" => "14:00",
+            "end" => "18:00"
+          }
+        })
+        |> Map.put("tuesday", %{
+          "_present" => "true",
+          "0" => window_params.(tuesday_start)
+        }),
+      "booking_horizon_days" => "30",
+      "minimum_lead_minutes" => "30"
+    }
+  end
+
+  defp format_test_time(minutes) do
+    hours = div(minutes, 60) |> Integer.to_string() |> String.pad_leading(2, "0")
+    remaining = rem(minutes, 60) |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{hours}:#{remaining}"
+  end
 end
