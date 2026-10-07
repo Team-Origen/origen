@@ -371,7 +371,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     ~H"""
     <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
-        <div id="professional-settings-content" class="flex flex-col gap-6 sm:gap-8">
+        <div
+          id="professional-settings-content"
+          class="flex flex-col gap-6 sm:gap-8"
+          inert={@interval_modal_open}
+        >
           <header
             id="professional-settings-header"
             class="flex items-start justify-between gap-4"
@@ -431,7 +435,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   <form
                     id="agenda-interval-form"
                     phx-change="select_interval"
-                    phx-submit="apply_interval"
                     class="flex flex-col gap-4 sm:max-w-xl"
                   >
                     <.field
@@ -445,17 +448,14 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       no_margin
                     />
                     <.alert
-                      :if={@selected_interval != @current_interval}
-                      id="interval-change-warning"
+                      :if={@interval_feedback == :availability_dirty}
+                      id="interval-availability-draft-warning"
                       color="warning"
                       variant="callout"
                       with_icon
                     >
-                      Las cantidades de intervalos no cambiarán. Las duraciones de los tipos activos sí se recalcularán. {change_example(
-                        @catalog,
-                        @current_interval,
-                        @selected_interval
-                      )}
+                      <strong>Hay cambios de disponibilidad sin guardar.</strong>
+                      Guarde o cancele ese borrador antes de cambiar el intervalo de la agenda.
                     </.alert>
 
                     <.alert
@@ -479,75 +479,25 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       El valor debe estar entre 5 y 240 minutos y ser divisible por 5.
                     </.alert>
 
-                    <.alert
-                      :if={@interval_review}
-                      id="interval-review-ready"
-                      color="info"
-                      variant="callout"
-                      with_icon
-                    >
-                      La revisión del cambio está lista. Todavía no se aplicó ningún cambio.
-                    </.alert>
-
-                    <.incompatible_alert
-                      :if={match?({:incompatible, _, _}, @interval_feedback)}
-                      feedback={@interval_feedback}
-                    />
                     <div>
                       <.button
-                        type="submit"
+                        :if={@selected_interval != @current_interval}
+                        id="open-interval-change-modal"
+                        type="button"
                         color="primary"
-                        disabled={@selected_interval == @current_interval}
+                        phx-click="open_interval_change"
                       >
-                        Aplicar intervalo
+                        Revisar cambios
+                      </.button>
+                      <.button
+                        :if={@selected_interval == @current_interval}
+                        type="button"
+                        color="primary"
+                        disabled
+                      >
+                        Revisar cambios
                       </.button>
                     </div>
-                  </form>
-
-                  <form
-                    :if={@interval_review}
-                    id="interval-review-form"
-                    phx-change="change_interval_review"
-                    phx-submit="confirm_interval_review"
-                    class="space-y-4"
-                  >
-                    <input
-                      type="hidden"
-                      name="interval_review[booking_horizon_days]"
-                      value={@interval_review.reviewed_availability.booking_horizon_days}
-                    />
-                    <input
-                      type="hidden"
-                      name="interval_review[minimum_lead_minutes]"
-                      value={@interval_review.reviewed_availability.minimum_lead_minutes}
-                    />
-                    <fieldset :for={{day, label} <- @availability_days}>
-                      <legend>{label}</legend>
-                      <input
-                        type="hidden"
-                        name={"interval_review[weekly_availability][#{day}][_present]"}
-                        value="true"
-                      />
-                      <div :for={
-                        {window, index} <-
-                          Enum.with_index(
-                            Map.fetch!(
-                              @interval_review.reviewed_availability.weekly_availability,
-                              day
-                            )
-                          )
-                      }>
-                        <select name={"interval_review[weekly_availability][#{day}][#{index}][start]"}>
-                          <option value={window.start} selected>{window.start}</option>
-                        </select>
-                        <select name={"interval_review[weekly_availability][#{day}][#{index}][end]"}>
-                          <option value={window.end} selected>{window.end}</option>
-                        </select>
-                      </div>
-                    </fieldset>
-                    <.button id="confirm-interval-change" type="submit" color="primary">
-                      Confirmar cambio
-                    </.button>
                   </form>
                 </.card_content>
               </.card>
@@ -859,23 +809,104 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             </:footer>
           </.modal>
         </div>
+
+        <.modal
+          :if={@interval_modal_open}
+          id="agenda-interval-change-modal"
+          title="Cambiar el intervalo de la agenda"
+          max_width="2xl"
+          on_cancel={JS.push("cancel_interval_change")}
+          close_on_escape
+          close_on_click_away
+        >
+          <div :if={@interval_modal_step == :warning} id="interval-modal-warning" class="space-y-5">
+            <.alert color="warning" variant="callout" with_icon>
+              Este cambio afecta las duraciones de los tipos de consulta y la disponibilidad semanal. Nada cambiará antes de la confirmación final.
+            </.alert>
+            <p class="text-sm text-text-muted dark:text-gray-300">
+              Las cantidades de intervalos no cambiarán. Las duraciones de los tipos activos sí se recalcularán. {change_example(
+                @catalog,
+                @current_interval,
+                @selected_interval
+              )}
+            </p>
+            <div class="flex flex-wrap justify-end gap-3">
+              <.button
+                type="button"
+                color="gray"
+                variant="outline"
+                phx-click="cancel_interval_change"
+              >
+                Cancelar
+              </.button>
+              <.button type="button" color="primary" phx-click="review_agenda_interval">
+                Revisar cambios
+              </.button>
+            </div>
+          </div>
+
+          <div :if={@interval_modal_step == :review} class="space-y-5">
+            <section :if={@interval_review} id="agenda-interval-review" class="space-y-4">
+              <.h3 no_margin>Revisión del cambio de intervalo</.h3>
+              <p class="text-sm text-text-muted dark:text-gray-300">
+                Revise el resultado completo antes de confirmar. Todavía no se aplicó ningún cambio.
+              </p>
+              <form
+                id="interval-review-form"
+                phx-change="change_interval_review"
+                phx-submit="confirm_interval_review"
+                class="space-y-4"
+              >
+                <input
+                  type="hidden"
+                  name="interval_review[booking_horizon_days]"
+                  value={@interval_review.reviewed_availability.booking_horizon_days}
+                />
+                <input
+                  type="hidden"
+                  name="interval_review[minimum_lead_minutes]"
+                  value={@interval_review.reviewed_availability.minimum_lead_minutes}
+                />
+                <fieldset :for={{day, label} <- @availability_days}>
+                  <legend>{label}</legend>
+                  <input
+                    type="hidden"
+                    name={"interval_review[weekly_availability][#{day}][_present]"}
+                    value="true"
+                  />
+                  <div :for={
+                    {window, index} <-
+                      Enum.with_index(
+                        Map.fetch!(@interval_review.reviewed_availability.weekly_availability, day)
+                      )
+                  }>
+                    <select name={"interval_review[weekly_availability][#{day}][#{index}][start]"}>
+                      <option value={window.start} selected>{window.start}</option>
+                    </select>
+                    <select name={"interval_review[weekly_availability][#{day}][#{index}][end]"}>
+                      <option value={window.end} selected>{window.end}</option>
+                    </select>
+                  </div>
+                </fieldset>
+                <div class="flex justify-between gap-3">
+                  <.button
+                    type="button"
+                    color="gray"
+                    variant="outline"
+                    phx-click="cancel_interval_change"
+                  >
+                    Cancelar
+                  </.button>
+                  <.button id="confirm-interval-change" type="submit" color="primary">
+                    Confirmar cambio
+                  </.button>
+                </div>
+              </form>
+            </section>
+          </div>
+        </.modal>
       </.container>
     </main>
-    """
-  end
-
-  attr :feedback, :any, required: true
-
-  defp incompatible_alert(%{feedback: {:incompatible, maximum, types}} = assigns) do
-    assigns =
-      assign(assigns, maximum: maximum, names: Enum.map_join(types, ", ", & &1.name))
-
-    ~H"""
-    <.alert id="interval-apply-error" color="danger" variant="callout" with_icon>
-      <strong>No se aplicó el intervalo.</strong>
-      Esta selección admite un máximo de {@maximum} intervalos; los tipos activos incompatibles son: {@names}.
-      No se modificó ninguna cantidad.
-    </.alert>
     """
   end
 

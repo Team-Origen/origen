@@ -218,17 +218,17 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
     |> render_change()
 
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
-    assert has_element?(view, "#interval-change-warning[role=alert]")
+    assert has_element?(view, "#open-interval-change-modal", "Revisar cambios")
+    refute has_element?(view, "#agenda-interval-change-modal")
 
-    assert has_element?(
-             view,
-             "#interval-change-warning",
-             "Las cantidades de intervalos no cambiarán"
-           )
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
 
-    assert has_element?(view, "#interval-change-warning", "Consulta general")
-    assert has_element?(view, "#interval-change-warning", "30 a 60 minutos")
-    refute has_element?(view, "#interval-change-warning", "TC-001")
+    assert has_element?(view, "#agenda-interval-change-modal", "Nada cambiará antes")
+    assert has_element?(view, "#agenda-interval-change-modal", "Consulta general")
+    assert has_element?(view, "#agenda-interval-change-modal", "30 a 60 minutos")
+    refute has_element?(view, "#agenda-interval-change-modal", "TC-001")
 
     assert has_element?(
              view,
@@ -237,15 +237,27 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
            )
   end
 
-  test "a compatible interval request prepares a read-only review", %{conn: conn} do
+  test "a compatible interval request is reviewed and confirmed in the modal", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 
     view
     |> form("#agenda-interval-form", interval_minutes: "30")
-    |> render_submit()
+    |> render_change()
+
+    view
+    |> element("#open-interval-change-modal")
+    |> render_click()
+
+    assert has_element?(view, "#professional-settings-content[inert]")
+    assert has_element?(view, "#interval-modal-warning")
+
+    view
+    |> element("#agenda-interval-change-modal button", "Revisar cambios")
+    |> render_click()
 
     assert has_element?(view, "#current-agenda-interval", "15 minutos")
-    assert has_element?(view, "#interval-review-ready", "Todavía no se aplicó ningún cambio")
+    assert has_element?(view, "#agenda-interval-review", "Todavía no se aplicó ningún cambio")
+    refute has_element?(view, "#professional-settings-content #interval-review-form")
     refute has_element?(view, "#interval-apply-success")
 
     view
@@ -254,7 +266,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
     assert has_element?(view, "#current-agenda-interval", "30 minutos")
     assert has_element?(view, "#interval-apply-success[role=status]")
-    refute has_element?(view, "#interval-review-form")
+    refute has_element?(view, "#agenda-interval-change-modal")
+    refute has_element?(view, "#professional-settings-content[inert]")
   end
 
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{
