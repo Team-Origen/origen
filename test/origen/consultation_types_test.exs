@@ -821,6 +821,38 @@ defmodule Origen.ConsultationTypesTest do
       assert {:ok, %{agenda_interval_minutes: 30, consultation_types: [^type]}} =
                ConsultationTypes.get_own_configuration(principal)
     end
+
+    test "returns availability boundaries and future appointment conflicts without mutation" do
+      principal = professional_principal!()
+      type = create_type!(principal, %{name: "Follow-up", interval_count: 2})
+
+      week =
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), fn day ->
+          {day, [%{"start" => "08:30", "end" => "12:00"}]}
+        end)
+
+      assert {:ok, availability_before} =
+               Availability.replace_own_configuration(principal, %{
+                 weekly_availability: week,
+                 booking_horizon_days: 30,
+                 minimum_lead_minutes: 30
+               })
+
+      appointment = insert_future_appointment!(principal.account_id, type.id)
+
+      assert {:ok, preview} = ConsultationTypes.preview_agenda_interval(principal, 60)
+
+      assert %{day: :monday, boundary: :start, time: "08:30"} in preview.incompatible_availability_boundaries
+
+      assert [%{appointment_id: appointment_id, date: appointment_date}] =
+               preview.future_appointment_conflicts
+
+      assert appointment_id == appointment.id
+      assert appointment_date == appointment.date
+      assert preview.reviewed_availability == availability_before
+
+      assert {:ok, ^availability_before} = Availability.get_own_configuration(principal)
+    end
   end
 
   defp professional_principal! do
@@ -858,6 +890,33 @@ defmodule Origen.ConsultationTypesTest do
       """,
       [account_id, interval_minutes]
     )
+  end
+
+  defp insert_future_appointment!(professional_id, consultation_type_id) do
+    [[patient_id]] =
+      Repo.query!(
+        "INSERT INTO patient_profiles (email) VALUES ($1) RETURNING id",
+        ["interval-preview-#{System.unique_integer([:positive])}@example.test"]
+      ).rows
+
+    date = Date.utc_today() |> Date.add(7)
+    start_time = DateTime.new!(date, ~T[13:00:00], "Etc/UTC")
+    end_time = DateTime.add(start_time, 60, :minute)
+
+    [[id]] =
+      Repo.query!(
+        """
+        INSERT INTO appointments
+          (patient_profile_id, professional_account_id, consultation_type_id,
+           start_time, end_time, status, snapshot_consultation_type_name,
+           snapshot_duration_minutes, snapshot_exact_price_ars)
+        VALUES ($1, $2, $3, $4, $5, 'reserved', 'Follow-up', 60, 18000.00)
+        RETURNING id
+        """,
+        [patient_id, professional_id, Ecto.UUID.dump!(consultation_type_id), start_time, end_time]
+      ).rows
+
+    %{id: id, date: date}
   end
 
   defp insert_consultation_type!(account_id, attrs) do

@@ -6,6 +6,7 @@ defmodule Origen.ConsultationTypes do
   server-created internal session principal; ownership is always resolved again from persistence.
   """
 
+  alias Origen.Availability
   alias Origen.Repo
 
   @default_interval_minutes 30
@@ -214,12 +215,14 @@ defmodule Origen.ConsultationTypes do
           {:ok, interval_minutes} ->
             settings = agenda_settings_snapshot!(owner_account_id)
             active_types = active_types_snapshot!(owner_account_id)
+            appointments = future_appointments_snapshot!(owner_account_id)
             availability = reviewed_availability || settings_to_availability(settings)
 
             build_interval_preview(
               owner_account_id,
               settings,
               active_types,
+              appointments,
               interval_minutes,
               availability
             )
@@ -392,6 +395,29 @@ defmodule Origen.ConsultationTypes do
     end)
   end
 
+  defp future_appointments_snapshot!(owner_account_id) do
+    Repo.query!(
+      """
+      SELECT id, start_time, end_time, status, updated_at
+      FROM appointments
+      WHERE professional_account_id = $1
+        AND start_time >= clock_timestamp()
+        AND status IN ('requested', 'reserved', 'confirmed')
+      ORDER BY start_time, id
+      """,
+      [owner_account_id]
+    ).rows
+    |> Enum.map(fn [id, start_time, end_time, status, updated_at] ->
+      %{
+        id: id,
+        start_time: start_time,
+        end_time: end_time,
+        status: status,
+        updated_at: updated_at
+      }
+    end)
+  end
+
   defp select_agenda_settings_snapshot(owner_account_id, lock_clause \\ "") do
     Repo.query!(
       """
@@ -430,9 +456,13 @@ defmodule Origen.ConsultationTypes do
          owner_account_id,
          settings,
          active_types,
+         appointments,
          proposed_interval,
          availability
        ) do
+    availability_attrs = availability_attributes(availability)
+    validation = Availability.validate_configuration(availability_attrs, proposed_interval)
+
     %{
       current_interval_minutes: settings.interval_minutes,
       proposed_interval_minutes: proposed_interval,
@@ -441,11 +471,21 @@ defmodule Origen.ConsultationTypes do
           active_types,
           &consultation_type_effect(&1, settings.interval_minutes, proposed_interval)
         ),
-      incompatible_availability_boundaries: [],
-      future_appointment_conflicts: [],
-      availability_validation_errors: %{},
-      reviewed_availability: availability,
-      stale_token: interval_state_token(owner_account_id, settings, active_types)
+      incompatible_availability_boundaries:
+        structured_availability_blockers(
+          availability_attrs.weekly_availability,
+          proposed_interval
+        ),
+      future_appointment_conflicts:
+        future_appointment_conflicts(
+          appointments,
+          availability_attrs.weekly_availability,
+          Application.fetch_env!(:origen, :organization_timezone)
+        ),
+      availability_validation_errors: validation_errors(validation),
+      reviewed_availability:
+        availability_for_preview(availability_attrs, settings.interval_minutes),
+      stale_token: interval_state_token(owner_account_id, settings, active_types, appointments)
     }
   end
 
@@ -462,21 +502,147 @@ defmodule Origen.ConsultationTypes do
     }
   end
 
-  defp settings_to_availability(settings) do
+  defp availability_attributes(availability) do
     %{
-      weekly_availability: settings.weekly_availability,
-      booking_horizon_days: settings.booking_horizon_days,
-      minimum_lead_minutes: settings.minimum_lead_minutes,
-      agenda_interval_minutes: settings.interval_minutes,
+      weekly_availability: fetch_attr(availability, :weekly_availability),
+      booking_horizon_days: fetch_attr(availability, :booking_horizon_days),
+      minimum_lead_minutes: fetch_attr(availability, :minimum_lead_minutes)
+    }
+  end
+
+  defp availability_for_preview(attrs, interval_minutes) do
+    %{
+      weekly_availability:
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday)a, fn day ->
+          windows =
+            Map.get(
+              attrs.weekly_availability,
+              day,
+              Map.get(attrs.weekly_availability, Atom.to_string(day), [])
+            )
+
+          {day,
+           Enum.map(windows, fn window ->
+             %{start: fetch_attr(window, :start), end: fetch_attr(window, :end)}
+           end)}
+        end),
+      booking_horizon_days: attrs.booking_horizon_days,
+      minimum_lead_minutes: attrs.minimum_lead_minutes,
+      agenda_interval_minutes: interval_minutes,
       timezone: Application.fetch_env!(:origen, :organization_timezone)
     }
   end
 
-  defp interval_state_token(owner_account_id, settings, active_types) do
+  defp settings_to_availability(settings) do
+    availability_for_preview(
+      %{
+        weekly_availability: settings.weekly_availability,
+        booking_horizon_days: settings.booking_horizon_days,
+        minimum_lead_minutes: settings.minimum_lead_minutes
+      },
+      settings.interval_minutes
+    )
+  end
+
+  defp structured_availability_blockers(week, interval_minutes) when is_map(week) do
+    ~w(monday tuesday wednesday thursday friday saturday sunday)a
+    |> Enum.flat_map(fn day ->
+      week
+      |> Map.get(day, Map.get(week, Atom.to_string(day), []))
+      |> Enum.flat_map(fn window ->
+        [:start, :end]
+        |> Enum.flat_map(fn boundary ->
+          time = fetch_attr(window, boundary)
+
+          case safe_time_to_minutes(time) do
+            {:ok, minutes} when rem(minutes, interval_minutes) != 0 ->
+              [%{day: day, boundary: boundary, time: time}]
+
+            _aligned_or_invalid ->
+              []
+          end
+        end)
+      end)
+    end)
+  end
+
+  defp structured_availability_blockers(_week, _interval_minutes), do: []
+
+  defp future_appointment_conflicts(appointments, week, timezone) do
+    Enum.flat_map(appointments, fn appointment ->
+      start_time = DateTime.shift_zone!(appointment.start_time, timezone)
+      end_time = DateTime.shift_zone!(appointment.end_time, timezone)
+
+      if appointment_fits_week?(start_time, end_time, week) do
+        []
+      else
+        [
+          %{
+            appointment_id: appointment.id,
+            date: DateTime.to_date(start_time),
+            start_time: Calendar.strftime(start_time, "%H:%M"),
+            end_time: Calendar.strftime(end_time, "%H:%M")
+          }
+        ]
+      end
+    end)
+  end
+
+  defp appointment_fits_week?(start_time, end_time, week) do
+    start_date = DateTime.to_date(start_time)
+    end_date = DateTime.to_date(end_time)
+
+    ends_at_next_midnight? =
+      Date.diff(end_date, start_date) == 1 and end_time.hour == 0 and end_time.minute == 0
+
+    if start_date == end_date or ends_at_next_midnight? do
+      day = start_date |> Date.day_of_week() |> weekday_atom()
+      start_minutes = start_time.hour * 60 + start_time.minute
+
+      end_minutes =
+        if ends_at_next_midnight?, do: 24 * 60, else: end_time.hour * 60 + end_time.minute
+
+      week
+      |> Map.get(day, Map.get(week, Atom.to_string(day), []))
+      |> Enum.any?(fn window ->
+        with {:ok, window_start} <- safe_time_to_minutes(fetch_attr(window, :start)),
+             {:ok, window_end} <- safe_time_to_minutes(fetch_attr(window, :end)) do
+          window_start <= start_minutes and end_minutes <= window_end
+        else
+          _invalid -> false
+        end
+      end)
+    else
+      false
+    end
+  end
+
+  defp weekday_atom(1), do: :monday
+  defp weekday_atom(2), do: :tuesday
+  defp weekday_atom(3), do: :wednesday
+  defp weekday_atom(4), do: :thursday
+  defp weekday_atom(5), do: :friday
+  defp weekday_atom(6), do: :saturday
+  defp weekday_atom(7), do: :sunday
+
+  defp safe_time_to_minutes(value) when is_binary(value) do
+    case Regex.run(~r/\A(?:[01]\d|2[0-3]):[0-5]\d\z|\A24:00\z/, value) do
+      nil -> :error
+      _match -> {:ok, time_to_minutes(value)}
+    end
+  end
+
+  defp safe_time_to_minutes(_value), do: :error
+
+  defp validation_errors({:ok, _configuration}), do: %{}
+  defp validation_errors({:error, errors}), do: errors
+
+  defp interval_state_token(owner_account_id, settings, active_types, appointments) do
     snapshot = %{
       owner_account_id: owner_account_id,
       settings: settings,
-      active_types: active_types
+      active_types: active_types,
+      appointments: appointments
     }
 
     :sha256
