@@ -106,6 +106,7 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] ODD-78-23 — Add a keyboard-operable interval-review copy action that copies a source day's complete draft windows to selected destination days without early persistence.
 - [x] ODD-78-24 — Reject malformed or incomplete interval-review change payloads without crashing the LiveView or mutating the current review draft.
 - [x] ODD-78-25 — Render the Professional settings route inside an explicit light-theme boundary so its page, surfaces, controls, and modal remain legible when the global preference is dark.
+- [ ] ODD-78-26 — Replace the non-autonomous draft PR chain with complete CI-valid work units, correct Issue-link metadata, and make the final Issue #78 tree pass the repository formatter and Dialyzer gates.
 
 ## Acceptance criteria
 
@@ -146,6 +147,7 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - Copying reviewed hours requires an explicit source and at least one explicit destination, replaces only the selected destination drafts, preserves every other reviewed day and blocker, and does not persist before final confirmation.
 - Malformed or incomplete interval-review change payloads leave the current review draft unchanged and do not terminate the LiveView process.
 - The Professional settings route uses the established light page, surface, text, border, and action palette even when the document-level theme is dark; other routes retain their existing theme behavior.
+- Every replacement child PR is syntactically complete and passes the repository's applicable format, compile, static-analysis, and focused test gates against its immediate parent; superseded draft PRs remain traceable but are not merged.
 
 ## Applicable checks
 
@@ -172,6 +174,7 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - Focused LiveView RED/GREEN coverage for source/destination copy semantics, keyboard-operable controls, no early persistence, and preservation of unselected days.
 - Focused LiveView RED/GREEN coverage for missing or malformed interval-review and copy payloads without process termination or draft mutation.
 - Focused rendered coverage for the explicit light-theme boundary and established semantic page/text tokens, plus an asset build proving the nested light boundary compiles.
+- Per-branch CI-equivalent checks for every replacement child, including full formatting, warnings-as-errors compilation, Sobelow, Dialyzer, focused tests, and issue-link validation before publication.
 
 ## Progress and verification evidence
 
@@ -305,6 +308,11 @@ Issue #78 completes the Professional configuration flow defined by Issue #76 and
 - [x] Parent structural readback confirmed the explicit light root and compiled nested-boundary selector; the parent `mix assets.build` spot-check passed. Phoenix restarted with rebuilt assets at `127.0.0.1:4000`: `/login` and `/dev/professional-availability` returned HTTP 200, while anonymous `/configuracion/profesional` returned the expected HTTP 401.
 - [ ] ODD-78-25 authenticated dark-preference browser verification remains for the parent after restarting Phoenix so the rebuilt CSS and updated LiveView are loaded. Verify that `/configuracion/profesional`, including its modal and Petal controls, remains light while another route still follows the document dark theme.
 - [x] Final integration regression against Issues #70–72 passed without modifying their artifacts: `mix test test/origen/integration/` passed 24/24 (seed 751334), both reproducible journey scripts completed successfully, `mix compile --warnings-as-errors` passed, and `git diff --check` remained clean.
+- [x] ODD-78-26 final-tree RED was reproduced locally: `mix format --check-formatted` rejected `lib/origen_web/live/consultation_type_catalog_live.ex`, and `mix dialyzer --format short` exited 2 with `lib/origen/consultation_types.ex:808:41:call_without_opaque` at `Writer.append(event, @audit_decision)`.
+- [x] ODD-78-26 final-tree corrections are GREEN: the repository formatter normalized the complete reported catalog LiveView source, and the precise `Events.agenda_interval_changed/2` constructor spec now exposes `Origen.Audit.Events.t()` without changing runtime behavior or adding a Dialyzer ignore.
+- [x] ODD-78-26 final-tree static gates passed: `mix format --check-formatted`, `mix compile --warnings-as-errors`, `mix sobelow --skip --threshold medium --exit`, and `mix dialyzer --format short`. Sobelow exited successfully while still reporting the existing ignored local-only database passwords in `config/dev.local.exs` and `config/test.local.exs`; neither file is part of the tracked candidate.
+- [x] ODD-78-26 final-tree regression checks passed: the combined consultation-type, availability, catalog LiveView, Professional availability LiveView, booking-calendar, and integration command passed 159/159 (seed 111720); `mix test` passed 678/678 with 29 skipped and 8 PostgreSQL-security tests excluded (seed 252348); `mix assets.build` passed with Tailwind v4.3.0 and esbuild; and `git diff --check` passed with no output.
+- [ ] ODD-78-26 remains open because replacement-chain construction and per-child autonomy have not been completed; this correction records final-tree evidence only.
 
 ## Pending WSL manual checklist
 
@@ -321,4 +329,4 @@ ODD-78-05 remains pending. When WSL browser authorization is available in a futu
 
 ## Next step
 
-Complete the pending ODD-78-05 authenticated browser verification. ODD-78-22 through ODD-78-25 are implemented and committed locally; keep push, pull request, and GitHub mutation as separate decisions.
+Construct and verify the autonomous replacement chain for ODD-78-26, then complete the pending ODD-78-05 authenticated browser verification. Keep merges as a separate decision.
