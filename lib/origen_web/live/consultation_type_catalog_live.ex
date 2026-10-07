@@ -215,29 +215,37 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         {:noreply,
          socket
          |> assign_configuration(configuration)
-         |> assign(interval_feedback: :applied, reactivation_feedback: nil)}
-
-      {:error, {:validation, _errors}} ->
-        {:noreply, assign(socket, interval_feedback: :invalid)}
-
-      {:error, {:incompatible, %{maximum_interval_count: maximum, blockers: incompatible_types}}} ->
-        {:noreply,
-         assign(socket,
-           selected_interval:
-             parsed_interval_or_current(interval, socket.assigns.current_interval),
-           interval_feedback: {:incompatible, maximum, incompatible_types}
+         |> assign(
+           interval_feedback: :applied,
+           interval_review: nil,
+           interval_modal_open: false,
+           interval_modal_step: :warning,
+           reactivation_feedback: nil,
+           availability_editing: false,
+           availability_dirty: false
          )}
 
-      {:error, reason} when reason in [:unauthorized, :unavailable] ->
-        {:noreply, assign(socket, catalog_error: :unavailable)}
+      {:error, :stale} ->
+        {:noreply, assign(socket, interval_feedback: :stale)}
 
-      _unexpected ->
-        {:noreply, assign(socket, catalog_error: :unavailable)}
+      {:error, {:validation, errors}} ->
+        review = Map.put(socket.assigns.interval_review, :availability_validation_errors, errors)
+        {:noreply, assign(socket, interval_feedback: :validation, interval_review: review)}
+
+      {:error, {:future_appointment_conflicts, conflicts}} ->
+        review = Map.put(socket.assigns.interval_review, :future_appointment_conflicts, conflicts)
+        {:noreply, assign(socket, interval_feedback: :future_conflicts, interval_review: review)}
+
+      {:error, {:incompatible, _evidence}} ->
+        {:noreply, assign(socket, interval_feedback: :incompatible_review)}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
     end
   end
 
-  def handle_event("apply_interval", _params, socket) do
-    {:noreply, assign(socket, interval_feedback: :invalid)}
+  def handle_event("confirm_interval_review", _params, socket) do
+    {:noreply, assign(socket, interval_feedback: :validation)}
   end
 
   @impl true
@@ -344,13 +352,32 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   def handle_event("reactivate_type", _params, socket), do: {:noreply, socket}
 
   @impl true
+  def handle_info({:availability_editor_state, state}, socket) do
+    interval_feedback =
+      if not state.dirty and socket.assigns.interval_feedback == :availability_dirty,
+        do: nil,
+        else: socket.assigns.interval_feedback
+
+    {:noreply,
+     assign(socket,
+       availability_editing: state.editing,
+       availability_dirty: state.dirty,
+       interval_feedback: interval_feedback
+     )}
+  end
+
+  @impl true
   def render(assigns) do
     assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
     <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
-        <div id="professional-settings-content" class="flex flex-col gap-6 sm:gap-8">
+        <div
+          id="professional-settings-content"
+          class="flex flex-col gap-6 sm:gap-8"
+          inert={@interval_modal_open}
+        >
           <header
             id="professional-settings-header"
             class="flex items-start justify-between gap-4"
@@ -410,7 +437,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   <form
                     id="agenda-interval-form"
                     phx-change="select_interval"
-                    phx-submit="apply_interval"
                     class="flex flex-col gap-4 sm:max-w-xl"
                   >
                     <.field
@@ -424,17 +450,14 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       no_margin
                     />
                     <.alert
-                      :if={@selected_interval != @current_interval}
-                      id="interval-change-warning"
+                      :if={@interval_feedback == :availability_dirty}
+                      id="interval-availability-draft-warning"
                       color="warning"
                       variant="callout"
                       with_icon
                     >
-                      Las cantidades de intervalos no cambiarán. Las duraciones de los tipos activos sí se recalcularán. {change_example(
-                        @catalog,
-                        @current_interval,
-                        @selected_interval
-                      )}
+                      <strong>Hay cambios de disponibilidad sin guardar.</strong>
+                      Guarde o cancele ese borrador antes de cambiar el intervalo de la agenda.
                     </.alert>
 
                     <.alert
@@ -458,17 +481,23 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       El valor debe estar entre 5 y 240 minutos y ser divisible por 5.
                     </.alert>
 
-                    <.incompatible_alert
-                      :if={match?({:incompatible, _, _}, @interval_feedback)}
-                      feedback={@interval_feedback}
-                    />
                     <div>
                       <.button
-                        type="submit"
+                        :if={@selected_interval != @current_interval}
+                        id="open-interval-change-modal"
+                        type="button"
                         color="primary"
-                        disabled={@selected_interval == @current_interval}
+                        phx-click="open_interval_change"
                       >
-                        Aplicar intervalo
+                        Revisar cambios
+                      </.button>
+                      <.button
+                        :if={@selected_interval == @current_interval}
+                        type="button"
+                        color="primary"
+                        disabled
+                      >
+                        Revisar cambios
                       </.button>
                     </div>
                   </form>
@@ -782,6 +811,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             </:footer>
           </.modal>
         </div>
+
+        <.modal
       </.container>
     </main>
     """

@@ -202,6 +202,48 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(
              view,
              ~s(#{monday_start} option[value="08:30"][disabled][selected]),
+             "08:30 — incompatible con 40 minutos"
+           )
+
+    expected_grid = Enum.map(0..1439//40, &format_test_time/1)
+    start_options = rendered_option_states(view, "#{monday_start} option")
+    end_options = rendered_option_states(view, "#{monday_end} option")
+
+    assert Enum.map(Enum.reject(start_options, & &1.disabled), & &1.value) == expected_grid
+
+    assert Enum.map(Enum.reject(end_options, & &1.disabled), & &1.value) ==
+             expected_grid ++ ["24:00"]
+
+    refute Enum.any?(start_options, &(&1.value == "24:00"))
+    assert Enum.any?(end_options, &(&1.value == "24:00" and not &1.disabled))
+    assert has_element?(view, "#availability-save-button[disabled]")
+
+    view
+    |> element("#availability-form")
+    |> render_change(%{
+      "availability" => grid_availability_params("08:00", nil),
+      "copy" => %{"source" => "monday", "targets" => []}
+    })
+
+    refute has_element?(view, ~s(#{monday_start}[aria-invalid="true"]))
+    assert has_element?(view, ~s(#{tuesday_start}[aria-invalid="true"]))
+
+    assert has_element?(
+             view,
+             ~s(#{tuesday_start} option[value="08:30"][disabled][selected])
+           )
+
+    assert has_element?(view, "#availability-save-button[disabled]")
+
+    view
+    |> element("#availability-form")
+    |> render_change(%{
+      "availability" => grid_availability_params("08:00", "08:00"),
+      "copy" => %{"source" => "monday", "targets" => []}
+    })
+
+    refute has_element?(view, ~s(#{tuesday_start}[aria-invalid="true"]))
+    assert has_element?(view, "#availability-save-button:not([disabled])")
   end
 
   test "uses the Origen palette and keeps the atomic editor in one visual section", %{conn: conn} do
@@ -237,7 +279,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
            )
   end
 
-  test "blocks an off-interval typed boundary and recovers when the field is corrected", %{
+  test "blocks an off-interval submitted boundary and recovers when the field is corrected", %{
     conn: conn
   } do
     Application.put_env(:origen, :availability_context, TrackingAvailability)
@@ -251,8 +293,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
       put_in(replacement_params(), ["weekly_availability", "monday", "0", "start"], "08:10")
 
     view
-    |> form("#availability-form", availability: invalid)
-    |> render_change()
+    |> element("#availability-form")
+    |> render_change(%{"availability" => invalid})
 
     assert has_element?(
              view,
@@ -262,14 +304,14 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(
              view,
              "#availability-monday-0-start-error",
-             "Debe coincidir con intervalos de 30 minutos."
+             "Seleccione un horario compatible con el intervalo actual de 30 minutos."
            )
 
     assert has_element?(view, ~s(#availability-save-button[disabled]))
 
     view
-    |> form("#availability-form", availability: invalid)
-    |> render_submit()
+    |> element("#availability-form")
+    |> render_submit(%{"availability" => invalid})
 
     refute_received :replacement_called
     assert has_element?(view, "#availability-form")
@@ -277,8 +319,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     valid = put_in(invalid, ["weekly_availability", "monday", "0", "start"], "08:00")
 
     view
-    |> form("#availability-form", availability: valid)
-    |> render_change()
+    |> element("#availability-form")
+    |> render_change(%{"availability" => valid})
 
     refute has_element?(view, ~s(#availability-monday-0-start[aria-invalid="true"]))
     refute has_element?(view, "#availability-monday-0-start-error")
@@ -355,8 +397,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#availability-summary-monday", "08:00 a 12:00")
 
     open_editor(view)
-    assert has_element?(view, ~s(#availability-monday-0-start[value="08:00"]))
-    assert has_element?(view, ~s(#availability-monday-1-start[value="14:00"]))
+    assert has_element?(view, ~s(#availability-monday-0-start option[value="08:00"][selected]))
+    assert has_element?(view, ~s(#availability-monday-1-start option[value="14:00"][selected]))
   end
 
   test "saves one complete replacement and adopts backend-normalized touching windows", %{
@@ -418,7 +460,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
 
     assert has_element?(
              view,
-             ~s(#availability-monday-1-start[value="09:00"][aria-invalid="true"])
+             ~s(#availability-monday-1-start[aria-invalid="true"] option[value="09:00"][selected])
            )
 
     assert has_element?(view, ~s(#booking-horizon-days[value="6"][aria-invalid="true"]))
@@ -453,9 +495,9 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     |> element(~s(button[phx-click="copy_availability_day"]), "Copiar horarios")
     |> render_click()
 
-    assert has_element?(view, ~s(#availability-saturday-0-start[value="08:00"]))
-    assert has_element?(view, ~s(#availability-saturday-1-start[value="14:00"]))
-    assert has_element?(view, ~s(#availability-sunday-0-start[value="08:00"]))
+    assert has_element?(view, ~s(#availability-saturday-0-start option[value="08:00"][selected]))
+    assert has_element?(view, ~s(#availability-saturday-1-start option[value="14:00"][selected]))
+    assert has_element?(view, ~s(#availability-sunday-0-start option[value="08:00"][selected]))
     refute has_element?(view, ~s([name="availability[weekday_group]"]))
   end
 
@@ -551,7 +593,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
 
     assert has_element?(view, "#availability-form")
     assert has_element?(view, "#availability-save-error[role=alert]", "No se pudo guardar")
-    assert has_element?(view, ~s(#availability-monday-1-start[value="09:00"]))
+    assert has_element?(view, ~s(#availability-monday-1-start option[value="09:00"][selected]))
 
     view
     |> element(~s(button[phx-click="cancel_availability"]), "Cancelar")
@@ -591,6 +633,23 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     |> LazyHTML.query(selector)
     |> LazyHTML.to_tree()
     |> length()
+  end
+
+  defp rendered_option_states(view, selector) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.to_tree()
+    |> Enum.map(fn {"option", attributes, _children} ->
+      attributes = Map.new(attributes)
+
+      %{
+        value: Map.fetch!(attributes, "value"),
+        disabled: Map.has_key?(attributes, "disabled"),
+        selected: Map.has_key?(attributes, "selected")
+      }
+    end)
   end
 
   defp assert_day_carousel(view, name) do

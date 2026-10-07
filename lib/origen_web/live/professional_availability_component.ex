@@ -89,19 +89,21 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
      socket
      |> assign(
        editing: true,
-       draft: configuration_to_draft(socket.assigns.configuration),
-       local_errors: %{},
+       draft: draft,
+       local_errors: local_time_errors(draft, socket.assigns.configuration),
        copy_source: :monday,
        copy_targets: [],
        feedback: nil,
        validation_errors: nil
-     )}
+     )
+     |> notify_parent(true, false)}
   end
 
   @impl true
   def handle_event("cancel_availability", _params, socket) do
     {:noreply,
-     assign(socket,
+     socket
+     |> assign(
        editing: false,
        draft: nil,
        local_errors: %{},
@@ -109,7 +111,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
        copy_targets: [],
        feedback: nil,
        validation_errors: nil
-     )}
+     )
+     |> notify_parent(false, false)}
   end
 
   @impl true
@@ -150,16 +153,20 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   @impl true
   def handle_event("change_availability", %{"availability" => params} = all_params, socket) do
     {copy_source, copy_targets} = copy_selection(Map.get(all_params, "copy", %{}), socket)
+    draft = params_to_draft(params, socket.assigns.draft)
+
+    dirty = draft_dirty?(draft, socket.assigns.configuration)
 
     {:noreply,
-     assign(socket,
-       draft: params_to_draft(params),
-       local_errors:
-         params |> params_to_draft() |> local_time_errors(socket.assigns.configuration),
+     socket
+     |> assign(
+       draft: draft,
+       local_errors: local_time_errors(draft, socket.assigns.configuration),
        copy_source: copy_source,
        copy_targets: copy_targets,
        validation_errors: nil
-     )}
+     )
+     |> notify_parent(true, dirty)}
   end
 
   @impl true
@@ -173,21 +180,21 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
         Map.put(week, day, source_windows)
       end)
 
+    draft = %{socket.assigns.draft | weekly_availability: week}
+
     {:noreply,
-     assign(socket,
-       draft: %{socket.assigns.draft | weekly_availability: week},
-       local_errors:
-         local_time_errors(
-           %{socket.assigns.draft | weekly_availability: week},
-           socket.assigns.configuration
-         ),
+     socket
+     |> assign(
+       draft: draft,
+       local_errors: local_time_errors(draft, socket.assigns.configuration),
        validation_errors: nil
-     )}
+     )
+     |> notify_parent(true, draft_dirty?(draft, socket.assigns.configuration))}
   end
 
   @impl true
   def handle_event("save_availability", %{"availability" => params}, socket) do
-    draft = params_to_draft(params)
+    draft = params_to_draft(params, socket.assigns.draft)
     local_errors = local_time_errors(draft, socket.assigns.configuration)
 
     if map_size(local_errors) > 0 do
