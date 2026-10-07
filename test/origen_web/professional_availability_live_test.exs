@@ -247,6 +247,29 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#availability-save-button:not([disabled])")
   end
 
+  test "copies one day's complete draft windows to selected weekdays without persisting a group",
+       %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+    open_editor(view)
+
+    assert has_element?(view, "#availability-copy-action", "Copiar horarios")
+
+    view
+    |> form("#availability-form",
+      copy: %{"source" => "monday", "targets" => ["saturday", "sunday"]}
+    )
+    |> render_change()
+
+    view
+    |> element(~s(button[phx-click="copy_availability_day"]), "Copiar horarios")
+    |> render_click()
+
+    assert has_element?(view, ~s(#availability-saturday-0-start[value="08:00"]))
+    assert has_element?(view, ~s(#availability-saturday-1-start[value="14:00"]))
+    assert has_element?(view, ~s(#availability-sunday-0-start[value="08:00"]))
+    refute has_element?(view, ~s([name="availability[weekday_group]"]))
+  end
+
   defp open_editor(view) do
     view
     |> element(~s(button[phx-click="edit_availability"]), "Editar disponibilidad")

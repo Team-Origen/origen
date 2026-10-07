@@ -65,6 +65,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
        editing: true,
        draft: draft,
        local_errors: local_time_errors(draft, socket.assigns.configuration),
+       copy_source: :monday,
+       copy_targets: [],
        feedback: nil,
        validation_errors: nil
      )}
@@ -77,6 +79,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
        editing: false,
        draft: nil,
        local_errors: %{},
+       copy_source: nil,
+       copy_targets: [],
        feedback: nil,
        validation_errors: nil
      )}
@@ -118,8 +122,32 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   end
 
   @impl true
-  def handle_event("change_availability", %{"availability" => params}, socket) do
+  def handle_event("change_availability", %{"availability" => params} = all_params, socket) do
+    {copy_source, copy_targets} = copy_selection(Map.get(all_params, "copy", %{}), socket)
     draft = params_to_draft(params, socket.assigns.draft)
+
+    {:noreply,
+     assign(socket,
+       draft: draft,
+       local_errors: local_time_errors(draft, socket.assigns.configuration),
+       copy_source: copy_source,
+       copy_targets: copy_targets,
+       validation_errors: nil
+     )}
+  end
+
+  @impl true
+  def handle_event("copy_availability_day", _params, socket) do
+    source_windows =
+      Map.fetch!(socket.assigns.draft.weekly_availability, socket.assigns.copy_source)
+
+    week =
+      Enum.reduce(socket.assigns.copy_targets, socket.assigns.draft.weekly_availability, fn day,
+                                                                                            week ->
+        Map.put(week, day, source_windows)
+      end)
+
+    draft = %{socket.assigns.draft | weekly_availability: week}
 
     {:noreply,
      assign(socket,
@@ -159,6 +187,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
            editing: false,
            draft: nil,
            local_errors: %{},
+           copy_source: nil,
+           copy_targets: [],
            feedback: :saved,
            validation_errors: nil
          )}
@@ -481,6 +511,66 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                     </fieldset>
                   </.day_carousel>
 
+                  <fieldset
+                    id="availability-copy-action"
+                    class="mt-6 rounded-lg border border-border bg-surface-muted p-4 dark:border-gray-700 dark:bg-gray-800"
+                  >
+                    <legend class="px-1 font-semibold">Copiar horarios</legend>
+                    <p class="mb-4 text-sm text-text-muted dark:text-gray-300">
+                      Copia todos los horarios de un día a los días seleccionados. Esta selección no se guarda como grupo.
+                    </p>
+                    <div class="grid gap-4 md:grid-cols-[minmax(12rem,16rem)_1fr]">
+                      <label class="font-medium" for="availability-copy-source">
+                        Día de origen
+                        <select
+                          id="availability-copy-source"
+                          class="pc-select mt-1"
+                          name="copy[source]"
+                        >
+                          <option
+                            :for={{day, label} <- @days}
+                            value={day}
+                            selected={day == @copy_source}
+                          >
+                            {label}
+                          </option>
+                        </select>
+                      </label>
+                      <fieldset>
+                        <legend class="font-medium">Días de destino</legend>
+                        <div class="mt-2 flex flex-wrap gap-x-5 gap-y-3">
+                          <label
+                            :for={{day, label} <- @days}
+                            :if={day != @copy_source}
+                            class="inline-flex items-center gap-2"
+                            for={"availability-copy-#{day}"}
+                          >
+                            <input
+                              id={"availability-copy-#{day}"}
+                              type="checkbox"
+                              name="copy[targets][]"
+                              value={day}
+                              checked={day in @copy_targets}
+                            />
+                            {label}
+                          </label>
+                        </div>
+                      </fieldset>
+                    </div>
+                    <div class="mt-4">
+                      <.button
+                        type="button"
+                        color="secondary"
+                        variant="outline"
+                        phx-click="copy_availability_day"
+                        phx-target={@myself}
+                        disabled={@copy_targets == []}
+                      >
+                        Copiar horarios
+                      </.button>
+                    </div>
+                  </fieldset>
+
                   <div id="booking-rules-editor" class="mt-6 border-t border-border pt-6">
                     <h3 class="font-semibold text-text dark:text-gray-100">Período de reserva</h3>
                     <div class="mt-4 grid gap-5 sm:grid-cols-2">
@@ -708,6 +798,29 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
       {day, _label} -> {:ok, day}
       nil -> :error
     end
+  end
+
+  defp copy_selection(params, socket) do
+    source =
+      case day_atom(Map.get(params, "source", "")) do
+        {:ok, day} -> day
+        :error -> socket.assigns.copy_source
+      end
+
+    targets =
+      params
+      |> Map.get("targets", [])
+      |> List.wrap()
+      |> Enum.flat_map(fn day_name ->
+        case day_atom(day_name) do
+          {:ok, ^source} -> []
+          {:ok, day} -> [day]
+          :error -> []
+        end
+      end)
+      |> Enum.uniq()
+
+    {source, targets}
   end
 
   defp format_minutes(minutes) do
