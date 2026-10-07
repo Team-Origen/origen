@@ -237,20 +237,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
            )
   end
 
-  test "a compatible apply recalculates durations and preserves counts", %{conn: conn} do
+  test "a compatible interval request prepares a read-only review", %{conn: conn} do
     {:ok, view, _html} = live(conn, @professional_configuration_path)
 
     view
     |> form("#agenda-interval-form", interval_minutes: "30")
     |> render_submit()
 
-    row = "#consultation-type-018f4a5b-0d62-7a44-8e32-2f608bfcb001"
-
-    assert has_element?(view, "#current-agenda-interval", "30 minutos")
-    assert has_element?(view, "#interval-apply-success[role=status]")
-    assert has_element?(view, row, "Cantidad de intervalos 2")
-    assert has_element?(view, row, "Duración: 60 minutos")
-    refute has_element?(view, "#interval-change-warning")
+    assert has_element?(view, "#current-agenda-interval", "15 minutos")
+    assert has_element?(view, "#interval-review-ready", "Todavía no se aplicó ningún cambio")
+    refute has_element?(view, "#interval-apply-success")
   end
 
   test "an inactive type preserves its deactivation duration until compatible reactivation", %{

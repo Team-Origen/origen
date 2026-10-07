@@ -30,6 +30,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         type_form_params: @type_form_defaults,
         type_form_errors: %{},
         reactivation_feedback: nil,
+        interval_review: nil,
+        interval_modal_open: false,
+        interval_modal_step: :warning,
         availability_editing: false,
         availability_dirty: false
       )
@@ -62,6 +65,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
          assign(socket,
            selected_interval: selected_interval,
            interval_feedback: nil,
+           interval_review: nil,
+           interval_modal_open: false,
+           interval_modal_step: :warning,
            reactivation_feedback: nil
          )}
 
@@ -76,33 +82,70 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
            socket.assigns.current_internal_session,
            interval
          ) do
-      {:ok, configuration} ->
+      {:error, {:confirmation_required, preview}} ->
         {:noreply,
          socket
-         |> assign_configuration(configuration)
-         |> assign(interval_feedback: :applied, reactivation_feedback: nil)}
+         |> assign(
+           selected_interval:
+             parsed_interval_or_current(interval, socket.assigns.current_interval),
+           interval_feedback: nil,
+           interval_review: preview,
+           reactivation_feedback: nil
+         )}
 
       {:error, {:validation, _errors}} ->
         {:noreply, assign(socket, interval_feedback: :invalid)}
 
-      {:error, {:incompatible, %{maximum_interval_count: maximum, blockers: incompatible_types}}} ->
-        {:noreply,
-         assign(socket,
-           selected_interval:
-             parsed_interval_or_current(interval, socket.assigns.current_interval),
-           interval_feedback: {:incompatible, maximum, incompatible_types}
-         )}
-
       {:error, reason} when reason in [:unauthorized, :unavailable] ->
-        {:noreply, assign(socket, catalog_error: :unavailable)}
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
 
       _unexpected ->
-        {:noreply, assign(socket, catalog_error: :unavailable)}
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
     end
   end
 
   def handle_event("apply_interval", _params, socket) do
     {:noreply, assign(socket, interval_feedback: :invalid)}
+  end
+
+  @impl true
+  def handle_event("open_interval_change", _params, socket) do
+    if socket.assigns.availability_dirty do
+      {:noreply,
+       assign(socket,
+         interval_feedback: :availability_dirty,
+         interval_modal_open: false,
+         interval_review: nil
+       )}
+    else
+      {:noreply,
+       assign(socket,
+         interval_feedback: nil,
+         interval_modal_open: true,
+         interval_modal_step: :warning,
+         interval_review: nil
+       )}
+    end
+  end
+
+  @impl true
+  def handle_event("review_agenda_interval", _params, socket) do
+    {:noreply,
+     socket
+     |> load_interval_review(nil)
+     |> assign(interval_modal_step: :review)}
+  end
+
+  @impl true
+  def handle_event("cancel_interval_change", _params, socket) do
+    {:noreply,
+     assign(socket,
+       selected_interval: socket.assigns.current_interval,
+       interval_feedback: nil,
+       interval_review: nil,
+       interval_modal_open: false,
+       interval_modal_step: :warning
+     )}
   end
 
   @impl true
@@ -330,6 +373,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                     >
                       <strong>No se aplicó el intervalo.</strong>
                       El valor debe estar entre 5 y 240 minutos y ser divisible por 5.
+                    </.alert>
+
+                    <.alert
+                      :if={@interval_review}
+                      id="interval-review-ready"
+                      color="info"
+                      variant="callout"
+                      with_icon
+                    >
+                      La revisión del cambio está lista. Todavía no se aplicó ningún cambio.
                     </.alert>
 
                     <.incompatible_alert
@@ -1034,6 +1087,23 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     case parse_interval(interval) do
       {:ok, parsed_interval} -> parsed_interval
       :error -> current_interval
+    end
+  end
+
+  defp load_interval_review(socket, reviewed_availability) do
+    case consultation_types().preview_agenda_interval(
+           socket.assigns.current_internal_session,
+           socket.assigns.selected_interval,
+           reviewed_availability
+         ) do
+      {:ok, review} ->
+        assign(socket, interval_review: review, interval_feedback: nil)
+
+      {:error, {:validation, _errors}} ->
+        assign(socket, interval_feedback: :invalid, interval_review: nil)
+
+      {:error, _reason} ->
+        assign(socket, interval_feedback: :unavailable, interval_review: nil)
     end
   end
 
