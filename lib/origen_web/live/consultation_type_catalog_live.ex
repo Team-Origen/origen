@@ -72,7 +72,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def handle_event("apply_interval", %{"interval_minutes" => interval}, socket) do
-    case consultation_types().apply_agenda_interval(
+    case apply_agenda_interval(
+           consultation_types(),
            socket.assigns.current_internal_session,
            interval
          ) do
@@ -1029,6 +1030,27 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       catalog_error: nil
     )
   end
+
+  defp apply_agenda_interval(context, principal, interval) do
+    case context.apply_agenda_interval(principal, interval) do
+      {:error, {:confirmation_required, preview}} ->
+        context.confirm_agenda_interval(principal, preview)
+        |> legacy_interval_result(preview.proposed_interval_minutes)
+
+      result ->
+        result
+    end
+  end
+
+  defp legacy_interval_result(
+         {:error, {:incompatible, %{consultation_type_effects: blockers}}},
+         interval
+       ),
+       do:
+         {:error,
+          {:incompatible, %{maximum_interval_count: div(240, interval), blockers: blockers}}}
+
+  defp legacy_interval_result(result, _interval), do: result
 
   defp parsed_interval_or_current(interval, current_interval) do
     case parse_interval(interval) do
