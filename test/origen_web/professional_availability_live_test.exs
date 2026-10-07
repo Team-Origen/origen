@@ -66,6 +66,24 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     end
   end
 
+  test "renders the settings navbar first with an honestly disabled agenda action", %{conn: conn} do
+    {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(
+             view,
+             "#professional-settings-content > #professional-settings-header:first-child",
+             "Ajustes"
+           )
+
+    assert has_element?(
+             view,
+             ~s|#back-to-agenda-button[type="button"][disabled][aria-disabled="true"]:not([href]):not([phx-click])|,
+             "Volver a Agenda"
+           )
+
+    assert has_element?(view, "#back-to-agenda-button .hero-arrow-left")
+  end
+
   test "opens a complete seven-day interval-aware draft editor", %{conn: conn} do
     {:ok, view, _html} = live(conn, @path)
     open_editor(view)
@@ -226,7 +244,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(
              view,
              "#availability-monday-0-start-error",
-             "Seleccione un horario compatible con el intervalo actual de 30 minutos."
+             "Debe coincidir con intervalos de 30 minutos."
            )
 
     assert has_element?(view, "#availability-save-button[disabled]")

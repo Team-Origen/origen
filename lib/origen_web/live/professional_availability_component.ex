@@ -31,7 +31,6 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
          |> assign(
            configuration: configuration,
            editing: false,
-           dirty: false,
            draft: nil,
            local_errors: %{},
            feedback: nil,
@@ -46,7 +45,6 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
          |> assign(
            configuration: nil,
            editing: false,
-           dirty: false,
            draft: nil,
            local_errors: %{},
            feedback: nil,
@@ -58,13 +56,11 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
   @impl true
   def handle_event("edit_availability", _params, socket) do
-    draft = configuration_to_draft(socket.assigns.configuration)
-
     {:noreply,
      assign(socket,
        editing: true,
-       draft: draft,
-       local_errors: local_time_errors(draft, socket.assigns.configuration),
+       draft: configuration_to_draft(socket.assigns.configuration),
+       local_errors: %{},
        copy_source: :monday,
        copy_targets: [],
        feedback: nil,
@@ -124,12 +120,12 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   @impl true
   def handle_event("change_availability", %{"availability" => params} = all_params, socket) do
     {copy_source, copy_targets} = copy_selection(Map.get(all_params, "copy", %{}), socket)
-    draft = params_to_draft(params, socket.assigns.draft)
 
     {:noreply,
      assign(socket,
-       draft: draft,
-       local_errors: local_time_errors(draft, socket.assigns.configuration),
+       draft: params_to_draft(params),
+       local_errors:
+         params |> params_to_draft() |> local_time_errors(socket.assigns.configuration),
        copy_source: copy_source,
        copy_targets: copy_targets,
        validation_errors: nil
@@ -147,19 +143,21 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
         Map.put(week, day, source_windows)
       end)
 
-    draft = %{socket.assigns.draft | weekly_availability: week}
-
     {:noreply,
      assign(socket,
-       draft: draft,
-       local_errors: local_time_errors(draft, socket.assigns.configuration),
+       draft: %{socket.assigns.draft | weekly_availability: week},
+       local_errors:
+         local_time_errors(
+           %{socket.assigns.draft | weekly_availability: week},
+           socket.assigns.configuration
+         ),
        validation_errors: nil
      )}
   end
 
   @impl true
   def handle_event("save_availability", %{"availability" => params}, socket) do
-    draft = params_to_draft(params, socket.assigns.draft)
+    draft = params_to_draft(params)
     local_errors = local_time_errors(draft, socket.assigns.configuration)
 
     if map_size(local_errors) > 0 do
@@ -270,6 +268,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   size="sm"
                   phx-click="edit_availability"
                   phx-target={@myself}
+                  aria-expanded="false"
+                  aria-controls="availability-editor-region"
                 >
                   Editar disponibilidad
                 </.button>
@@ -335,18 +335,25 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                 <li :for={message <- validation_messages(@validation_errors)}>{message}</li>
               </ul>
             </.alert>
+
             <section id="availability-section" aria-labelledby="weekly-availability-heading">
               <.card variant="basic">
                 <.card_header>
                   <.h2 id="weekly-availability-heading" no_margin>Disponibilidad semanal</.h2>
+                  <.text_muted>
+                    Cada horario debe respetar el intervalo de Agenda de {@configuration.agenda_interval_minutes} minutos.
+                  </.text_muted>
                   <:action>
                     <.button
+                      id="edit-availability-button"
                       type="button"
                       color="gray"
                       variant="outline"
                       size="sm"
                       phx-click="cancel_availability"
                       phx-target={@myself}
+                      aria-expanded="true"
+                      aria-controls="availability-editor-region"
                     >
                       Cerrar edición
                     </.button>
@@ -478,6 +485,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                               phx-value-day={day}
                               phx-value-index={index}
                               phx-target={@myself}
+                              aria-label={"Eliminar horario #{index + 1} de #{label}"}
                             >
                               Eliminar horario
                             </.button>
@@ -588,6 +596,10 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                           aria-invalid={
                             invalid_field?(@validation_errors, :booking_horizon_days) && "true"
                           }
+                          aria-describedby={
+                            invalid_field?(@validation_errors, :booking_horizon_days) &&
+                              "availability-validation-error"
+                          }
                           required
                         />
                       </label>
@@ -605,6 +617,10 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                           aria-invalid={
                             invalid_field?(@validation_errors, :minimum_lead_minutes) && "true"
                           }
+                          aria-describedby={
+                            invalid_field?(@validation_errors, :minimum_lead_minutes) &&
+                              "availability-validation-error"
+                          }
                           required
                         />
                       </label>
@@ -612,23 +628,25 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
                   </div>
                 </.card_content>
                 <.card_footer>
-                  <.button
-                    type="button"
-                    color="gray"
-                    variant="outline"
-                    phx-click="cancel_availability"
-                    phx-target={@myself}
-                  >
-                    Cancelar
-                  </.button>
-                  <.button
-                    id="availability-save-button"
-                    type="submit"
-                    color="primary"
-                    disabled={map_size(@local_errors) > 0}
-                  >
-                    Guardar disponibilidad
-                  </.button>
+                  <div id="availability-form-actions" class="flex w-full flex-wrap justify-end gap-3">
+                    <.button
+                      type="button"
+                      color="gray"
+                      variant="outline"
+                      phx-click="cancel_availability"
+                      phx-target={@myself}
+                    >
+                      Cancelar
+                    </.button>
+                    <.button
+                      id="availability-save-button"
+                      type="submit"
+                      color="primary"
+                      disabled={map_size(@local_errors) > 0}
+                    >
+                      Guardar disponibilidad
+                    </.button>
+                  </div>
                 </.card_footer>
               </.card>
             </section>
@@ -740,25 +758,19 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     }
   end
 
-  defp params_to_draft(params, current_draft) do
+  defp params_to_draft(params) do
     week_params = Map.get(params, "weekly_availability", %{})
 
     week =
       Map.new(@days, fn {day, _label} ->
         day_params = Map.get(week_params, Atom.to_string(day), %{})
-        current_windows = Map.fetch!(current_draft.weekly_availability, day)
 
         windows =
           day_params
           |> Enum.reject(fn {key, _value} -> key == "_present" end)
           |> Enum.sort_by(fn {key, _value} -> parse_index(key) end)
-          |> Enum.map(fn {index_text, window} ->
-            current_window = Enum.at(current_windows, parse_index(index_text), %{})
-
-            %{
-              start: Map.get(window, "start", Map.get(current_window, :start, "")),
-              end: Map.get(window, "end", Map.get(current_window, :end, ""))
-            }
+          |> Enum.map(fn {_key, window} ->
+            %{start: Map.get(window, "start", ""), end: Map.get(window, "end", "")}
           end)
 
         {day, windows}
@@ -766,10 +778,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
     %{
       weekly_availability: week,
-      booking_horizon_days:
-        Map.get(params, "booking_horizon_days", current_draft.booking_horizon_days),
-      minimum_lead_minutes:
-        Map.get(params, "minimum_lead_minutes", current_draft.minimum_lead_minutes)
+      booking_horizon_days: Map.get(params, "booking_horizon_days", ""),
+      minimum_lead_minutes: Map.get(params, "minimum_lead_minutes", "")
     }
   end
 
@@ -848,6 +858,10 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
 
   defp parse_integer(value), do: value
 
+  defp availability do
+    Application.get_env(:origen, :availability_context, Availability)
+  end
+
   defp invalid_day?(%{weekly_availability: day_errors}, day) when is_map(day_errors),
     do: Map.has_key?(day_errors, day)
 
@@ -870,8 +884,8 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
   end
 
   defp validate_local_window(errors, day, index, window, interval) do
-    start_result = validate_time_boundary(window.start, interval, :start)
-    end_result = validate_time_boundary(window.end, interval, :end)
+    start_result = validate_time_boundary(window.start, interval)
+    end_result = validate_time_boundary(window.end, interval)
 
     errors
     |> put_time_error(day, index, :start, start_result, interval)
@@ -879,24 +893,25 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     |> put_window_order_error(day, index, start_result, end_result, interval)
   end
 
-  defp validate_time_boundary(value, interval, boundary) do
-    case parse_time_minutes(value, boundary) do
+  defp validate_time_boundary(value, interval) do
+    case parse_time_minutes(value) do
       {:ok, minutes} when rem(minutes, interval) == 0 -> {:ok, minutes}
       {:ok, _minutes} -> :misaligned
       :error -> :invalid
     end
   end
 
-  defp parse_time_minutes("24:00", :end), do: {:ok, 24 * 60}
-
-  defp parse_time_minutes(value, _boundary) when is_binary(value) do
+  defp parse_time_minutes(value) when is_binary(value) do
     case Regex.run(~r/\A([01]\d|2[0-3]):([0-5]\d)\z/, value) do
-      [_, hours, minutes] -> {:ok, String.to_integer(hours) * 60 + String.to_integer(minutes)}
-      nil -> :error
+      [_, hours, minutes] ->
+        {:ok, String.to_integer(hours) * 60 + String.to_integer(minutes)}
+
+      nil ->
+        :error
     end
   end
 
-  defp parse_time_minutes(_value, _boundary), do: :error
+  defp parse_time_minutes(_value), do: :error
 
   defp put_time_error(errors, _day, _index, _boundary, {:ok, _minutes}, _interval),
     do: errors
@@ -905,7 +920,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     Map.put(
       errors,
       {day, index, boundary},
-      "Seleccione un horario compatible con el intervalo actual de #{interval} minutos."
+      "Debe coincidir con intervalos de #{interval} minutos."
     )
   end
 
@@ -963,8 +978,11 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
             end
           end)
 
-        _other ->
+        nil ->
           []
+
+        _reason ->
+          ["Disponibilidad semanal: revise los siete días."]
       end
 
     day_messages
@@ -984,10 +1002,21 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
     if Map.has_key?(errors, field), do: messages ++ [message], else: messages
   end
 
-  defp day_validation_message(label, :overlap), do: "#{label}: los horarios se superponen."
-  defp day_validation_message(label, _reason), do: "#{label}: revise los horarios."
+  defp day_validation_message(label, :overlap),
+    do: "#{label}: los horarios se superponen."
 
-  defp availability do
-    Application.get_env(:origen, :availability_context, Availability)
-  end
+  defp day_validation_message(label, reason)
+       when reason in [:invalid_time, :invalid_window, :invalid_windows],
+       do: "#{label}: ingrese horarios válidos en formato HH:MM."
+
+  defp day_validation_message(label, :overnight_or_empty),
+    do: "#{label}: el horario de fin debe ser posterior al inicio y dentro del mismo día."
+
+  defp day_validation_message(label, :misaligned),
+    do: "#{label}: los límites deben coincidir con el intervalo de Agenda."
+
+  defp day_validation_message(label, :too_short),
+    do: "#{label}: cada horario debe durar al menos un intervalo de Agenda."
+
+  defp day_validation_message(label, _reason), do: "#{label}: revise los horarios."
 end
