@@ -56,6 +56,10 @@ defmodule Origen.Availability do
 
   def replace_own_configuration(_principal, _attrs), do: {:error, :unauthorized}
 
+  @doc false
+  @spec validate_configuration(map(), pos_integer()) :: {:ok, map()} | {:error, map()}
+  def validate_configuration(attrs, interval_minutes), do: validate(attrs, interval_minutes)
+
   defp transaction_result({:ok, {:error, :unauthorized}}), do: {:error, :unauthorized}
   defp transaction_result({:ok, result}), do: {:ok, result}
   defp transaction_result({:error, :unauthorized}), do: {:error, :unauthorized}

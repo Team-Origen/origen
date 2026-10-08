@@ -31,6 +31,7 @@ defmodule Origen.Appointments.MockCalendar do
 
   @demo_windows [{~T[09:00:00], ~T[12:00:00]}, {~T[14:00:00], ~T[17:00:00]}]
   @demo_occupancies []
+  @demo_interval_minutes 15
 
   @impl true
   def list_professionals do
@@ -64,7 +65,7 @@ defmodule Origen.Appointments.MockCalendar do
 
           true ->
             duration = Keyword.get(opts, :duration_minutes, 30)
-            interval = Keyword.get(opts, :agenda_interval_minutes, duration)
+            interval = @demo_interval_minutes
 
             now =
               Keyword.get(opts, :now) ||
