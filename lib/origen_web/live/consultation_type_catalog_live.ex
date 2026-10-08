@@ -4,8 +4,18 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
 
   alias Origen.ConsultationTypes
+  alias OrigenWeb.TimeGrid
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
+  @availability_days [
+    {:monday, "Lunes"},
+    {:tuesday, "Martes"},
+    {:wednesday, "Miércoles"},
+    {:thursday, "Jueves"},
+    {:friday, "Viernes"},
+    {:saturday, "Sábado"},
+    {:sunday, "Domingo"}
+  ]
   @type_form_defaults %{
     "name" => "",
     "currency" => "ARS",
@@ -31,6 +41,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         type_form_errors: %{},
         reactivation_feedback: nil,
         interval_review: nil,
+        interval_review_copy_source: nil,
+        interval_review_copy_targets: [],
         interval_modal_open: false,
         interval_modal_step: :warning,
         availability_editing: false,
@@ -66,6 +78,8 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
            selected_interval: selected_interval,
            interval_feedback: nil,
            interval_review: nil,
+           interval_review_copy_source: nil,
+           interval_review_copy_targets: [],
            interval_modal_open: false,
            interval_modal_step: :warning,
            reactivation_feedback: nil
@@ -123,7 +137,9 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
          interval_feedback: nil,
          interval_modal_open: true,
          interval_modal_step: :warning,
-         interval_review: nil
+         interval_review: nil,
+         interval_review_copy_source: nil,
+         interval_review_copy_targets: []
        )}
     end
   end
@@ -146,6 +162,130 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
        interval_modal_open: false,
        interval_modal_step: :warning
      )}
+  end
+
+  def handle_event("cancel_interval_warning", params, socket),
+    do: handle_event("cancel_interval_change", params, socket)
+
+  @impl true
+  def handle_event("change_interval_review", %{"interval_review" => params} = all_params, socket)
+      when is_map(params) do
+    case Map.fetch(all_params, "interval_review_copy") do
+      :error ->
+        {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+
+      {:ok, copy_params} when is_map(copy_params) ->
+        socket = update_interval_review_copy(socket, copy_params)
+        {:noreply, load_interval_review(socket, interval_review_attributes(params, socket))}
+
+      _malformed ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("change_interval_review", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("add_interval_review_window", %{"day" => day_name}, socket) do
+    with {:ok, day} <- availability_day(day_name),
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      window = %{start: "00:00", end: format_interval_time(socket.assigns.selected_interval)}
+      week = Map.update!(availability.weekly_availability, day, &(&1 ++ [window]))
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event(
+        "remove_interval_review_window",
+        %{"day" => day_name, "index" => index_text},
+        socket
+      ) do
+    with {:ok, day} <- availability_day(day_name),
+         {index, ""} when index >= 0 <- Integer.parse(index_text),
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      week = Map.update!(availability.weekly_availability, day, &List.delete_at(&1, index))
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("copy_interval_review_hours", _params, socket) do
+    with source when not is_nil(source) <- socket.assigns.interval_review_copy_source,
+         %{reviewed_availability: availability} <- socket.assigns.interval_review do
+      source_windows = Map.fetch!(availability.weekly_availability, source)
+
+      week =
+        Enum.reduce(
+          socket.assigns.interval_review_copy_targets,
+          availability.weekly_availability,
+          &Map.put(&2, &1, source_windows)
+        )
+
+      {:noreply, load_interval_review(socket, availability_attrs(availability, week))}
+    else
+      _invalid -> {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("confirm_interval_review", %{"interval_review" => params}, socket) do
+    reviewed_availability = interval_review_attributes(params, socket)
+
+    case consultation_types().confirm_agenda_interval(
+           socket.assigns.current_internal_session,
+           %{
+             proposed_interval_minutes: socket.assigns.selected_interval,
+             reviewed_availability: reviewed_availability,
+             stale_token: socket.assigns.interval_review.stale_token
+           }
+         ) do
+      {:ok, configuration} ->
+        send_update(OrigenWeb.ProfessionalAvailabilityComponent,
+          id: "professional-availability",
+          refresh_after_interval_change: true
+        )
+
+        {:noreply,
+         socket
+         |> assign_configuration(configuration)
+         |> assign(
+           interval_feedback: :applied,
+           interval_review: nil,
+           interval_review_copy_source: nil,
+           interval_review_copy_targets: [],
+           interval_modal_open: false,
+           interval_modal_step: :warning,
+           reactivation_feedback: nil,
+           availability_editing: false,
+           availability_dirty: false
+         )}
+
+      {:error, :stale} ->
+        {:noreply, assign(socket, interval_feedback: :stale)}
+
+      {:error, {:validation, errors}} ->
+        review = Map.put(socket.assigns.interval_review, :availability_validation_errors, errors)
+        {:noreply, assign(socket, interval_feedback: :validation, interval_review: review)}
+
+      {:error, {:future_appointment_conflicts, conflicts}} ->
+        review = Map.put(socket.assigns.interval_review, :future_appointment_conflicts, conflicts)
+        {:noreply, assign(socket, interval_feedback: :future_conflicts, interval_review: review)}
+
+      {:error, {:incompatible, _evidence}} ->
+        {:noreply, assign(socket, interval_feedback: :incompatible_review)}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, interval_feedback: :unavailable)}
+    end
+  end
+
+  def handle_event("confirm_interval_review", _params, socket) do
+    {:noreply, assign(socket, interval_feedback: :validation)}
   end
 
   @impl true
@@ -253,10 +393,16 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def handle_info({:availability_editor_state, state}, socket) do
+    interval_feedback =
+      if not state.dirty and socket.assigns.interval_feedback == :availability_dirty,
+        do: nil,
+        else: socket.assigns.interval_feedback
+
     {:noreply,
      assign(socket,
        availability_editing: state.editing,
-       availability_dirty: state.dirty
+       availability_dirty: state.dirty,
+       interval_feedback: interval_feedback
      )}
   end
 
@@ -265,9 +411,13 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
-    <main class="min-h-screen bg-page py-6 text-text dark:bg-gray-950 dark:text-gray-100 sm:py-10">
+    <main data-theme="light" class="min-h-screen bg-page py-6 text-text sm:py-10">
       <.container max_width="xl">
-        <div id="professional-settings-content" class="flex flex-col gap-6 sm:gap-8">
+        <div
+          id="professional-settings-content"
+          class="flex flex-col gap-6 sm:gap-8"
+          inert={@interval_modal_open}
+        >
           <header
             id="professional-settings-header"
             class="flex items-start justify-between gap-4"
@@ -327,7 +477,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   <form
                     id="agenda-interval-form"
                     phx-change="select_interval"
-                    phx-submit="apply_interval"
                     class="flex flex-col gap-4 sm:max-w-xl"
                   >
                     <.field
@@ -341,17 +490,14 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       no_margin
                     />
                     <.alert
-                      :if={@selected_interval != @current_interval}
-                      id="interval-change-warning"
+                      :if={@interval_feedback == :availability_dirty}
+                      id="interval-availability-draft-warning"
                       color="warning"
                       variant="callout"
                       with_icon
                     >
-                      Las cantidades de intervalos no cambiarán. Las duraciones de los tipos activos sí se recalcularán. {change_example(
-                        @catalog,
-                        @current_interval,
-                        @selected_interval
-                      )}
+                      <strong>Hay cambios de disponibilidad sin guardar.</strong>
+                      Guarde o cancele ese borrador antes de cambiar el intervalo de la agenda.
                     </.alert>
 
                     <.alert
@@ -375,27 +521,23 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                       El valor debe estar entre 5 y 240 minutos y ser divisible por 5.
                     </.alert>
 
-                    <.alert
-                      :if={@interval_review}
-                      id="interval-review-ready"
-                      color="info"
-                      variant="callout"
-                      with_icon
-                    >
-                      La revisión del cambio está lista. Todavía no se aplicó ningún cambio.
-                    </.alert>
-
-                    <.incompatible_alert
-                      :if={match?({:incompatible, _, _}, @interval_feedback)}
-                      feedback={@interval_feedback}
-                    />
                     <div>
                       <.button
-                        type="submit"
+                        :if={@selected_interval != @current_interval}
+                        id="open-interval-change-modal"
+                        type="button"
                         color="primary"
-                        disabled={@selected_interval == @current_interval}
+                        phx-click="open_interval_change"
                       >
-                        Aplicar intervalo
+                        Revisar cambios
+                      </.button>
+                      <.button
+                        :if={@selected_interval == @current_interval}
+                        type="button"
+                        color="primary"
+                        disabled
+                      >
+                        Revisar cambios
                       </.button>
                     </div>
                   </form>
@@ -709,23 +851,97 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             </:footer>
           </.modal>
         </div>
+
+        <.modal
+          :if={@interval_modal_open}
+          id="agenda-interval-change-modal"
+          title="Cambiar el intervalo de la agenda"
+          max_width="2xl"
+          on_cancel={JS.push("cancel_interval_change")}
+          close_on_escape
+          close_on_click_away
+        >
+          <div :if={@interval_modal_step == :warning} id="interval-modal-warning" class="space-y-5">
+            <.alert color="warning" variant="callout" with_icon>
+              Este cambio afecta las duraciones de los tipos de consulta y la disponibilidad semanal. Nada cambiará antes de la confirmación final.
+            </.alert>
+            <p class="text-sm text-text-muted dark:text-gray-300">
+              Las cantidades de intervalos no cambiarán. Las duraciones de los tipos activos sí se recalcularán. {change_example(
+                @catalog,
+                @current_interval,
+                @selected_interval
+              )}
+            </p>
+            <div class="flex flex-wrap justify-end gap-3">
+              <.button
+                type="button"
+                color="gray"
+                variant="outline"
+                phx-click="cancel_interval_change"
+              >
+                Cancelar
+              </.button>
+              <.button type="button" color="primary" phx-click="review_agenda_interval">
+                Revisar cambios
+              </.button>
+            </div>
+          </div>
+
+          <div :if={@interval_modal_step == :review} class="space-y-5">
+            <.alert
+              :if={@interval_feedback == :stale}
+              id="interval-apply-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se aplicó el intervalo.</strong>
+              La configuración cambió desde la revisión. Vuelva a revisar los efectos antes de confirmar. La configuración cargada continúa visible y no se aplicó ningún efecto de esta propuesta.
+            </.alert>
+
+            <.alert
+              :if={@interval_feedback in [:validation, :future_conflicts, :incompatible_review]}
+              id="interval-apply-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se aplicó el intervalo.</strong>
+              Revise los bloqueos indicados. La configuración cargada continúa visible y no se aplicó ningún efecto de esta propuesta.
+            </.alert>
+
+            <.alert
+              :if={@interval_feedback == :unavailable}
+              id="interval-apply-error"
+              color="danger"
+              variant="callout"
+              with_icon
+            >
+              <strong>No se aplicó el intervalo.</strong>
+              No se pudo completar la confirmación. La configuración cargada continúa visible y no se aplicó ningún efecto.
+            </.alert>
+
+            <.interval_review
+              :if={@interval_review}
+              review={@interval_review}
+              proposed_interval={@selected_interval}
+              copy_source={@interval_review_copy_source}
+              copy_targets={@interval_review_copy_targets}
+            />
+            <div class="flex justify-start">
+              <.button
+                type="button"
+                color="gray"
+                variant="outline"
+                phx-click="cancel_interval_change"
+              >
+                Cancelar
+              </.button>
+            </div>
+          </div>
+        </.modal>
       </.container>
     </main>
-    """
-  end
-
-  attr :feedback, :any, required: true
-
-  defp incompatible_alert(%{feedback: {:incompatible, maximum, types}} = assigns) do
-    assigns =
-      assign(assigns, maximum: maximum, names: Enum.map_join(types, ", ", & &1.name))
-
-    ~H"""
-    <.alert id="interval-apply-error" color="danger" variant="callout" with_icon>
-      <strong>No se aplicó el intervalo.</strong>
-      Esta selección admite un máximo de {@maximum} intervalos; los tipos activos incompatibles son: {@names}.
-      No se modificó ninguna cantidad.
-    </.alert>
     """
   end
 
@@ -739,6 +955,355 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       <strong>No se reactivó {@name}.</strong>
       Su cantidad preservada produciría una duración de {@duration} minutos, superior al máximo de 240 minutos. El tipo continúa inactivo y no se realizaron cambios.
     </.alert>
+    """
+  end
+
+  attr :review, :map, required: true
+  attr :proposed_interval, :integer, required: true
+  attr :copy_source, :atom, default: nil
+  attr :copy_targets, :list, default: []
+
+  defp interval_review(assigns) do
+    overlap_indexes =
+      Map.new(assigns.review.reviewed_availability.weekly_availability, fn {day, windows} ->
+        {day, interval_review_overlap_indexes(windows)}
+      end)
+
+    assigns = assign(assigns, days: @availability_days, overlap_indexes: overlap_indexes)
+
+    ~H"""
+    <section
+      id="agenda-interval-review"
+      class="border-t border-border pt-6"
+      aria-labelledby="agenda-interval-review-heading"
+    >
+      <.h3 id="agenda-interval-review-heading" no_margin>Revisión del cambio de intervalo</.h3>
+      <p class="mt-2 text-sm text-text-muted dark:text-gray-300">
+        Revise el resultado completo antes de confirmar. Todavía no se aplicó ningún cambio.
+      </p>
+
+      <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <dt class="font-medium">Intervalo actual</dt><dd>
+            {@review.current_interval_minutes} minutos
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Intervalo propuesto</dt><dd>
+            {@review.proposed_interval_minutes} minutos
+          </dd>
+        </div>
+      </dl>
+
+      <div id="interval-type-effects" class="mt-6">
+        <h4 class="font-semibold">Duraciones de tipos de consulta activos</h4>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li
+            :for={effect <- @review.consultation_type_effects}
+            id={"interval-type-effect-#{effect.id}"}
+            data-compatible={to_string(effect.compatible)}
+            class={not effect.compatible && "text-danger-600 dark:text-danger-400"}
+          >
+            {effect.name}: {effect.current_duration_minutes} a {effect.proposed_duration_minutes} minutos
+            <strong :if={not effect.compatible}>
+              Bloqueo: la duración propuesta supera el máximo permitido de 240 minutos.
+            </strong>
+          </li>
+          <li :if={@review.consultation_type_effects == []}>No hay tipos activos afectados.</li>
+        </ul>
+      </div>
+
+      <div id="interval-boundary-conflicts" class="mt-6">
+        <h4 class="font-semibold">Límites semanales incompatibles</h4>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li :for={boundary <- @review.incompatible_availability_boundaries}>
+            {format_review_boundary(boundary)}
+          </li>
+          <li :if={@review.incompatible_availability_boundaries == []}>
+            Todos los límites coinciden con el intervalo propuesto.
+          </li>
+        </ul>
+      </div>
+
+      <div id="interval-appointment-conflicts" class="mt-6">
+        <h4 class="font-semibold">Conflictos con turnos futuros</h4>
+        <ul class="mt-2 list-disc space-y-1 pl-5">
+          <li :for={conflict <- @review.future_appointment_conflicts}>
+            Turno #{conflict.appointment_id}: {Date.to_iso8601(conflict.date)}, {conflict.start_time} a {conflict.end_time}.
+          </li>
+          <li :if={@review.future_appointment_conflicts == []}>
+            No se detectaron conflictos con turnos futuros.
+          </li>
+        </ul>
+      </div>
+
+      <form
+        id="interval-review-form"
+        phx-change="change_interval_review"
+        phx-submit="confirm_interval_review"
+        class="mt-6 space-y-5"
+      >
+        <input
+          type="hidden"
+          name="interval_review[booking_horizon_days]"
+          value={@review.reviewed_availability.booking_horizon_days}
+        />
+        <input
+          type="hidden"
+          name="interval_review[minimum_lead_minutes]"
+          value={@review.reviewed_availability.minimum_lead_minutes}
+        />
+        <fieldset
+          id="interval-review-copy-action"
+          class="rounded-lg border border-border p-4 dark:border-gray-700"
+        >
+          <legend class="px-1 font-semibold">Copiar horarios revisados</legend>
+          <p class="mt-1 text-sm text-text-muted dark:text-gray-300">
+            Elija un día de origen y uno o más destinos. La copia es temporal hasta la confirmación final.
+          </p>
+          <div class="mt-3 grid gap-4 lg:grid-cols-2">
+            <div>
+              <label for="interval-review-copy-source" class="text-sm font-medium">Día de origen</label>
+              <select
+                id="interval-review-copy-source"
+                name="interval_review_copy[source]"
+                class="pc-select mt-1"
+              >
+                <option value="" selected={is_nil(@copy_source)}>Seleccione un día</option>
+                <option
+                  :for={{day, label} <- @days}
+                  value={day}
+                  selected={day == @copy_source}
+                >
+                  {label}
+                </option>
+              </select>
+            </div>
+            <fieldset>
+              <legend class="text-sm font-medium">Días de destino</legend>
+              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                <label :for={{day, label} <- @days} class="flex items-center gap-2 text-sm">
+                  <input
+                    id={"interval-review-copy-#{day}"}
+                    type="checkbox"
+                    name="interval_review_copy[targets][]"
+                    value={day}
+                    checked={day in @copy_targets}
+                    disabled={day == @copy_source}
+                  />
+                  {label}
+                </label>
+              </div>
+            </fieldset>
+          </div>
+          <div class="mt-4">
+            <.button
+              id="copy-interval-review-hours"
+              type="button"
+              color="secondary"
+              variant="outline"
+              size="sm"
+              phx-click="copy_interval_review_hours"
+              disabled={is_nil(@copy_source) or @copy_targets == []}
+            >
+              Copiar horarios revisados
+            </.button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="font-semibold">Disponibilidad semanal resultante</legend>
+          <p class="mt-1 text-sm text-text-muted dark:text-gray-300">
+            Ajuste explícitamente la semana completa en la grilla de {@proposed_interval} minutos. Los horarios no se redondean ni se restablecen automáticamente.
+          </p>
+          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <fieldset
+              :for={{day, label} <- @days}
+              id={"interval-review-day-#{day}"}
+              class="rounded-lg border border-border p-4 dark:border-gray-700"
+            >
+              <legend class="px-1 font-medium">{label}</legend>
+              <input
+                type="hidden"
+                name={"interval_review[weekly_availability][#{day}][_present]"}
+                value="true"
+              />
+              <p
+                :if={Map.fetch!(@review.reviewed_availability.weekly_availability, day) == []}
+                class="text-sm text-text-muted dark:text-gray-300"
+              >
+                Sin disponibilidad
+              </p>
+              <div
+                :for={
+                  {window, index} <-
+                    Enum.with_index(
+                      Map.fetch!(@review.reviewed_availability.weekly_availability, day)
+                    )
+                }
+                id={"interval-review-#{day}-#{index}-window"}
+                class={[
+                  "mb-3 grid grid-cols-2 gap-3 rounded-lg border p-2",
+                  if(MapSet.member?(Map.fetch!(@overlap_indexes, day), index),
+                    do: "border-danger-500",
+                    else: "border-transparent"
+                  )
+                ]}
+                data-overlap-invalid={
+                  MapSet.member?(Map.fetch!(@overlap_indexes, day), index) && "true"
+                }
+                aria-describedby={
+                  MapSet.member?(Map.fetch!(@overlap_indexes, day), index) &&
+                    "interval-review-#{day}-#{index}-overlap-error"
+                }
+              >
+                <input
+                  type="hidden"
+                  name={"interval_review[weekly_availability][#{day}][#{index}][_present]"}
+                  value="true"
+                />
+                <.interval_review_time_select
+                  day={day}
+                  index={index}
+                  boundary={:start}
+                  value={window.start}
+                  proposed_interval={@proposed_interval}
+                  overlap_invalid?={MapSet.member?(Map.fetch!(@overlap_indexes, day), index)}
+                />
+                <.interval_review_time_select
+                  day={day}
+                  index={index}
+                  boundary={:end}
+                  value={window.end}
+                  start_value={window.start}
+                  proposed_interval={@proposed_interval}
+                  overlap_invalid?={MapSet.member?(Map.fetch!(@overlap_indexes, day), index)}
+                />
+                <p
+                  :if={MapSet.member?(Map.fetch!(@overlap_indexes, day), index)}
+                  id={"interval-review-#{day}-#{index}-overlap-error"}
+                  class="col-span-2 text-sm text-danger-600 dark:text-danger-400"
+                >
+                  Este horario se superpone con otro horario del {String.downcase(label)}.
+                </p>
+                <div class="col-span-2">
+                  <.button
+                    type="button"
+                    color="danger"
+                    variant="outline"
+                    size="xs"
+                    phx-click="remove_interval_review_window"
+                    phx-value-day={day}
+                    phx-value-index={index}
+                  >
+                    Eliminar horario
+                  </.button>
+                </div>
+              </div>
+              <.button
+                type="button"
+                color="secondary"
+                variant="outline"
+                size="xs"
+                phx-click="add_interval_review_window"
+                phx-value-day={day}
+              >
+                Agregar horario
+              </.button>
+            </fieldset>
+          </div>
+        </fieldset>
+        <div class="flex justify-end">
+          <.button
+            id="confirm-interval-change"
+            type="submit"
+            color="primary"
+            disabled={interval_review_blocked?(@review)}
+          >
+            Confirmar cambio
+          </.button>
+        </div>
+      </form>
+    </section>
+    """
+  end
+
+  attr :day, :atom, required: true
+  attr :index, :integer, required: true
+  attr :boundary, :atom, values: [:start, :end], required: true
+  attr :value, :string, required: true
+  attr :start_value, :string, default: nil
+  attr :proposed_interval, :integer, required: true
+  attr :overlap_invalid?, :boolean, default: false
+
+  defp interval_review_time_select(assigns) do
+    options = TimeGrid.options(assigns.proposed_interval, assigns.boundary)
+    grid_invalid? = assigns.value not in options
+    ordering_invalid? = interval_review_order_invalid?(assigns.start_value, assigns.value)
+    invalid? = grid_invalid? or ordering_invalid? or assigns.overlap_invalid?
+    id = "interval-review-#{assigns.day}-#{assigns.index}-#{assigns.boundary}"
+    label = if(assigns.boundary == :start, do: "Desde", else: "Hasta")
+    day_label = Keyword.fetch!(@availability_days, assigns.day)
+    grid_error_id = "#{id}-error"
+    ordering_error_id = "#{id}-ordering-error"
+    overlap_error_id = "interval-review-#{assigns.day}-#{assigns.index}-overlap-error"
+
+    assigns =
+      assign(assigns,
+        id: id,
+        label: label,
+        accessible_name: "#{day_label}, horario #{assigns.index + 1}, #{String.downcase(label)}",
+        options: options,
+        grid_invalid?: grid_invalid?,
+        ordering_invalid?: ordering_invalid?,
+        overlap_invalid?: assigns.overlap_invalid?,
+        invalid?: invalid?,
+        error_id: grid_error_id,
+        ordering_error_id: ordering_error_id,
+        overlap_error_id: overlap_error_id,
+        described_by:
+          interval_review_described_by(
+            grid_invalid?,
+            grid_error_id,
+            ordering_invalid?,
+            ordering_error_id,
+            assigns.overlap_invalid?,
+            overlap_error_id
+          )
+      )
+
+    ~H"""
+    <div>
+      <label for={@id} class="text-sm font-medium">{@label}</label>
+      <select
+        id={@id}
+        class={["pc-select mt-1", @invalid? && "border-danger-500"]}
+        name={"interval_review[weekly_availability][#{@day}][#{@index}][#{@boundary}]"}
+        aria-label={@accessible_name}
+        aria-invalid={@invalid? && "true"}
+        aria-describedby={@described_by}
+        data-order-invalid={@ordering_invalid? && "true"}
+        required
+      >
+        <option :if={@grid_invalid?} value={@value} disabled selected>
+          {@value} — incompatible con {@proposed_interval} minutos
+        </option>
+        <option :for={time <- @options} value={time} selected={time == @value}>{time}</option>
+      </select>
+      <p
+        :if={@grid_invalid?}
+        id={@error_id}
+        class="mt-1 text-sm text-danger-600 dark:text-danger-400"
+      >
+        Seleccione un horario compatible con el intervalo propuesto de {@proposed_interval} minutos.
+      </p>
+      <p
+        :if={@ordering_invalid?}
+        id={@ordering_error_id}
+        class="mt-1 text-sm text-danger-600 dark:text-danger-400"
+      >
+        La hora de cierre debe ser posterior a la hora de apertura.
+      </p>
+    </div>
     """
   end
 
@@ -1105,6 +1670,181 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
       {:error, _reason} ->
         assign(socket, interval_feedback: :unavailable, interval_review: nil)
     end
+  end
+
+  defp interval_review_attributes(params, socket) do
+    current = socket.assigns.interval_review.reviewed_availability
+    week_params = Map.get(params, "weekly_availability", %{})
+
+    week =
+      Map.new(@availability_days, fn {day, _label} ->
+        day_params = Map.get(week_params, Atom.to_string(day), %{})
+        current_windows = Map.fetch!(current.weekly_availability, day)
+
+        windows =
+          day_params
+          |> Enum.reject(fn {key, _value} -> key == "_present" end)
+          |> Enum.sort_by(fn {key, _value} -> parse_review_index(key) end)
+          |> Enum.map(fn {index_text, window} ->
+            current_window = Enum.at(current_windows, parse_review_index(index_text), %{})
+
+            %{
+              start: Map.get(window, "start", Map.get(current_window, :start, "")),
+              end: Map.get(window, "end", Map.get(current_window, :end, ""))
+            }
+          end)
+
+        {day, windows}
+      end)
+
+    %{
+      weekly_availability: week,
+      booking_horizon_days:
+        parse_review_integer(
+          Map.get(params, "booking_horizon_days"),
+          current.booking_horizon_days
+        ),
+      minimum_lead_minutes:
+        parse_review_integer(
+          Map.get(params, "minimum_lead_minutes"),
+          current.minimum_lead_minutes
+        )
+    }
+  end
+
+  defp availability_attrs(availability, week) do
+    %{
+      weekly_availability: week,
+      booking_horizon_days: availability.booking_horizon_days,
+      minimum_lead_minutes: availability.minimum_lead_minutes
+    }
+  end
+
+  defp availability_day(day_name) do
+    case Enum.find(@availability_days, fn {day, _label} -> Atom.to_string(day) == day_name end) do
+      {day, _label} -> {:ok, day}
+      nil -> :error
+    end
+  end
+
+  defp update_interval_review_copy(socket, params) do
+    source =
+      case availability_day(Map.get(params, "source", "")) do
+        {:ok, day} -> day
+        :error -> nil
+      end
+
+    targets =
+      params
+      |> Map.get("targets", [])
+      |> List.wrap()
+      |> Enum.flat_map(fn day_name ->
+        case availability_day(day_name) do
+          {:ok, day} when day != source -> [day]
+          _invalid -> []
+        end
+      end)
+      |> Enum.uniq()
+
+    assign(socket,
+      interval_review_copy_source: source,
+      interval_review_copy_targets: targets
+    )
+  end
+
+  defp parse_review_index(value) do
+    case Integer.parse(value) do
+      {index, ""} -> index
+      _invalid -> 1_000_000
+    end
+  end
+
+  defp parse_review_integer(value, fallback) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _invalid -> fallback
+    end
+  end
+
+  defp parse_review_integer(_value, fallback), do: fallback
+
+  defp format_interval_time(minutes), do: TimeGrid.format(minutes)
+
+  defp format_review_boundary(%{day: day, time: time}) do
+    label = @availability_days |> Keyword.fetch!(day)
+    "#{label} #{time}"
+  end
+
+  defp interval_review_order_invalid?(start_value, end_value)
+       when is_binary(start_value) and is_binary(end_value),
+       do: start_value != "" and end_value != "" and end_value <= start_value
+
+  defp interval_review_order_invalid?(_start_value, _end_value), do: false
+
+  defp interval_review_overlap_indexes(windows) do
+    indexed_windows = Enum.with_index(windows)
+
+    Enum.reduce(indexed_windows, MapSet.new(), fn {window, index}, overlaps ->
+      if Enum.any?(indexed_windows, fn {other, other_index} ->
+           index != other_index and interval_review_windows_overlap?(window, other)
+         end) do
+        MapSet.put(overlaps, index)
+      else
+        overlaps
+      end
+    end)
+  end
+
+  defp interval_review_windows_overlap?(
+         %{start: left_start, end: left_end},
+         %{start: right_start, end: right_end}
+       )
+       when is_binary(left_start) and is_binary(left_end) and is_binary(right_start) and
+              is_binary(right_end) do
+    left_start < left_end and right_start < right_end and left_start < right_end and
+      right_start < left_end
+  end
+
+  defp interval_review_windows_overlap?(_left, _right), do: false
+
+  defp interval_review_described_by(
+         grid_invalid?,
+         grid_error_id,
+         ordering_invalid?,
+         ordering_error_id,
+         overlap_invalid?,
+         overlap_error_id
+       ) do
+    [
+      grid_invalid? && grid_error_id,
+      ordering_invalid? && ordering_error_id,
+      overlap_invalid? && overlap_error_id
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(" ")
+    |> case do
+      "" -> nil
+      ids -> ids
+    end
+  end
+
+  defp interval_review_order_blocked?(weekly_availability) do
+    Enum.any?(weekly_availability, fn {_day, windows} ->
+      Enum.any?(windows, fn window ->
+        interval_review_order_invalid?(window.start, window.end)
+      end)
+    end)
+  end
+
+  defp interval_review_blocked?(review) do
+    Enum.any?(review.consultation_type_effects, &(not &1.compatible)) or
+      review.incompatible_availability_boundaries != [] or
+      review.future_appointment_conflicts != [] or
+      map_size(review.availability_validation_errors) > 0 or
+      interval_review_order_blocked?(review.reviewed_availability.weekly_availability) or
+      Enum.any?(review.reviewed_availability.weekly_availability, fn {_day, windows} ->
+        MapSet.size(interval_review_overlap_indexes(windows)) > 0
+      end)
   end
 
   defp backend_type_errors(errors) do
