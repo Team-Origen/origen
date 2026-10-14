@@ -58,13 +58,10 @@ defmodule OrigenWeb.Router do
     end
   end
 
-  if Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
-       Mix.env() != :prod do
-    scope "/configuracion", OrigenWeb do
-      pipe_through [:browser, :require_internal_session, :require_professional]
+  scope "/configuracion", OrigenWeb do
+    pipe_through [:browser, :require_internal_session, :require_professional]
 
-      live "/profesional", ConsultationTypeCatalogLive
-    end
+    live "/profesional", ConsultationTypeCatalogLive
   end
 
   scope "/api/bootstrap", OrigenWeb do
