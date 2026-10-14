@@ -25,12 +25,13 @@ defmodule Origen.Appointments.MockCalendarTest do
       assert schedule.date == date
       assert schedule.professional_id == "PRO-DEMO-001"
       assert schedule.professional_name == "Dra. Sofía Martínez"
-      assert length(schedule.slots) == 12
+      assert length(schedule.slots) == 22
 
       first_slot = hd(schedule.slots)
       assert first_slot.start_formatted == "09:00"
       assert first_slot.end_formatted == "09:30"
       assert first_slot.status == :available
+      assert Enum.at(schedule.slots, 1).start_formatted == "09:15"
 
       assert schedule.cancellation_policy.penalty_percentage == 50
       assert schedule.cancellation_policy.cutoff_description =~ "18:00"

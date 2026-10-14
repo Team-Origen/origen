@@ -88,6 +88,28 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
       assert schedule.slots == []
     end
 
+    test "uses the persisted non-default interval independently from consultation duration", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        "UPDATE agenda_settings SET interval_minutes = 15 WHERE owner_account_id = $1",
+        [account_id]
+      )
+
+      assert {:ok, schedule} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25],
+                 now: @fixed_now,
+                 duration_minutes: 45,
+                 agenda_interval_minutes: 45
+               )
+
+      starts = Enum.map(schedule.slots, & &1.start_formatted)
+      assert "14:15" in starts
+      assert "16:15" in starts
+      refute "16:30" in starts
+      assert Enum.all?(schedule.slots, &(Time.diff(&1.end_time, &1.start_time, :minute) == 45))
+    end
+
     test "handles unknown or unconfigured professional gracefully" do
       friday = ~D[2026-09-25]
 

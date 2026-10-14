@@ -71,7 +71,7 @@ defmodule Origen.Appointments.DatabaseCalendar do
         end)
 
       duration = Keyword.get(opts, :duration_minutes, 30)
-      interval = Keyword.get(opts, :agenda_interval_minutes, settings.interval_minutes)
+      interval = settings.interval_minutes
       occupancies = Keyword.get(opts, :occupancies, [])
 
       slots =
