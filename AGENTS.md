@@ -11,3 +11,13 @@ Every implementation GitHub subissue associated with an OpenSpec change must dec
 - Path: `openspec/changes/local-bootstrap-profile/`
 - Scope: Implementation slice 1 of 6
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked in GitHub Issues for `Team-Origen/origen`. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context domain documentation. See `docs/agents/domain.md`.
