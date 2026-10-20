@@ -6,6 +6,7 @@ Este directorio reúne la documentación durable del proyecto. Las **GitHub Issu
 
 - [Glosario de dominio](./CONTEXT.md)
 - [Requisitos y decisiones de arquitectura](./Origen_Documentacion.md)
+- [Guía de trabajo para la beta: tickets, subtareas y cierre](./sprints/GUIA_TRABAJO_BETA.md)
 - [Plan de sprints](./sprints/PLAN_TENTATIVO_11_SPRINTS.md)
 - [Reprogramación y fundamentación de sprints](./sprints/REPROGRAMACION_Y_FUNDAMENTACION.md)
 - [Historial de Sprint 0](./sprints/SPRINT_00.md)

@@ -1,0 +1,588 @@
+{
+  "repository": "Team-Origen/origen",
+  "change": "health-center-beta-core",
+  "milestone": 5,
+  "status": "verified",
+  "parents": {
+    "276": {
+      "title": "[Plan]: Registrar paciente inexistente desde Secretaría",
+      "body_sha256": "3d6a20eb27a013c1e9f040bbf9d33033b10b51fe2eed51045839e5683fef8507",
+      "blockers": [],
+      "milestone": 5,
+      "assignees": []
+    },
+    "277": {
+      "title": "[Plan]: Vincular acceso de paciente por magic link",
+      "body_sha256": "1e0492de9bff35bc94a36812792f049d3d5cf218af0c1c8523af8a910362bb7e",
+      "blockers": [
+        276
+      ],
+      "milestone": 5,
+      "assignees": []
+    },
+    "278": {
+      "title": "[Plan]: Configurar perfil profesional apto para reserva",
+      "body_sha256": "ac9c2ce424dfe17eedb45c79064cc9c41439c30a3eb5b333701304c525b183cd",
+      "blockers": [],
+      "milestone": 5,
+      "assignees": []
+    },
+    "280": {
+      "title": "[Plan]: Reservar turno propio como Paciente",
+      "body_sha256": "96c8be9e313d142b872f68c3fcd47c594c9241ce9142fb6741b7b092432f9b71",
+      "blockers": [
+        277,
+        278
+      ],
+      "milestone": 5,
+      "assignees": []
+    },
+    "281": {
+      "title": "[Plan]: Agendar paciente existente desde Secretaría",
+      "body_sha256": "cfa8d45e22e88ee5cd956f67d74a548c7f492fee0d1023d2836afae854baff58",
+      "blockers": [
+        276,
+        278
+      ],
+      "milestone": 5,
+      "assignees": []
+    },
+    "282": {
+      "title": "[Plan]: Agendar paciente existente desde Profesional con privacidad",
+      "body_sha256": "a1dfebda444006d498d664b6bba3e44e87e40d5cdbabd5e9c213e7446c8c352d",
+      "blockers": [
+        276,
+        278
+      ],
+      "milestone": 5,
+      "assignees": []
+    },
+    "283": {
+      "title": "[Plan]: Registrar y agendar paciente inexistente desde Profesional",
+      "body_sha256": "f1ffaff7e8b64b472d901c1011cb355c6b6a73f02c6abe58c2187bc454438793",
+      "blockers": [
+        278,
+        282
+      ],
+      "milestone": 5,
+      "assignees": []
+    },
+    "284": {
+      "title": "[Plan]: Resolver solicitudes con aprobación manual",
+      "body_sha256": "25668e305ef5df1465d6c203915a36ce8918739eb7923f0ed23841500b0704d1",
+      "blockers": [
+        280,
+        281,
+        282,
+        283
+      ],
+      "milestone": 5,
+      "assignees": []
+    },
+    "290": {
+      "title": "[Plan]: Definir artefacto de aceptación de entrega beta",
+      "body_sha256": "6aa368c4abb39e1853ae85beb8b0255aa9d17fa39bbfaa26046b1b28fec91e1c",
+      "blockers": [],
+      "milestone": 5,
+      "assignees": []
+    }
+  },
+  "children": [
+    {
+      "parent": 276,
+      "kind": "contract",
+      "number": 293,
+      "url": "https://github.com/Team-Origen/origen/issues/293",
+      "title": "[Plan]: #276 · Contrato — Alta de paciente desde Secretaría",
+      "body_sha256": "6b758239860b46beb92b2fe9f9733554c8a65de12d83b3bd8bcee0085e8b571a",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931717418,
+      "blockers_linked": true
+    },
+    {
+      "parent": 276,
+      "kind": "backend",
+      "number": 294,
+      "url": "https://github.com/Team-Origen/origen/issues/294",
+      "title": "[Plan]: #276 · Backend — Alta de paciente desde Secretaría",
+      "body_sha256": "cfc1887042938ec853930e1b9feddaca49e0a2ed315dbd0a24c463314c17ba4c",
+      "blockers": [
+        293
+      ],
+      "parent_attached": true,
+      "id": 5931718568,
+      "blockers_linked": true
+    },
+    {
+      "parent": 276,
+      "kind": "frontend",
+      "number": 295,
+      "url": "https://github.com/Team-Origen/origen/issues/295",
+      "title": "[Plan]: #276 · Frontend — Alta de paciente desde Secretaría",
+      "body_sha256": "c1e743888be9b45e2f2996d2340468ee4a4291a933fcaad67855bd43153b56ff",
+      "blockers": [
+        293
+      ],
+      "parent_attached": true,
+      "id": 5931719624,
+      "blockers_linked": true
+    },
+    {
+      "parent": 276,
+      "kind": "integration",
+      "number": 296,
+      "url": "https://github.com/Team-Origen/origen/issues/296",
+      "title": "[Plan]: #276 · Integración y verificación — Alta de paciente desde Secretaría",
+      "body_sha256": "978593de2f3a2b82344b644c1291636d0b9f44e1128c9598e7c834a20f569b85",
+      "blockers": [
+        293,
+        294,
+        295
+      ],
+      "parent_attached": true,
+      "id": 5931720761,
+      "blockers_linked": true
+    },
+    {
+      "parent": 277,
+      "kind": "contract",
+      "number": 297,
+      "url": "https://github.com/Team-Origen/origen/issues/297",
+      "title": "[Plan]: #277 · Contrato — Acceso de paciente por magic link",
+      "body_sha256": "e0ca5d39cb50082cadd77d38c2d497b880a15f8d5e1669d9508e6e5c29d432ba",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931721648,
+      "blockers_linked": true
+    },
+    {
+      "parent": 277,
+      "kind": "backend",
+      "number": 298,
+      "url": "https://github.com/Team-Origen/origen/issues/298",
+      "title": "[Plan]: #277 · Backend — Acceso de paciente por magic link",
+      "body_sha256": "2477355ec07dfe852b6cbdf65d3a72ca3d2a427974e33d7cc36a485559a296c9",
+      "blockers": [
+        297
+      ],
+      "parent_attached": true,
+      "id": 5931722648,
+      "blockers_linked": true
+    },
+    {
+      "parent": 277,
+      "kind": "frontend",
+      "number": 299,
+      "url": "https://github.com/Team-Origen/origen/issues/299",
+      "title": "[Plan]: #277 · Frontend — Acceso de paciente por magic link",
+      "body_sha256": "2f5b8ed897033d3a9fe9879c20da7006150b8fedda65cd8613596672cd7637e6",
+      "blockers": [
+        297
+      ],
+      "parent_attached": true,
+      "id": 5931723639,
+      "blockers_linked": true
+    },
+    {
+      "parent": 277,
+      "kind": "integration",
+      "number": 300,
+      "url": "https://github.com/Team-Origen/origen/issues/300",
+      "title": "[Plan]: #277 · Integración y verificación — Acceso de paciente por magic link",
+      "body_sha256": "e6caf22cb0d901de93c9d8f5ec038ede0cb02261739408941f6feab6d034afe9",
+      "blockers": [
+        276,
+        297,
+        298,
+        299
+      ],
+      "parent_attached": true,
+      "id": 5931725402,
+      "blockers_linked": true
+    },
+    {
+      "parent": 278,
+      "kind": "contract",
+      "number": 301,
+      "url": "https://github.com/Team-Origen/origen/issues/301",
+      "title": "[Plan]: #278 · Contrato — Perfil profesional apto para reserva",
+      "body_sha256": "db59f1746c88ecc98b8a15e5f2336e35339b98c18d50a684bea9dbd07ffd78f3",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931726514,
+      "blockers_linked": true
+    },
+    {
+      "parent": 278,
+      "kind": "backend",
+      "number": 302,
+      "url": "https://github.com/Team-Origen/origen/issues/302",
+      "title": "[Plan]: #278 · Backend — Perfil profesional apto para reserva",
+      "body_sha256": "a7373af888ff54fe740a96bfa2743c7ce50a3a30a68f5465a7f25658a83ce6dd",
+      "blockers": [
+        301
+      ],
+      "parent_attached": true,
+      "id": 5931727669,
+      "blockers_linked": true
+    },
+    {
+      "parent": 278,
+      "kind": "frontend",
+      "number": 303,
+      "url": "https://github.com/Team-Origen/origen/issues/303",
+      "title": "[Plan]: #278 · Frontend — Perfil profesional apto para reserva",
+      "body_sha256": "378e645a123518c98ed0ae778240dd2a2fb6785e4f7e9d205d25ce5cd93860ae",
+      "blockers": [
+        301
+      ],
+      "parent_attached": true,
+      "id": 5931728668,
+      "blockers_linked": true
+    },
+    {
+      "parent": 278,
+      "kind": "integration",
+      "number": 304,
+      "url": "https://github.com/Team-Origen/origen/issues/304",
+      "title": "[Plan]: #278 · Integración y verificación — Perfil profesional apto para reserva",
+      "body_sha256": "752f87a022a24c13197dd687603cb8190460cbfc9a33c0acd86232d98c4d35f3",
+      "blockers": [
+        301,
+        302,
+        303
+      ],
+      "parent_attached": true,
+      "id": 5931729698,
+      "blockers_linked": true
+    },
+    {
+      "parent": 280,
+      "kind": "contract",
+      "number": 305,
+      "url": "https://github.com/Team-Origen/origen/issues/305",
+      "title": "[Plan]: #280 · Contrato — Reserva propia del Paciente",
+      "body_sha256": "e0d03df2cba5785d457e7be9fab532c3694626b34a52a21c66b91555b413b915",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931730699,
+      "blockers_linked": true
+    },
+    {
+      "parent": 280,
+      "kind": "backend",
+      "number": 306,
+      "url": "https://github.com/Team-Origen/origen/issues/306",
+      "title": "[Plan]: #280 · Backend — Reserva propia del Paciente",
+      "body_sha256": "cfaa9019cd2a043b1ecf99f29cf170c84b11ede7c7ed489e5b6df10b6339a43c",
+      "blockers": [
+        305
+      ],
+      "parent_attached": true,
+      "id": 5931731545,
+      "blockers_linked": true
+    },
+    {
+      "parent": 280,
+      "kind": "frontend",
+      "number": 307,
+      "url": "https://github.com/Team-Origen/origen/issues/307",
+      "title": "[Plan]: #280 · Frontend — Reserva propia del Paciente",
+      "body_sha256": "39660c747eeac374dc644ea7eb9b93f7b4dfadd0f27689c73e8e9a71f2184a47",
+      "blockers": [
+        305
+      ],
+      "parent_attached": true,
+      "id": 5931732819,
+      "blockers_linked": true
+    },
+    {
+      "parent": 280,
+      "kind": "integration",
+      "number": 308,
+      "url": "https://github.com/Team-Origen/origen/issues/308",
+      "title": "[Plan]: #280 · Integración y verificación — Reserva propia del Paciente",
+      "body_sha256": "1af6351fb7e1565f7d1e8a0dfbd2bce96f4c89237c20457c316090677afd5f34",
+      "blockers": [
+        277,
+        278,
+        305,
+        306,
+        307
+      ],
+      "parent_attached": true,
+      "id": 5931734045,
+      "blockers_linked": true
+    },
+    {
+      "parent": 281,
+      "kind": "contract",
+      "number": 309,
+      "url": "https://github.com/Team-Origen/origen/issues/309",
+      "title": "[Plan]: #281 · Contrato — Agenda de paciente existente desde Secretaría",
+      "body_sha256": "d9e534218f394ef18e42517cd1e1cb1828c5cd2b6196a1ceab334cf9d2d83328",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931735124,
+      "blockers_linked": true
+    },
+    {
+      "parent": 281,
+      "kind": "backend",
+      "number": 310,
+      "url": "https://github.com/Team-Origen/origen/issues/310",
+      "title": "[Plan]: #281 · Backend — Agenda de paciente existente desde Secretaría",
+      "body_sha256": "b00237828cff43955e7b78321fac228f71cc5a6bc9e41b8c022b06e28a3707b4",
+      "blockers": [
+        309
+      ],
+      "parent_attached": true,
+      "id": 5931736103,
+      "blockers_linked": true
+    },
+    {
+      "parent": 281,
+      "kind": "frontend",
+      "number": 311,
+      "url": "https://github.com/Team-Origen/origen/issues/311",
+      "title": "[Plan]: #281 · Frontend — Agenda de paciente existente desde Secretaría",
+      "body_sha256": "fb0c77019f75235e7037aaea7ce9582ab27514fb67de5b5d2bc354ab639ef3bf",
+      "blockers": [
+        309
+      ],
+      "parent_attached": true,
+      "id": 5931737288,
+      "blockers_linked": true
+    },
+    {
+      "parent": 281,
+      "kind": "integration",
+      "number": 312,
+      "url": "https://github.com/Team-Origen/origen/issues/312",
+      "title": "[Plan]: #281 · Integración y verificación — Agenda de paciente existente desde Secretaría",
+      "body_sha256": "7256719a28a436157570cfa78d4b3a663b92f9ac6254572e51336cf7b8d04175",
+      "blockers": [
+        276,
+        278,
+        309,
+        310,
+        311
+      ],
+      "parent_attached": true,
+      "id": 5931738304,
+      "blockers_linked": true
+    },
+    {
+      "parent": 282,
+      "kind": "contract",
+      "number": 313,
+      "url": "https://github.com/Team-Origen/origen/issues/313",
+      "title": "[Plan]: #282 · Contrato — Agenda del Profesional con privacidad",
+      "body_sha256": "964df4d2d03689425616471275f9b4d210ea1ee5800914ba94dc36abc18e43e6",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931739552,
+      "blockers_linked": true
+    },
+    {
+      "parent": 282,
+      "kind": "backend",
+      "number": 314,
+      "url": "https://github.com/Team-Origen/origen/issues/314",
+      "title": "[Plan]: #282 · Backend — Agenda del Profesional con privacidad",
+      "body_sha256": "772f48d591b8a2f066bdd76876c2c7702b4d45c956dd41d84935aeb86c7dfc37",
+      "blockers": [
+        313
+      ],
+      "parent_attached": true,
+      "id": 5931740598,
+      "blockers_linked": true
+    },
+    {
+      "parent": 282,
+      "kind": "frontend",
+      "number": 315,
+      "url": "https://github.com/Team-Origen/origen/issues/315",
+      "title": "[Plan]: #282 · Frontend — Agenda del Profesional con privacidad",
+      "body_sha256": "26d1b819679a0db0bcd6817d9e9976e252e7b8ce49f959ec4d53fbbe80ae32fa",
+      "blockers": [
+        313
+      ],
+      "parent_attached": true,
+      "id": 5931741748,
+      "blockers_linked": true
+    },
+    {
+      "parent": 282,
+      "kind": "integration",
+      "number": 316,
+      "url": "https://github.com/Team-Origen/origen/issues/316",
+      "title": "[Plan]: #282 · Integración y verificación — Agenda del Profesional con privacidad",
+      "body_sha256": "07ea24664cd45410d6a9447841731375a26c79d6dbb444862b51a5e777b23a3c",
+      "blockers": [
+        276,
+        278,
+        313,
+        314,
+        315
+      ],
+      "parent_attached": true,
+      "id": 5931742936,
+      "blockers_linked": true
+    },
+    {
+      "parent": 283,
+      "kind": "contract",
+      "number": 317,
+      "url": "https://github.com/Team-Origen/origen/issues/317",
+      "title": "[Plan]: #283 · Contrato — Alta y agenda desde Profesional",
+      "body_sha256": "c5bebf374b2f1fd0bdb737a547c79d4ef4322c3c607f6e70e8b1b7ca562882db",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931744017,
+      "blockers_linked": true
+    },
+    {
+      "parent": 283,
+      "kind": "backend",
+      "number": 318,
+      "url": "https://github.com/Team-Origen/origen/issues/318",
+      "title": "[Plan]: #283 · Backend — Alta y agenda desde Profesional",
+      "body_sha256": "db2b95501faaa5b5fee0e060746b46ad6bedbc58208402571ff66e68408bc6ea",
+      "blockers": [
+        317
+      ],
+      "parent_attached": true,
+      "id": 5931745044,
+      "blockers_linked": true
+    },
+    {
+      "parent": 283,
+      "kind": "frontend",
+      "number": 319,
+      "url": "https://github.com/Team-Origen/origen/issues/319",
+      "title": "[Plan]: #283 · Frontend — Alta y agenda desde Profesional",
+      "body_sha256": "395e24a8653cedc9f92547930f941173624a426480c4067beeb1c3ce0b9e696a",
+      "blockers": [
+        317
+      ],
+      "parent_attached": true,
+      "id": 5931745981,
+      "blockers_linked": true
+    },
+    {
+      "parent": 283,
+      "kind": "integration",
+      "number": 320,
+      "url": "https://github.com/Team-Origen/origen/issues/320",
+      "title": "[Plan]: #283 · Integración y verificación — Alta y agenda desde Profesional",
+      "body_sha256": "59f2949b80983b3ade272a7510c74c3401af96b3e272081754473528771eb51e",
+      "blockers": [
+        278,
+        282,
+        317,
+        318,
+        319
+      ],
+      "parent_attached": true,
+      "id": 5931746868,
+      "blockers_linked": true
+    },
+    {
+      "parent": 284,
+      "kind": "contract",
+      "number": 321,
+      "url": "https://github.com/Team-Origen/origen/issues/321",
+      "title": "[Plan]: #284 · Contrato — Aprobación manual de solicitudes",
+      "body_sha256": "35280341d315beb2e8d901c80b4648f68c0322f3ef18b36db97ebf6b0b4d0610",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931747851,
+      "blockers_linked": true
+    },
+    {
+      "parent": 284,
+      "kind": "backend",
+      "number": 322,
+      "url": "https://github.com/Team-Origen/origen/issues/322",
+      "title": "[Plan]: #284 · Backend — Aprobación manual de solicitudes",
+      "body_sha256": "3f76b3849750489ffd0021a82d090af0bc1fec7504df77592efb0da9a13a920d",
+      "blockers": [
+        321
+      ],
+      "parent_attached": true,
+      "id": 5931748993,
+      "blockers_linked": true
+    },
+    {
+      "parent": 284,
+      "kind": "frontend",
+      "number": 323,
+      "url": "https://github.com/Team-Origen/origen/issues/323",
+      "title": "[Plan]: #284 · Frontend — Aprobación manual de solicitudes",
+      "body_sha256": "4d0626b5b0e23a33176ee70fc98e0192934a513a10fecdcb7bf7b2c25b5db14c",
+      "blockers": [
+        321
+      ],
+      "parent_attached": true,
+      "id": 5931750328,
+      "blockers_linked": true
+    },
+    {
+      "parent": 284,
+      "kind": "integration",
+      "number": 324,
+      "url": "https://github.com/Team-Origen/origen/issues/324",
+      "title": "[Plan]: #284 · Integración y verificación — Aprobación manual de solicitudes",
+      "body_sha256": "5d589266d8f7c83fa9a0951ee5de7336dc608db05ab62a795aaab93f8bd31012",
+      "blockers": [
+        280,
+        281,
+        282,
+        283,
+        321,
+        322,
+        323
+      ],
+      "parent_attached": true,
+      "id": 5931751556,
+      "blockers_linked": true
+    },
+    {
+      "parent": 290,
+      "kind": "contract",
+      "number": 325,
+      "url": "https://github.com/Team-Origen/origen/issues/325",
+      "title": "[Plan]: #290 · Contrato — Artefacto de aceptación de beta",
+      "body_sha256": "670dab4c10cbf3c12838461758d2fe3d5fc3b9fea574f4352b3bc65fbada8465",
+      "blockers": [],
+      "parent_attached": true,
+      "id": 5931752449,
+      "blockers_linked": true
+    },
+    {
+      "parent": 290,
+      "kind": "integration",
+      "number": 326,
+      "url": "https://github.com/Team-Origen/origen/issues/326",
+      "title": "[Plan]: #290 · Integración y verificación — Artefacto de aceptación de beta",
+      "body_sha256": "c3adfa5b5da05749dbde9b7128c4ba50d92f45f36e5dac2bd9a357431d9eeaf8",
+      "blockers": [
+        325
+      ],
+      "parent_attached": true,
+      "id": 5931753572,
+      "blockers_linked": true
+    }
+  ],
+  "verification": {
+    "children": 34,
+    "parents": 9,
+    "native_dependency_edges": 54,
+    "milestone_members": 43,
+    "parent_bodies_and_blockers_unchanged": true,
+    "no_assignees": true,
+    "exact_child_bodies": true
+  }
+}
