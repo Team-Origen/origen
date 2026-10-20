@@ -1,0 +1,1528 @@
+{
+  "status": "verified",
+  "project": {
+    "id": "PVT_kwDOErCx2M4Bn1G5",
+    "title": "Appointment Manager — Beta W16.",
+    "url": "https://github.com/orgs/Team-Origen/projects/6",
+    "items": {
+      "pageInfo": {
+        "hasNextPage": false
+      },
+      "nodes": []
+    },
+    "views": {
+      "nodes": [
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLh4",
+          "name": "Backlog",
+          "layout": "BOARD_LAYOUT",
+          "filter": ""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiA",
+          "name": "My Work",
+          "layout": "TABLE_LAYOUT",
+          "filter": "assignee:@me, iteration:\"Sprint 0\""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiE",
+          "name": "Current Sprint",
+          "layout": "BOARD_LAYOUT",
+          "filter": "iteration:\"Sprint 0\""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiI",
+          "name": "Planning",
+          "layout": "TABLE_LAYOUT",
+          "filter": ""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiM",
+          "name": "Roadmap",
+          "layout": "ROADMAP_LAYOUT",
+          "filter": ""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiQ",
+          "name": "History",
+          "layout": "TABLE_LAYOUT",
+          "filter": "iteration:@previous"
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiU",
+          "name": "Priority board",
+          "layout": "BOARD_LAYOUT",
+          "filter": ""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLiY",
+          "name": "Team items",
+          "layout": "TABLE_LAYOUT",
+          "filter": ""
+        },
+        {
+          "id": "PVTV_lADOErCx2M4Bn1G5zgMJLic",
+          "name": "View 9",
+          "layout": "TABLE_LAYOUT",
+          "filter": null
+        }
+      ]
+    }
+  },
+  "issues": [
+    {
+      "number": 266,
+      "node_id": "I_kwDOTvGwCc8AAAABYFgVug",
+      "status": "Father Issues",
+      "open_blockers": [],
+      "original": {
+        "title": "Mapa Wayfinder: alcance y prioridades de la beta de turnos",
+        "body": "## Destination\nDefinir el alcance funcional y las prioridades de una beta académica de gestión de turnos configurable para un único centro de salud, reutilizando ORIGEN y aclarando las decisiones necesarias antes de especificar su implementación.\n\n## Notes\n- Este es el único mapa canónico de este esfuerzo. Antecedente, conservado sin modificaciones: [Planificación Wayfinder para generalizar ORIGEN a centros de salud](https://github.com/Team-Origen/origen/issues/265).\n- Fuente primaria: entrevista con el responsable del producto en esta conversación. Los tickets cerrados son registros retrospectivos de acuerdos humanos ya alcanzados; no representan sesiones de tickets realizadas ni nuevas resoluciones durante el trazado.\n- El mapa es un índice. El detalle de cada acuerdo vive en el comentario de resolución histórica de su ticket, no se duplica aquí.\n- Las preguntas abiertas son tickets hijos consultables en GitHub; no son tareas de implementación. No se reabre la entrevista salvo contradicción concreta.\n- Consultar `grilling`, `domain-modeling`, `AGENTS.md`, `docs/agents/issue-tracker.md` y `docs/agents/domain.md`. Este runtime aplica las instrucciones mediante lectura: no expone herramienta `Skill` ni se afirma composición nativa comprobada.\n- Solo planificación. La publicación autorizada no habilita cambios de código, documentos locales, implementación, PRs o reparto del equipo. U1–U12 y unidades visuales son propuestas provisionales, no tickets de implementación.\n- La lectura del repositorio no incluyó ejecución de pruebas: presencia de código o verificaciones históricas no certifica preparación actual.\n\n## Decisions so far\n- [Acordar destino, entregas y condiciones académicas](https://github.com/Team-Origen/origen/issues/267): Destino académico, cuatro semanas a beta y dos a final, datos cargados por uso real y despliegue en nube.\n- [Definir identidad y acceso de pacientes en ambos canales](https://github.com/Team-Origen/origen/issues/268): Alta asistida separada del acceso por correo; datos obligatorios, correcciones y vinculación por personal.\n- [Delimitar perfiles profesionales, ajustes y administración de cuentas](https://github.com/Team-Origen/origen/issues/269): Perfil profesional declarado, ajustes reservados y ciclo de cuentas administrativas con preservación de turnos.\n- [Definir creación de turnos, relaciones y privacidad de agendas](https://github.com/Team-Origen/origen/issues/270): Tres canales, búsqueda DNI dentro de reserva, relación al crear turno y privacidad entre profesionales.\n- [Acordar aprobación y ciclo de vida del turno](https://github.com/Team-Origen/origen/issues/271): Modalidades de aprobación, ocupación, vencimiento, cancelación, asistencia e historial.\n- [Acotar pagos y resumen económico de la primera entrega](https://github.com/Team-Origen/origen/issues/272): Pago total sin comprobantes, corrección trazable y resumen por fecha de turno con exclusiones explícitas.\n- [Ordenar prioridades sin recortar el alcance de la beta](https://github.com/Team-Origen/origen/issues/273): Identidad visual temprana y orden funcional aprobado; desglose de implementación permanece provisional.\n\n## Not yet specified\n- Elección concreta de hosting y presupuesto definitivo: se especificará después de aclarar condiciones con los docentes. La nube ya es requisito; gratuito/mínimo es preferencia provisional.\n- Se permite preparar la especificación del núcleo funcional aprobado mientras identidad visual y condiciones de hosting siguen pendientes. No se darán por resueltos: bloquearán únicamente el trabajo que dependa de ellos, sin inventar nombre, colores, proveedor o presupuesto. La estimación y el reparto se tratarán después; esta disposición no autoriza implementar ni publicar la especificación o tickets de implementación sin aprobación de su fase.\n\n## Out of scope\n### Funcionalidades excluidas de esta beta\n- WhatsApp y obligatoriedad de verificar el teléfono para reservar.\n- Notas del profesional, devoluciones clínicas de consulta, historia clínica y resultados.\n- Multas, advertencias de multas y bloqueos por multa impaga.\n- Reprogramación directa y edición del tipo de consulta de un turno existente: cancelar y crear otro.\n- Adjuntar, consultar o revisar comprobantes; pagos parciales, cuenta corriente/saldo a favor del paciente, devoluciones registradas o automáticas y traslado automático de pagos.\n- Reservas para familiares o personas a cargo desde la cuenta paciente.\n- Lista de espera, reportes avanzados y resumen global/comparativo del centro.\n- Edición autónoma de datos/correo por el paciente; solicitudes internas de corrección o vinculación.\n- Verificación de credenciales médicas y catálogos precargados de tipos de matrícula.\n- Personalización de marca por centro y pruebas de rendimiento.\n\n### Límites de este mapa\n- Ejecutar desarrollo, despliegues, migraciones o cambios de datos reales.\n- Crear tickets de implementación o asignar desarrolladores durante este trazado. La continuación puede ser `/to-spec` sobre el núcleo aprobado sin esperar a resolver los pendientes independientes; después, `/to-tickets` con revisión y aprobación propias. No implementar directamente ni considerar resueltos los pendientes por avanzar de fase.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "wayfinder:map"
+        ],
+        "milestone": null,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cew",
+      "status_applied": true
+    },
+    {
+      "number": 276,
+      "node_id": "I_kwDOTvGwCc8AAAABYTuPHQ",
+      "status": "Father Issues",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: Registrar paciente inexistente desde Secretaría",
+        "body": "### Objetivo\n\nSecretaría busca un DNI y registra un paciente inexistente para usarlo en la operación asistida.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 01 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Busca antes de crear y conserva unicidad de DNI.\n- [ ] Exige nombre, apellido, DNI, fecha de nacimiento y teléfono; correo opcional.\n- [ ] No crea acceso personal ni exige teléfono verificado.\n\n### Dependencias y bloqueos\n\nNinguna (puede comenzar inmediatamente)\n\n### Fuera de alcance\n\nNo incluye agenda, reserva ni acceso personal.\n\n### Evidencia esperada\n\nPruebas de alta asistida, DNI duplicado y ausencia de cuenta automática.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cgM",
+      "status_applied": true
+    },
+    {
+      "number": 277,
+      "node_id": "I_kwDOTvGwCc8AAAABYTuVDQ",
+      "status": "Father Issues",
+      "open_blockers": [
+        276
+      ],
+      "original": {
+        "title": "[Plan]: Vincular acceso de paciente por magic link",
+        "body": "### Objetivo\n\nEl personal autorizado vincula o reemplaza correo; el paciente accede sólo a su información mediante magic link.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 02 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nSeguridad\n\n### Criterios de aceptación\n\n- [ ] El correo nuevo es único y prueba posesión mediante magic link.\n- [ ] El reemplazo preserva historia, invalida enlaces/sesiones previos y registra actor/fecha.\n- [ ] El flujo público no revela existencia por DNI.\n\n### Dependencias y bloqueos\n\n01 — Registrar paciente inexistente desde Secretaría\n\n### Fuera de alcance\n\nNo incluye edición autónoma de datos/correo.\n\n### Evidencia esperada\n\nPruebas de vinculación, reemplazo, invalidación y no enumeración; reutiliza sin duplicar #193.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": [
+          276
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_ciM",
+      "status_applied": true
+    },
+    {
+      "number": 278,
+      "node_id": "I_kwDOTvGwCc8AAAABYTuZQA",
+      "status": "Father Issues",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: Configurar perfil profesional apto para reserva",
+        "body": "### Objetivo\n\nUn Profesional completa su perfil y ajustes para aparecer disponible a pacientes.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 03 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Exige datos declarados de perfil antes de aparecer en reservas.\n- [ ] Permite configurar intervalo, consultas, duración, precio, horarios, anticipación y horizonte.\n- [ ] Secretaría no lee ni muta ajustes; foto opcional.\n\n### Dependencias y bloqueos\n\nNinguna (puede comenzar inmediatamente)\n\n### Fuera de alcance\n\nNo incluye verificación ni catálogo de matrículas.\n\n### Evidencia esperada\n\nPruebas de visibilidad profesional completo/incompleto y denegación a Secretaría.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cj0",
+      "status_applied": true
+    },
+    {
+      "number": 279,
+      "node_id": "I_kwDOTvGwCc8AAAABYTueWw",
+      "status": "Father Issues",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: Administrar ciclo de cuentas internas",
+        "body": "### Objetivo\n\nAdministrador gestiona cuentas de Profesional y Secretaría sin permisos operativos implícitos.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 04 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Crea, edita, desactiva y reactiva cuentas, incluido correo.\n- [ ] Desactivar corta acceso/nuevas reservas y muestra futuros afectados sin borrar historia.\n- [ ] Reactivar no restaura turnos cancelados.\n\n### Dependencias y bloqueos\n\nNinguna (puede comenzar inmediatamente)\n\n### Fuera de alcance\n\nNo incluye pacientes, turnos, pagos ni ajustes profesionales.\n\n### Evidencia esperada\n\nPruebas de permisos y preservación de historia.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_ck0",
+      "status_applied": true
+    },
+    {
+      "number": 280,
+      "node_id": "I_kwDOTvGwCc8AAAABYTuj8A",
+      "status": "Father Issues",
+      "open_blockers": [
+        277,
+        278
+      ],
+      "original": {
+        "title": "[Plan]: Reservar turno propio como Paciente",
+        "body": "### Objetivo\n\nUn Paciente autenticado reserva sólo para sí usando disponibilidad real.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 05 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Elige Profesional, consulta, fecha y hora disponibles.\n- [ ] No exige teléfono verificado ni reglas D-1 incompatibles.\n- [ ] Evita doble ocupación y crea relación al concretar.\n\n### Dependencias y bloqueos\n\n02 — Vincular acceso de paciente por magic link; 03 — Configurar perfil profesional apto para reserva\n\n### Fuera de alcance\n\nNo incluye familiares, aprobación manual ni pagos.\n\n### Evidencia esperada\n\nPruebas end-to-end de reserva, disponibilidad, ocupación y teléfono no obligatorio.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": [
+          277,
+          278
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cm8",
+      "status_applied": true
+    },
+    {
+      "number": 281,
+      "node_id": "I_kwDOTvGwCc8AAAABYTuoEA",
+      "status": "Father Issues",
+      "open_blockers": [
+        276,
+        278
+      ],
+      "original": {
+        "title": "[Plan]: Agendar paciente existente desde Secretaría",
+        "body": "### Objetivo\n\nSecretaría crea un turno asistido para un paciente existente en una agenda del centro.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 06 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Localiza paciente existente y opera agenda del centro.\n- [ ] Respeta disponibilidad y modalidad de aprobación.\n- [ ] No acepta ni rechaza solicitudes.\n\n### Dependencias y bloqueos\n\n01 — Registrar paciente inexistente desde Secretaría; 03 — Configurar perfil profesional apto para reserva\n\n### Fuera de alcance\n\nNo incluye alta de paciente inexistente, aprobación ni ajustes.\n\n### Evidencia esperada\n\nPruebas end-to-end de agenda asistida, permisos y ocupación.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": [
+          276,
+          278
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_coQ",
+      "status_applied": true
+    },
+    {
+      "number": 282,
+      "node_id": "I_kwDOTvGwCc8AAAABYTut6g",
+      "status": "Father Issues",
+      "open_blockers": [
+        276,
+        278
+      ],
+      "original": {
+        "title": "[Plan]: Agendar paciente existente desde Profesional con privacidad",
+        "body": "### Objetivo\n\nUn Profesional agenda paciente existente desde su lista o DNI exacto sin cruzar privacidad.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 07 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Buscar/abandonar no crea relación.\n- [ ] Concretar solicitud o turno crea relación.\n- [ ] No revela actividad con otros Profesionales.\n\n### Dependencias y bloqueos\n\n01 — Registrar paciente inexistente desde Secretaría; 03 — Configurar perfil profesional apto para reserva\n\n### Fuera de alcance\n\nNo incluye registrar paciente inexistente ni aprobar solicitudes.\n\n### Evidencia esperada\n\nPruebas de búsqueda, relación y regresión de privacidad sin duplicar #202.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": [
+          276,
+          278
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cqc",
+      "status_applied": true
+    },
+    {
+      "number": 283,
+      "node_id": "I_kwDOTvGwCc8AAAABYTuzgA",
+      "status": "Father Issues",
+      "open_blockers": [
+        278,
+        282
+      ],
+      "original": {
+        "title": "[Plan]: Registrar y agendar paciente inexistente desde Profesional",
+        "body": "### Objetivo\n\nUn Profesional registra un paciente inexistente dentro de Crear turno y completa el turno propio.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 08 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Alta asistida sin correo ni acceso personal cuando DNI no existe.\n- [ ] Concretar crea relación; buscar/abandonar no.\n- [ ] Conserva disponibilidad y privacidad.\n\n### Dependencias y bloqueos\n\n03 — Configurar perfil profesional apto para reserva; 07 — Agendar paciente existente desde Profesional con privacidad\n\n### Fuera de alcance\n\nNo incluye acceso personal ni administración global.\n\n### Evidencia esperada\n\nPrueba end-to-end desde DNI inexistente a turno creado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": [
+          278,
+          282
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cr8",
+      "status_applied": true
+    },
+    {
+      "number": 284,
+      "node_id": "I_kwDOTvGwCc8AAAABYTu32Q",
+      "status": "Father Issues",
+      "open_blockers": [
+        280,
+        281,
+        282,
+        283
+      ],
+      "original": {
+        "title": "[Plan]: Resolver solicitudes con aprobación manual",
+        "body": "### Objetivo\n\nEl Profesional configura aprobación y resuelve sólo solicitudes de su agenda.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 09 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Automática confirma nuevas reservas; manual deja pendiente al Paciente y define una regla de Secretaría.\n- [ ] Turnos de Profesional quedan confirmados.\n- [ ] Pendiente ocupa horario y sólo dueño acepta/rechaza.\n- [ ] Cambio de modalidad afecta sólo reservas nuevas.\n\n### Dependencias y bloqueos\n\n05 — Reservar turno propio como Paciente; 06 — Agendar paciente existente desde Secretaría; 07 — Agendar paciente existente desde Profesional con privacidad; 08 — Registrar y agendar paciente inexistente desde Profesional\n\n### Fuera de alcance\n\nNo incluye vencimiento, cancelación, asistencia ni multas.\n\n### Evidencia esperada\n\nPruebas de modalidades, ocupación, autorización y pendientes existentes.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": [
+          280,
+          281,
+          282,
+          283
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_ctg",
+      "status_applied": true
+    },
+    {
+      "number": 285,
+      "node_id": "I_kwDOTvGwCc8AAAABYTu8TQ",
+      "status": "Father Issues",
+      "open_blockers": [
+        284
+      ],
+      "original": {
+        "title": "[Plan]: Cerrar ciclo operativo del turno",
+        "body": "### Objetivo\n\nPacientes y personal manejan vencimiento, cancelación, asistencia, ausencia e historial.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 10 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Solicitud no resuelta vence al inicio sin multa/ausencia/confirmación.\n- [ ] Paciente cancela antes; personal cancela con motivo y origen.\n- [ ] Personal marca asistencia/ausencia.\n- [ ] Cambiar fecha/hora/tipo es cancelar y crear.\n\n### Dependencias y bloqueos\n\n09 — Resolver solicitudes con aprobación manual\n\n### Fuera de alcance\n\nNo incluye WhatsApp, multas, notificaciones automáticas ni reprogramación directa.\n\n### Evidencia esperada\n\nPruebas de transiciones, liberación de horario e historial.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          284
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cvA",
+      "status_applied": true
+    },
+    {
+      "number": 286,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvBLA",
+      "status": "Father Issues",
+      "open_blockers": [
+        285
+      ],
+      "original": {
+        "title": "[Plan]: Bloquear rangos puntuales de agenda",
+        "body": "### Objetivo\n\nProfesional y Secretaría bloquean/desbloquean rangos sin cancelar ocupantes automáticamente.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 11 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Rechaza bloquear rangos con turnos o solicitudes activos.\n- [ ] Permite bloquear/desbloquear rangos libres.\n- [ ] Nunca cancela automáticamente.\n\n### Dependencias y bloqueos\n\n10 — Cerrar ciclo operativo del turno\n\n### Fuera de alcance\n\nNo incluye horarios semanales ni reprogramación.\n\n### Evidencia esperada\n\nPruebas de rangos libres, conflictos y no cancelación automática.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          285
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cwg",
+      "status_applied": true
+    },
+    {
+      "number": 287,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvGHg",
+      "status": "Father Issues",
+      "open_blockers": [
+        285
+      ],
+      "original": {
+        "title": "[Plan]: Registrar y corregir pagos simples",
+        "body": "### Objetivo\n\nProfesional y Secretaría registran pago total y corrigen una marca pagada errónea.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 12 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Un pago total efectivo/transferencia sólo para confirmado o asistido.\n- [ ] Ajusta precio final antes de pago y lo bloquea después.\n- [ ] Reversión preserva actor/fecha/acción, vuelve pendiente y habilita precio.\n- [ ] Cancelar no borra pago.\n\n### Dependencias y bloqueos\n\n10 — Cerrar ciclo operativo del turno\n\n### Fuera de alcance\n\nNo incluye comprobantes, parciales, cuentas corrientes, devoluciones, créditos o traslados.\n\n### Evidencia esperada\n\nPruebas de pago, corrección, permisos y cancelación.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          285
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_cyQ",
+      "status_applied": true
+    },
+    {
+      "number": 288,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvKJw",
+      "status": "Father Issues",
+      "open_blockers": [
+        287
+      ],
+      "original": {
+        "title": "[Plan]: Consultar resumen económico por fecha de turno",
+        "body": "### Objetivo\n\nProfesional consulta su resumen y Secretaría el de un Profesional por fecha de turno.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 13 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Pagado incluye cancelados y ausencias pagados.\n- [ ] Pendiente incluye sólo confirmados/asistidos impagos y aplica exclusiones.\n- [ ] No presenta total como deuda, caja, ingreso neto o saldo.\n- [ ] Administrador no accede.\n\n### Dependencias y bloqueos\n\n12 — Registrar y corregir pagos simples\n\n### Fuera de alcance\n\nNo incluye resumen global, comparaciones ni reportes avanzados.\n\n### Evidencia esperada\n\nPruebas de cálculo, período y visibilidad.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          287
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c0E",
+      "status_applied": true
+    },
+    {
+      "number": 289,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvOew",
+      "status": "Father Issues",
+      "open_blockers": [
+        280,
+        281,
+        282,
+        283,
+        284,
+        285,
+        286,
+        287,
+        288
+      ],
+      "original": {
+        "title": "[Plan]: Unificar navegación y mensajes del núcleo",
+        "body": "### Objetivo\n\nLos cuatro roles recorren identidad, agenda, turnos y pagos con navegación y estados coherentes.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 14 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Distingue solicitud, confirmación, vencimiento, cancelación, asistencia, ausencia y pago.\n- [ ] Mantiene accesibilidad y coherencia.\n- [ ] Foto opcional no bloquea flujos.\n\n### Dependencias y bloqueos\n\n05–13 — Todos los slices funcionales previos\n\n### Fuera de alcance\n\nNo incluye nombre, logo, paleta ni tipografía.\n\n### Evidencia esperada\n\nVerificación funcional de recorridos y estados observables.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          280,
+          281,
+          282,
+          283,
+          284,
+          285,
+          286,
+          287,
+          288
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c1E",
+      "status_applied": true
+    },
+    {
+      "number": 290,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvTHA",
+      "status": "Father Issues",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: Definir artefacto de aceptación de entrega beta",
+        "body": "### Objetivo\n\nLa beta cuenta con un artefacto separado para demostrar entregables obligatorios.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 15 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nDocumentación\n\n### Criterios de aceptación\n\n- [ ] Criterios para manual, datos ficticios por flujos reales y comprobaciones funcionales/de permisos.\n- [ ] Incluye estabilización y condiciones docentes.\n- [ ] Distingue definición del artefacto de ejecución final.\n\n### Dependencias y bloqueos\n\nNinguna (puede comenzar inmediatamente)\n\n### Fuera de alcance\n\nNo elige hosting/presupuesto/proveedor ni implementa funciones.\n\n### Evidencia esperada\n\nArtefacto revisable que referencia la spec y #266 sin inventar evidencia.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c2M",
+      "status_applied": true
+    },
+    {
+      "number": 291,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvX8g",
+      "status": "Father Issues",
+      "open_blockers": [
+        274,
+        289
+      ],
+      "original": {
+        "title": "[Plan]: Aplicar identidad visual aprobada",
+        "body": "### Objetivo\n\nEl sistema aplica la identidad visual decidida sin personalización por centro.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 16 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Usa sólo identidad resuelta en #274.\n- [ ] La integra en recorridos ya coherentes.\n- [ ] No vuelve obligatoria la foto profesional.\n\n### Dependencias y bloqueos\n\n#274 — Elegir la identidad visual básica del sistema; 14 — Unificar navegación y mensajes del núcleo\n\n### Fuera de alcance\n\nNo decide identidad visual ni personaliza marca por centro.\n\n### Evidencia esperada\n\nRevisión visual/accesibilidad contra decisión de #274.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          274,
+          289
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c4k",
+      "status_applied": true
+    },
+    {
+      "number": 292,
+      "node_id": "I_kwDOTvGwCc8AAAABYTvcvQ",
+      "status": "Father Issues",
+      "open_blockers": [
+        275,
+        289,
+        290
+      ],
+      "original": {
+        "title": "[Plan]: Completar aceptación de hosting en nube",
+        "body": "### Objetivo\n\nLa beta demuestra acceso en nube bajo condiciones docentes y presupuesto decididos.\n\n### Contexto y alcance\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Implementation slice 17 of 17\n\nEste ticket es un slice vertical: entrega comportamiento observable con persistencia, autorización, interfaz y pruebas cuando apliquen.\n\n### Área principal\n\nInfraestructura\n\n### Criterios de aceptación\n\n- [ ] Usa sólo proveedor/presupuesto/condiciones resueltos tras #275.\n- [ ] Aporta evidencia al artefacto de aceptación.\n- [ ] No reabre capacidades independientes.\n\n### Dependencias y bloqueos\n\n#275 — Aclarar con docentes las condiciones del despliegue académico; 14 — Unificar navegación y mensajes del núcleo; 15 — Definir artefacto de aceptación de entrega beta\n\n### Fuera de alcance\n\nNo selecciona proveedor, contrata servicios ni inventa presupuesto/condiciones.\n\n### Evidencia esperada\n\nEvidencia sanitizada de despliegue y acceso en el artefacto de aceptación.\n",
+        "state": "open",
+        "assignees": [],
+        "labels": [
+          "ready-for-agent",
+          "type:feature",
+          "wayfinder:task"
+        ],
+        "milestone": 6,
+        "blockers": [
+          275,
+          289,
+          290
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c6g",
+      "status_applied": true
+    },
+    {
+      "number": 293,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7TKg",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #276 · Contrato — Alta de paciente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #276: Alta de paciente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #276. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #276 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #276, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar búsqueda, alta asistida, persona/perfil y sus integraciones y pruebas existentes; documentar qué se reutiliza, adapta, crea o reemplaza frente a la beta con referencias concretas.\n- [ ] Precisar búsqueda previa, unicidad de DNI, nombre, apellido, fecha de nacimiento y teléfono obligatorios; correo de contacto opcional y compartible, sin acceso personal automático.\n- [ ] Acordar entradas, resultados, errores y permisos de Secretaría; distinguir alta asistida de reserva y acceso personal.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c70",
+      "status_applied": true
+    },
+    {
+      "number": 294,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7XqA",
+      "status": "Backlog",
+      "open_blockers": [
+        293
+      ],
+      "original": {
+        "title": "[Plan]: #276 · Backend — Alta de paciente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #276: Alta de paciente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #276. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #276 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #276, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #293; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Reutilizar o adaptar búsqueda y alta asistida con validación de campos y unicidad de DNI; no exigir correo ni teléfono verificado ni crear acceso personal automáticamente.\n- [ ] Aplicar autorización del alcance en servidor, sin acceso implícito de Administrador; preservar identidad y registros existentes.\n- [ ] Probar alta sin correo, contacto compartido, datos faltantes, DNI duplicado y actor no autorizado; comprobar respuestas y que rechazos no creen registros ni efectos parciales.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #293.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          293
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c9s",
+      "status_applied": true
+    },
+    {
+      "number": 295,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7byA",
+      "status": "Backlog",
+      "open_blockers": [
+        293
+      ],
+      "original": {
+        "title": "[Plan]: #276 · Frontend — Alta de paciente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #276: Alta de paciente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #276. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #276 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #276, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #293; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar búsqueda previa y formulario de alta de Secretaría con campos y mensajes del contrato.\n- [ ] Distinguir paciente encontrado de DNI inexistente; permitir correo opcional y no presentar alta como creación de cuenta o reserva.\n- [ ] Probar validaciones, errores, vacío y éxito con fixtures/dobles del contrato si todavía falta integración real.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #293.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          293
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_c_Y",
+      "status_applied": true
+    },
+    {
+      "number": 296,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7gOQ",
+      "status": "Backlog",
+      "open_blockers": [
+        293,
+        294,
+        295
+      ],
+      "original": {
+        "title": "[Plan]: #276 · Integración y verificación — Alta de paciente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #276: Alta de paciente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #276. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #276 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #276, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #293; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Recorrer búsqueda y alta reales desde Secretaría; reutilizar paciente encontrado y registrar sólo al inexistente.\n- [ ] Comprobar todos los criterios de #276: campos, DNI único, correo opcional, ausencia de cuenta automática y ausencia de exigencia de teléfono verificado.\n- [ ] Verificar permisos y rechazos por datos inválidos/duplicados sin cambios parciales; conservar evidencia reproducible.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #293, #294, #295.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          293,
+          294,
+          295
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dBM",
+      "status_applied": true
+    },
+    {
+      "number": 297,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7jsA",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #277 · Contrato — Acceso de paciente por magic link",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #277: Acceso de paciente por magic link.\n\n### Contexto y alcance\n\nIssue padre: #277. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #277 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #277, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar identidad, emisión/consumo de magic link, sesión e integraciones/pruebas anteriores; separar reutilización, adaptación y faltantes con evidencia.\n- [ ] Precisar vinculación y reemplazo por Profesional o Secretaría autorizados, comprobación operativa de identidad fuera del sistema y prueba de posesión del correo nuevo.\n- [ ] Distinguir contacto compartible de correo de acceso personal único; definir preservación de historia, invalidación de enlaces/sesiones anteriores, auditoría y respuesta pública no enumeradora; reutilizar #193 sin duplicar su auditoría.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dDM",
+      "status_applied": true
+    },
+    {
+      "number": 298,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7nmA",
+      "status": "Backlog",
+      "open_blockers": [
+        297
+      ],
+      "original": {
+        "title": "[Plan]: #277 · Backend — Acceso de paciente por magic link",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #277: Acceso de paciente por magic link.\n\n### Contexto y alcance\n\nIssue padre: #277. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #277 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #277, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #297; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Implementar vinculación/reemplazo sobre la misma identidad: correo de acceso único, prueba por magic link sin contraseña y sin vinculación pública automática por DNI.\n- [ ] Invalidar enlaces y sesiones anteriores del paciente al reemplazar, conservar historia y registrar actor/fecha sin secretos.\n- [ ] Probar primera vinculación, reemplazo, correo ocupado, invalidación/replay, permiso denegado y respuesta pública no enumeradora; verificar que los rechazos no cambien identidad, historia o acceso.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #297.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          297
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dEw",
+      "status_applied": true
+    },
+    {
+      "number": 299,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7rdw",
+      "status": "Backlog",
+      "open_blockers": [
+        297
+      ],
+      "original": {
+        "title": "[Plan]: #277 · Frontend — Acceso de paciente por magic link",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #277: Acceso de paciente por magic link.\n\n### Contexto y alcance\n\nIssue padre: #277. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #277 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #277, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #297; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar flujo del personal autorizado para vincular/reemplazar correo y estados de prueba de posesión/acceso del paciente según contrato.\n- [ ] No ofrecer edición autónoma de datos/correo ni revelar identidad por coincidencia pública de DNI; tratar mensajes de enlace inválido o vencido sin filtrar información.\n- [ ] Probar éxito, validaciones, errores y acciones permitidas con fixtures/dobles sin manipular secretos en evidencia.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #297.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          297
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dGM",
+      "status_applied": true
+    },
+    {
+      "number": 300,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7yWg",
+      "status": "Backlog",
+      "open_blockers": [
+        276,
+        297,
+        298,
+        299
+      ],
+      "original": {
+        "title": "[Plan]: #277 · Integración y verificación — Acceso de paciente por magic link",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #277: Acceso de paciente por magic link.\n\n### Contexto y alcance\n\nIssue padre: #277. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #277 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #277, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #297; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Sobre un paciente real de alta asistida, vincular correo y consumir magic link para acceder únicamente a información propia.\n- [ ] Reemplazar correo, comprobar misma identidad e historia e invalidación real de enlaces/sesiones anteriores, con actor/fecha registrados.\n- [ ] Verificar todos los criterios de #277, correo ocupado, permisos y no enumeración pública con evidencia sanitizada.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #297, #298, #299, #276.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          276,
+          297,
+          298,
+          299
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dII",
+      "status_applied": true
+    },
+    {
+      "number": 301,
+      "node_id": "I_kwDOTvGwCc8AAAABYY72sg",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #278 · Contrato — Perfil profesional apto para reserva",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #278: Perfil profesional apto para reserva.\n\n### Contexto y alcance\n\nIssue padre: #278. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #278 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #278, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar perfil, catálogo, intervalo, horarios, anticipación, horizonte y sus integraciones/pruebas existentes; identificar reutilización, adaptación y faltantes.\n- [ ] Precisar campos obligatorios: nombre, apellido, especialidad, tipo y número de matrícula libres; foto opcional y sin verificación ni catálogo de matrículas.\n- [ ] Definir profesional activo/completo para listado reservable, acceso a preparación con perfil incompleto y permisos exclusivos sobre ajustes propios; Secretaría no lee ni modifica.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dJg",
+      "status_applied": true
+    },
+    {
+      "number": 302,
+      "node_id": "I_kwDOTvGwCc8AAAABYY77NQ",
+      "status": "Backlog",
+      "open_blockers": [
+        301
+      ],
+      "original": {
+        "title": "[Plan]: #278 · Backend — Perfil profesional apto para reserva",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #278: Perfil profesional apto para reserva.\n\n### Contexto y alcance\n\nIssue padre: #278. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #278 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #278, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #301; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Completar persistencia/validación de perfil y ajustes propios reutilizando catálogo y disponibilidad; incluir intervalo, consultas, duración, precio, horarios, anticipación y horizonte.\n- [ ] Excluir profesionales incompletos del listado para pacientes sin bloquear su preparación ni exigir foto; respetar cuenta activa y autorización por propietario.\n- [ ] Probar perfil completo/incompleto, foto ausente, validaciones de ajustes y denegación de lectura/mutación a Secretaría y terceros, sin cambios ante rechazos.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #301.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          301
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dLU",
+      "status_applied": true
+    },
+    {
+      "number": 303,
+      "node_id": "I_kwDOTvGwCc8AAAABYY7_HA",
+      "status": "Backlog",
+      "open_blockers": [
+        301
+      ],
+      "original": {
+        "title": "[Plan]: #278 · Frontend — Perfil profesional apto para reserva",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #278: Perfil profesional apto para reserva.\n\n### Contexto y alcance\n\nIssue padre: #278. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #278 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #278, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #301; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar edición de perfil/ajustes propios con todos los campos del contrato y explicación de por qué todavía no aparece para reservas.\n- [ ] Mantener foto opcional y matrícula libre; mostrar los ajustes reutilizados sin ampliar permisos de Secretaría.\n- [ ] Probar campos, validaciones, carga, errores y estado completo/incompleto con fixtures/dobles; no aplicar identidad visual aún no aprobada.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #301.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          301
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dMs",
+      "status_applied": true
+    },
+    {
+      "number": 304,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8DIg",
+      "status": "Backlog",
+      "open_blockers": [
+        301,
+        302,
+        303
+      ],
+      "original": {
+        "title": "[Plan]: #278 · Integración y verificación — Perfil profesional apto para reserva",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #278: Perfil profesional apto para reserva.\n\n### Contexto y alcance\n\nIssue padre: #278. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #278 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #278, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #301; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Guardar perfil y ajustes desde el recorrido real del Profesional; verificar que paciente ve sólo profesionales activos con perfil completo.\n- [ ] Comprobar disponibilidad/configuración real, preparación con perfil incompleto y que foto ausente no impida acceso ni reservas.\n- [ ] Verificar todos los criterios de #278 y denegaciones en servidor, no sólo ocultamiento visual.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #301, #302, #303.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          301,
+          302,
+          303
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dOs",
+      "status_applied": true
+    },
+    {
+      "number": 305,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8HCw",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #280 · Contrato — Reserva propia del Paciente",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #280: Reserva propia del Paciente.\n\n### Contexto y alcance\n\nIssue padre: #280. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #280 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #280, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar calendario, adaptadores, reserva persistente, solapamientos y relaciones existentes; documentar integraciones reales frente a mocks y pruebas observadas.\n- [ ] Definir selección propia de Profesional reservable, consulta y horario real; identificar puertas históricas de teléfono verificado y D-1 que contradicen la beta.\n- [ ] Acordar entradas, resultados, errores y relación al concretar; coordinar contrato de modalidades con #284 sin implementar aquí su configuración ni aceptación/rechazo ni generar un bloqueo circular.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dQA",
+      "status_applied": true
+    },
+    {
+      "number": 306,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8KWQ",
+      "status": "Backlog",
+      "open_blockers": [
+        305
+      ],
+      "original": {
+        "title": "[Plan]: #280 · Backend — Reserva propia del Paciente",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #280: Reserva propia del Paciente.\n\n### Contexto y alcance\n\nIssue padre: #280. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #280 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #280, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #305; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Adaptar reserva propia y disponibilidad real, validando identidad autenticada, profesional reservable, consulta y horario; no admitir reservas para terceros.\n- [ ] Quitar requisitos incompatibles de teléfono verificado y D-1 del recorrido; evitar doble ocupación y crear relación al concretar conforme al contrato beta.\n- [ ] Probar reserva válida sin teléfono verificado, disponibilidad, colisión concurrente, suplantación y rechazo sin turno/relación parcial; reutilizar motor compartido, no duplicarlo.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #305.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          305
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dRo",
+      "status_applied": true
+    },
+    {
+      "number": 307,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8PUw",
+      "status": "Backlog",
+      "open_blockers": [
+        305
+      ],
+      "original": {
+        "title": "[Plan]: #280 · Frontend — Reserva propia del Paciente",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #280: Reserva propia del Paciente.\n\n### Contexto y alcance\n\nIssue padre: #280. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #280 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #280, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #305; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar calendario y selección de Profesional, consulta, fecha/hora propia contra el contrato de disponibilidad.\n- [ ] Mostrar vacío, error, conflicto y resultado sin pedir teléfono verificado ni presentar políticas D-1 incompatibles.\n- [ ] Probar selección, validaciones y prevención de envíos duplicados con fixtures/dobles; la evidencia de disponibilidad persistente pertenece a Integración.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #305.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          305
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dTs",
+      "status_applied": true
+    },
+    {
+      "number": 308,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8UHQ",
+      "status": "Backlog",
+      "open_blockers": [
+        277,
+        278,
+        305,
+        306,
+        307
+      ],
+      "original": {
+        "title": "[Plan]: #280 · Integración y verificación — Reserva propia del Paciente",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #280: Reserva propia del Paciente.\n\n### Contexto y alcance\n\nIssue padre: #280. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #280 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #280, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/staff-accounts-and-professional-settings/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #305; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Entrar por acceso real de paciente y reservar para sí con profesional/configuración y disponibilidad persistente.\n- [ ] Verificar todos los criterios de #280: horario real, ausencia de teléfono obligatorio y D-1 incompatible, ocupación única y relación al concretar.\n- [ ] Comprobar conflictos y denegación para terceros sin efectos parciales; no incluir pagos, familiares ni configurar/aprobar solicitudes en este slice.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #305, #306, #307, #277, #278.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "samuel-olmos"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          277,
+          278,
+          305,
+          306,
+          307
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dVw",
+      "status_applied": true
+    },
+    {
+      "number": 309,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8YVA",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #281 · Contrato — Agenda de paciente existente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #281: Agenda de paciente existente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #281. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #281 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #281, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar búsqueda de pacientes, autorización asistida, agenda y operaciones compartidas con sus integraciones/pruebas previas.\n- [ ] Precisar selección de paciente existente y agendas del centro, disponibilidad y resultado de reserva según contrato de aprobación; retirar exigencias históricas incompatibles como acuerdo de horario.\n- [ ] Delimitar Secretaría: puede agendar pero no aceptar/rechazar solicitudes ni leer/modificar ajustes; coordinar #284 sin duplicar ni bloquear circularmente su implementación.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dXA",
+      "status_applied": true
+    },
+    {
+      "number": 310,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8cJw",
+      "status": "Backlog",
+      "open_blockers": [
+        309
+      ],
+      "original": {
+        "title": "[Plan]: #281 · Backend — Agenda de paciente existente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #281: Agenda de paciente existente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #281. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #281 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #281, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #309; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Implementar o adaptar reserva de paciente existente por Secretaría sobre motor compartido y disponibilidad real de agendas del centro.\n- [ ] Respetar el contrato de modalidad de aprobación y negar aceptación/rechazo a Secretaría; no implementar alta de paciente ni ajustes profesionales en este slice.\n- [ ] Probar selección existente, agenda del centro, ocupación/conflicto y permisos; comprobar que rechazos no creen turnos, relaciones ni auditoría de éxito parcial.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #309.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          309
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dZI",
+      "status_applied": true
+    },
+    {
+      "number": 311,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8gyA",
+      "status": "Backlog",
+      "open_blockers": [
+        309
+      ],
+      "original": {
+        "title": "[Plan]: #281 · Frontend — Agenda de paciente existente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #281: Agenda de paciente existente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #281. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #281 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #281, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #309; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar selección de paciente existente, Profesional/agenda, consulta y horario para Secretaría.\n- [ ] Mostrar resultados y errores del contrato sin incorporar alta de inexistentes ni acciones de aceptar/rechazar ni ajustes.\n- [ ] Probar búsqueda/selección, disponibilidad y estados con fixtures/dobles; la conexión real se comprueba al integrar.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #309.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          309
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_daw",
+      "status_applied": true
+    },
+    {
+      "number": 312,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8kwA",
+      "status": "Backlog",
+      "open_blockers": [
+        276,
+        278,
+        309,
+        310,
+        311
+      ],
+      "original": {
+        "title": "[Plan]: #281 · Integración y verificación — Agenda de paciente existente desde Secretaría",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #281: Agenda de paciente existente desde Secretaría.\n\n### Contexto y alcance\n\nIssue padre: #281. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #281 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #281, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #309; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Con paciente existente y profesional/configuración reales, completar el turno asistido desde Secretaría.\n- [ ] Verificar todos los criterios de #281: agendas del centro, disponibilidad, ocupación y contrato de aprobación sin habilitar aceptación/rechazo.\n- [ ] Comprobar rechazos y permisos en servidor con evidencia del recorrido completo; mantener alta de inexistentes fuera de este slice.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #309, #310, #311, #276, #278.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          276,
+          278,
+          309,
+          310,
+          311
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dcI",
+      "status_applied": true
+    },
+    {
+      "number": 313,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8poA",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #282 · Contrato — Agenda del Profesional con privacidad",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #282: Agenda del Profesional con privacidad.\n\n### Contexto y alcance\n\nIssue padre: #282. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #282 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #282, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar consulta de relacionados, búsqueda, autorización, reserva y regresiones de privacidad existentes; identificar diferencias con beta y reutilización de #202.\n- [ ] Definir selección desde relacionados o DNI exacto de paciente registrado, sin navegación global ni exposición de actividad con otros Profesionales.\n- [ ] Precisar que buscar/abandonar no crea relación y concretar solicitud o turno sí; acordar respuestas y errores sin duplicar el motor ni la configuración de #284.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_ddc",
+      "status_applied": true
+    },
+    {
+      "number": 314,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8ttg",
+      "status": "Backlog",
+      "open_blockers": [
+        313
+      ],
+      "original": {
+        "title": "[Plan]: #282 · Backend — Agenda del Profesional con privacidad",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #282: Agenda del Profesional con privacidad.\n\n### Contexto y alcance\n\nIssue padre: #282. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #282 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #282, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #313; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Permitir al Profesional seleccionar relacionado o buscar por DNI exacto y agendar únicamente en su agenda sobre motor compartido.\n- [ ] Crear relación sólo al concretar solicitud/turno, incluida solicitud pendiente; nunca al buscar/abandonar; impedir acceso a agendas e historia ajenas.\n- [ ] Probar búsqueda, abandono, concreción, ocupación y aislamiento entre dos Profesionales; verificar ausencia de relación/cambios ante búsquedas o rechazos y reutilizar regresión #202.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #313.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          313
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dfI",
+      "status_applied": true
+    },
+    {
+      "number": 315,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8yNA",
+      "status": "Backlog",
+      "open_blockers": [
+        313
+      ],
+      "original": {
+        "title": "[Plan]: #282 · Frontend — Agenda del Profesional con privacidad",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #282: Agenda del Profesional con privacidad.\n\n### Contexto y alcance\n\nIssue padre: #282. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #282 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #282, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #313; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar selección desde pacientes relacionados o búsqueda por DNI exacto dentro de Crear turno propio.\n- [ ] No mostrar listado global ni citas/historia con otros Profesionales; distinguir encontrado/no encontrado sin registrar automáticamente.\n- [ ] Probar estados, selección, abandono, errores y mensajes con fixtures/dobles del contrato; no incluir alta de inexistentes ni aprobación.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #313.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          313
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dhs",
+      "status_applied": true
+    },
+    {
+      "number": 316,
+      "node_id": "I_kwDOTvGwCc8AAAABYY822A",
+      "status": "Backlog",
+      "open_blockers": [
+        276,
+        278,
+        313,
+        314,
+        315
+      ],
+      "original": {
+        "title": "[Plan]: #282 · Integración y verificación — Agenda del Profesional con privacidad",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #282: Agenda del Profesional con privacidad.\n\n### Contexto y alcance\n\nIssue padre: #282. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #282 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #282, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #313; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Agendar paciente existente desde lista propia y desde DNI exacto usando búsqueda y reserva reales.\n- [ ] Comprobar todos los criterios de #282: búsqueda/abandono sin relación, concreción con relación y ninguna actividad de otros Profesionales visible.\n- [ ] Ejecutar regresión con dos Profesionales y permisos en servidor, sin duplicar la tarea de auditoría #202.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #313, #314, #315, #276, #278.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "SantiCasali"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          276,
+          278,
+          313,
+          314,
+          315
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_djU",
+      "status_applied": true
+    },
+    {
+      "number": 317,
+      "node_id": "I_kwDOTvGwCc8AAAABYY87EQ",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #283 · Contrato — Alta y agenda desde Profesional",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #283: Alta y agenda desde Profesional.\n\n### Contexto y alcance\n\nIssue padre: #283. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #283 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #283, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar alta asistida y flujo profesional existente, incluidas integraciones previas; identificar componentes reutilizables sin trasladar permisos de Secretaría por accidente.\n- [ ] Precisar DNI inexistente dentro de Crear turno, campos obligatorios de alta y correo opcional sin cuenta ni acceso automático.\n- [ ] Definir identidad, relación y efectos al abandonar o fallar frente a concreción; preservar unicidad de DNI, disponibilidad y privacidad sin agregar requisitos fuera de beta.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dlQ",
+      "status_applied": true
+    },
+    {
+      "number": 318,
+      "node_id": "I_kwDOTvGwCc8AAAABYY8_FA",
+      "status": "Backlog",
+      "open_blockers": [
+        317
+      ],
+      "original": {
+        "title": "[Plan]: #283 · Backend — Alta y agenda desde Profesional",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #283: Alta y agenda desde Profesional.\n\n### Contexto y alcance\n\nIssue padre: #283. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #283 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #283, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #317; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Habilitar alta asistida por Profesional dentro de creación de turno propio reutilizando identidad y motor, con campos beta, DNI único y sin exigir correo ni acceso personal.\n- [ ] Concretar turno crea relación; buscar/abandonar no la crea; mantener disponibilidad y aislamiento, sin conceder administración global.\n- [ ] Probar alta y concreción, DNI duplicado/carrera, campos inválidos, abandono y permiso denegado; comprobar efectos sobre identidad/relación/turno conforme al contrato.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #317.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          317
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dms",
+      "status_applied": true
+    },
+    {
+      "number": 319,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9CvQ",
+      "status": "Backlog",
+      "open_blockers": [
+        317
+      ],
+      "original": {
+        "title": "[Plan]: #283 · Frontend — Alta y agenda desde Profesional",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #283: Alta y agenda desde Profesional.\n\n### Contexto y alcance\n\nIssue padre: #283. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #283 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #283, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #317; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Extender Crear turno propio: ante DNI inexistente ofrecer alta asistida y continuidad al horario/consulta.\n- [ ] Reutilizar búsqueda/selección de #282 y campos acordados sin pedir cuenta ni correo obligatorio ni mostrar historia ajena.\n- [ ] Probar no encontrado, campos, abandono, conflictos y éxito con fixtures/dobles; no incorporar acceso personal o administración global.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #317.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          317
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dok",
+      "status_applied": true
+    },
+    {
+      "number": 320,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9GNA",
+      "status": "Backlog",
+      "open_blockers": [
+        278,
+        282,
+        317,
+        318,
+        319
+      ],
+      "original": {
+        "title": "[Plan]: #283 · Integración y verificación — Alta y agenda desde Profesional",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #283: Alta y agenda desde Profesional.\n\n### Contexto y alcance\n\nIssue padre: #283. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #283 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #283, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/patient-identity-and-access/spec.md`\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #317; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Recorrer desde DNI inexistente hasta paciente y turno reales desde Profesional.\n- [ ] Verificar todos los criterios de #283: alta sin correo/cuenta, relación al concretar y no al buscar/abandonar, disponibilidad y privacidad.\n- [ ] Comprobar duplicados, rechazos y autorizaciones sin efectos inconsistentes; conservar evidencia de reutilización del recorrido existente.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #317, #318, #319, #278, #282.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          278,
+          282,
+          317,
+          318,
+          319
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dqY",
+      "status_applied": true
+    },
+    {
+      "number": 321,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9KCw",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #284 · Contrato — Aprobación manual de solicitudes",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #284: Aprobación manual de solicitudes.\n\n### Contexto y alcance\n\nIssue padre: #284. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #284 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #284, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Revisar estados, ocupación, relaciones, configuración y recorridos previos con evidencia; identificar reglas históricas incompatibles con beta.\n- [ ] Precisar matriz normativa: automática confirma Paciente/Secretaría; manual solicita para Paciente y una subconfiguración única decide si Secretaría confirma o solicita; Profesional confirma siempre.\n- [ ] Definir aceptación/rechazo exclusivo del dueño, liberación al rechazar, relación al concretar solicitud y cambio de modalidad sólo para reservas nuevas; coordinar contratos con #280–#283 sin depender de sus integraciones para diseñarlo.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dsI",
+      "status_applied": true
+    },
+    {
+      "number": 322,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9OgQ",
+      "status": "Backlog",
+      "open_blockers": [
+        321
+      ],
+      "original": {
+        "title": "[Plan]: #284 · Backend — Aprobación manual de solicitudes",
+        "body": "### Objetivo\n\nCompletar backend del alcance de #284: Aprobación manual de solicitudes.\n\n### Contexto y alcance\n\nIssue padre: #284. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #284 / backend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #284, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #321; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nBackend\n\n### Criterios de aceptación\n\n- [ ] Implementar configuración automática/manual y subconfiguración de Secretaría aplicadas a reservas nuevas, conservando solicitudes anteriores sin resolverlas.\n- [ ] Implementar aceptación/rechazo sólo por Profesional dueño, ocupación pendiente y liberación al rechazo; mantener creación de relación para solicitud concretada.\n- [ ] Probar matriz de canales/modalidades, pendientes existentes tras cambio, ocupación, rechazo y permisos; verificar que transiciones inválidas no alteren datos.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #321.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No dar por verificado el recorrido integrado ni sustituir pruebas propias por la futura integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:backend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          321
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dtw",
+      "status_applied": true
+    },
+    {
+      "number": 323,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9TuA",
+      "status": "Backlog",
+      "open_blockers": [
+        321
+      ],
+      "original": {
+        "title": "[Plan]: #284 · Frontend — Aprobación manual de solicitudes",
+        "body": "### Objetivo\n\nCompletar frontend del alcance de #284: Aprobación manual de solicitudes.\n\n### Contexto y alcance\n\nIssue padre: #284. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #284 / frontend\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #284, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #321; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nFrontend\n\n### Criterios de aceptación\n\n- [ ] Preparar configuración de modalidad y subconfiguración de Secretaría, lista de pendientes y acciones del Profesional dueño.\n- [ ] Mostrar estados, errores y efecto de cambiar modalidad sin sugerir resolución automática de pendientes; no ofrecer aceptación/rechazo a Secretaría u otros roles.\n- [ ] Probar componentes y recorridos contra fixtures/dobles de matriz acordada; excluir vencimiento, asistencia, cancelación operativa y multas.\n- [ ] Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #321.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:frontend"
+        ],
+        "milestone": 5,
+        "blockers": [
+          321
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dvQ",
+      "status_applied": true
+    },
+    {
+      "number": 324,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9YhA",
+      "status": "Backlog",
+      "open_blockers": [
+        280,
+        281,
+        282,
+        283,
+        321,
+        322,
+        323
+      ],
+      "original": {
+        "title": "[Plan]: #284 · Integración y verificación — Aprobación manual de solicitudes",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #284: Aprobación manual de solicitudes.\n\n### Contexto y alcance\n\nIssue padre: #284. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #284 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #284, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/appointment-booking-and-lifecycle/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #321; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nProducto\n\n### Criterios de aceptación\n\n- [ ] Crear reservas reales por Paciente, Secretaría y Profesional y comprobar cada combinación normativa de modalidad/subconfiguración.\n- [ ] Aceptar/rechazar como dueño, comprobar ocupación/liberación y denegación a otros Profesionales/Secretaría; preservar pendientes al cambiar modalidad.\n- [ ] Verificar todos los criterios de #284 con los tres canales reales, sin incorporar vencimiento ni el resto del ciclo de #285.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #321, #322, #323, #280, #281, #282, #283.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "ChordanDev"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          280,
+          281,
+          282,
+          283,
+          321,
+          322,
+          323
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dw8",
+      "status_applied": true
+    },
+    {
+      "number": 325,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9cAQ",
+      "status": "Ready",
+      "open_blockers": [],
+      "original": {
+        "title": "[Plan]: #290 · Contrato — Artefacto de aceptación de beta",
+        "body": "### Objetivo\n\nCompletar contrato del alcance de #290: Artefacto de aceptación de beta.\n\n### Contexto y alcance\n\nIssue padre: #290. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #290 / contract\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #290, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n\n\n### Área principal\n\nDocumentación\n\n### Criterios de aceptación\n\n- [ ] Revisar documentación, evidencias e integraciones de aceptación existentes; distinguir material reutilizable de reglas históricas incompatibles y de comprobaciones todavía no ejecutadas.\n- [ ] Definir y escribir el artefacto separado de aceptación: criterios y evidencia esperada para manual, datos ficticios persistentes cargados por flujos reales, comprobaciones funcionales/permisos, acceso en nube, condiciones docentes y estabilización de dos semanas.\n- [ ] Referenciar beta y #266, separar definición de ejecución final y registrar pendientes #274/#275 sin inventar identidad visual, proveedor, presupuesto o evidencia de despliegue.\n- [ ] Distinguir código encontrado, pruebas leídas y pruebas realmente ejecutadas con resultados; no dar por cumplida beta por una issue histórica cerrada.\n- [ ] Registrar acuerdo/aprobación del contrato y los pendientes sin atribuir aprobaciones a personas no asignadas; no implementar la aplicación en esta subtarea.\n\n### Dependencias y bloqueos\n\nSin blockers internos: puede comenzar la revisión/definición con las fuentes beta disponibles.\nLos blockers externos de la padre se conservan, pero no se copian automáticamente a esta preparación. Puede avanzar sólo lo realmente independiente con contrato acordado y fixtures/dobles cuando correspondan; si surge una dependencia real adicional, registrarla antes de la acción afectada. No duplicar el backend de otro slice ni confundir fixtures con integración real.\nEsta padre define aceptación: no depende de completar todas las funcionalidades, elegir hosting ni ejecutar la entrega final.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No implementar código de aplicación ni considerar cerrada la funcionalidad por tener el contrato. No producir aquí toda la entrega final, contratar servicios ni inventar evidencia funcional o de nube.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Artefacto y escenarios acordados, mapa de estado actual/reutilización/adaptación/faltantes y aprobación registrada.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:contract"
+        ],
+        "milestone": 5,
+        "blockers": []
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_dy4",
+      "status_applied": true
+    },
+    {
+      "number": 326,
+      "node_id": "I_kwDOTvGwCc8AAAABYY9gZA",
+      "status": "Backlog",
+      "open_blockers": [
+        325
+      ],
+      "original": {
+        "title": "[Plan]: #290 · Integración y verificación — Artefacto de aceptación de beta",
+        "body": "### Objetivo\n\nCompletar integración y verificación del alcance de #290: Artefacto de aceptación de beta.\n\n### Contexto y alcance\n\nIssue padre: #290. Parte de la funcionalidad, no una entrega independiente que amplíe su alcance.\n\n## OpenSpec\n\n- Change: `health-center-beta-core`\n- Path: `openspec/changes/health-center-beta-core/`\n- Scope: Sprint 3 / parent #290 / integration\n\n### Contexto y lecturas obligatorias\n\n- Leer completa la padre #290, su alcance y criterios; sus comentarios/decisiones vigentes cuando existan.\n- Leer `openspec/changes/health-center-beta-core/proposal.md`, `openspec/changes/health-center-beta-core/design.md` y las secciones aplicables de:\n- `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`\n- Respetar exclusiones en `openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md`.\n- Consultar `docs/sprints/GUIA_TRABAJO_BETA.md` y el estado actual de código, pruebas e integraciones del slice. Si falta una fuente obligatoria, solicitarla; no inventar su contenido.\n- La beta aprobada es la fuente de verdad: el código o tickets históricos no prevalecen sobre ella.\n- Un mismo integrante será responsable de la padre y sus subissues; no se asignan personas ni aprobadores distintos ahora.\n- Leer y respetar el contrato acordado en #325; no redefinir unilateralmente entradas, resultados, permisos o estados.\n\n\n### Área principal\n\nDocumentación\n\n### Criterios de aceptación\n\n- [ ] Revisar el artefacto documental real contra todos los criterios de #290 y la frontera de entrega beta, sin exigir aquí ejecución de funcionalidades futuras.\n- [ ] Comprobar enlaces, criterios verificables y separación explícita entre definición y ejecución; marcar evidencia pendiente sin simular que manual, pruebas, datos o nube ya están completados.\n- [ ] Corregir inconsistencias documentales en esta subtarea y aprobar sólo la definición del artefacto, no la aceptación final de toda la beta.\n- [ ] Iniciar esta subtarea sólo cuando todas las otras subissues de esta padre estén terminadas y aprobadas y todos los tickets que bloquean a la padre estén resueltos.\n- [ ] Resolver aquí los defectos encontrados, incluidos cambios en backend/frontend, sin reabrir sus subissues; registrar arreglos y ejecutar/actualizar las pruebas afectadas sin ampliar alcance.\n- [ ] Registrar aprobación explícita con evidencia de todos los criterios de la padre: significa que la padre está terminada y corresponde registrar su cierre; no asumir cierre automático.\n\n### Dependencias y bloqueos\n\nBlockers nativos de esta subtarea: #325.\nEstos blockers incluyen todas las subtareas hermanas y todos los blockers actuales de la padre; son explícitos, no heredados por GitHub. No ejecutar Integración antes de resolverlos y registrar aprobación de las hermanas.\nEsta padre define aceptación: no depende de completar todas las funcionalidades, elegir hosting ni ejecutar la entrega final.\n\n\n### Fuera de alcance\n\nNo ampliar el alcance de la padre, inventar decisiones pendientes, asignar personas, seleccionar branding/hosting/presupuesto ni cambiar blockers entre padres. No aprobar con criterios de la padre incumplidos ni reabrir backend/frontend por arreglos de integración. No producir aquí toda la entrega final, contratar servicios ni inventar evidencia funcional o de nube.\n\n### Evidencia esperada\n\nReferencias concretas, resultado y limitaciones de las verificaciones; evidencia sanitizada sin credenciales, datos personales reales ni tokens. Pruebas ejecutadas con resultados observados y correcciones documentadas; indicar cualquier prueba pendiente o no disponible, sin afirmar éxito no observado.\n",
+        "state": "open",
+        "assignees": [
+          "Saidqr"
+        ],
+        "labels": [
+          "type:feature",
+          "work:integration"
+        ],
+        "milestone": 5,
+        "blockers": [
+          325
+        ]
+      },
+      "item_id": "PVTI_lADOErCx2M4Bn1G5zhB_d1g",
+      "status_applied": true
+    }
+  ],
+  "planned_order": [
+    266,
+    276,
+    277,
+    278,
+    279,
+    280,
+    281,
+    282,
+    283,
+    284,
+    285,
+    286,
+    287,
+    288,
+    289,
+    290,
+    291,
+    292,
+    293,
+    301,
+    297,
+    313,
+    305,
+    309,
+    317,
+    321,
+    325,
+    294,
+    295,
+    296,
+    298,
+    299,
+    300,
+    302,
+    303,
+    304,
+    306,
+    307,
+    308,
+    310,
+    311,
+    312,
+    314,
+    315,
+    316,
+    318,
+    319,
+    320,
+    322,
+    323,
+    324,
+    326
+  ],
+  "verification": {
+    "membership": 52,
+    "counts": {
+      "Father Issues": 18,
+      "Ready": 9,
+      "Backlog": 25
+    },
+    "manual_order_exact": true,
+    "issue_metadata_unchanged": true,
+    "blockers_unchanged": true,
+    "ready_without_open_blockers": true
+  }
+}
