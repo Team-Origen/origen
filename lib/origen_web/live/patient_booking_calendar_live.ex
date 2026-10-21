@@ -9,9 +9,12 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     profile = if email, do: resolve_profile(email)
     ready? = profile != nil and Patients.ready_for_booking?(profile)
     {:ok, profs} = Calendar.list_professionals()
-    default_prof = hd(profs)
-    {types, agenda_interval_minutes} = fetch_catalog(default_prof.id)
-    default_type = hd(types)
+    default_prof = List.first(profs)
+
+    {types, agenda_interval_minutes} =
+      if default_prof, do: fetch_catalog(default_prof.id), else: {[], 30}
+
+    default_type = List.first(types)
 
     {:ok,
      assign(socket,
@@ -19,9 +22,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        profile: profile,
        ready?: ready?,
        professionals: profs,
-       prof_id: default_prof.id,
+       prof_id: default_prof && default_prof.id,
        consultation_types: types,
-       selected_type_id: default_type.id,
+       selected_type_id: default_type && default_type.id,
        selected_type: default_type,
        agenda_interval_minutes: agenda_interval_minutes,
        date: next_weekday(Date.utc_today()),
@@ -33,21 +36,28 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
   end
 
   @impl true
-  def handle_event("change_prof", %{"prof_id" => id}, socket) do
-    {types, agenda_interval_minutes} = fetch_catalog(id)
-    type = hd(types)
+  def handle_event(_event, _params, %{assigns: %{prof_id: nil}} = socket),
+    do: {:noreply, socket}
 
-    {:noreply,
-     assign(socket,
-       prof_id: id,
-       consultation_types: types,
-       selected_type_id: type.id,
-       selected_type: type,
-       agenda_interval_minutes: agenda_interval_minutes,
-       selected_slot: nil,
-       confirmed?: false
-     )
-     |> load_schedule()}
+  def handle_event("change_prof", %{"prof_id" => id}, socket) do
+    if Enum.any?(socket.assigns.professionals, &(&1.id == id)) do
+      {types, agenda_interval_minutes} = fetch_catalog(id)
+      type = hd(types)
+
+      {:noreply,
+       assign(socket,
+         prof_id: id,
+         consultation_types: types,
+         selected_type_id: type.id,
+         selected_type: type,
+         agenda_interval_minutes: agenda_interval_minutes,
+         selected_slot: nil,
+         confirmed?: false
+       )
+       |> load_schedule()}
+    else
+      {:noreply, socket}
+    end
   end
 
   def handle_event("change_type", %{"type_id" => id}, socket) do
@@ -137,6 +147,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        )}
     end
   end
+
+  defp load_schedule(%{assigns: %{prof_id: nil}} = socket),
+    do: assign(socket, schedule: nil, error: nil)
 
   defp load_schedule(socket) do
     duration =
@@ -240,7 +253,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
           </.link>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4">
+        <div
+          :if={@professionals != []}
+          class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 space-y-4"
+        >
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label class="block text-xs font-semibold text-stone-700 uppercase tracking-wider mb-1.5">Profesional</label>
@@ -313,6 +329,13 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         </div>
 
         <%= cond do %>
+          <% @professionals == [] -> %>
+            <p
+              role="status"
+              class="p-6 bg-white text-stone-600 text-center rounded-xl border border-stone-200"
+            >
+              No hay profesionales disponibles para reservar en este momento.
+            </p>
           <% @confirmed? and @selected_slot -> %>
             <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-8 text-center space-y-4">
               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
