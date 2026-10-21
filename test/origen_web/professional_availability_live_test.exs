@@ -90,6 +90,27 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#back-to-agenda-button .hero-arrow-left")
   end
 
+  test "prioritizes agenda and consultation types before infrequently changed settings",
+       %{
+         conn: conn
+       } do
+    {:ok, view, _html} = live(conn, @path)
+
+    expected = [
+      "weekly-availability-heading",
+      "consultation-types-heading",
+      "agenda-interval-heading",
+      "timezone-heading"
+    ]
+
+    actual =
+      Regex.scan(~r/<h2\b[^>]*\bid="([^"]+)"/, render(view), capture: :all_but_first)
+      |> List.flatten()
+      |> Enum.filter(&(&1 in expected))
+
+    assert actual == expected
+  end
+
   test "opens a complete seven-day interval-aware editor with booking controls", %{conn: conn} do
     {:ok, view, _html} = live(conn, @path)
 
