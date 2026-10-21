@@ -11,6 +11,7 @@ defmodule Origen.Patients.PatientProfile do
   @primary_key {:id, :id, autogenerate: true}
   schema "patient_profiles" do
     field :email, :string
+    field :contact_email, :string
     field :state, :string, default: "pending_completion"
     field :phone, :string
     field :phone_verified, :boolean, default: false
@@ -29,6 +30,7 @@ defmodule Origen.Patients.PatientProfile do
     profile
     |> cast(attrs, [
       :email,
+      :contact_email,
       :persona_id,
       :state,
       :phone,
@@ -36,7 +38,7 @@ defmodule Origen.Patients.PatientProfile do
       :collision_detected_at,
       :collision_notes
     ])
-    |> validate_required([:email, :state])
+    |> validate_required([:state])
     |> validate_inclusion(:state, @states)
     |> unique_constraint(:email)
   end

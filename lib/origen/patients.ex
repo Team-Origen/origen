@@ -171,66 +171,89 @@ defmodule Origen.Patients do
   """
   @spec search_persona_by_document(String.t(), String.t(), integer()) ::
           {:ok, %{persona: Persona.t(), profile: PatientProfile.t() | nil} | nil}
+          | {:error, :unauthorized}
   def search_persona_by_document(document_type, document_number, secretary_account_id)
-      when is_binary(document_type) and is_binary(document_number) and
-             is_integer(secretary_account_id) do
-    doc_num = Persona.normalize_number(document_number)
+      when is_binary(document_type) and is_binary(document_number) do
+    with :ok <- authorize_secretary(secretary_account_id) do
+      doc_num = Persona.normalize_number(document_number)
 
-    persona =
-      Repo.one(
-        from p in Persona,
-          where: p.document_type == ^document_type and p.document_number == ^doc_num
-      )
+      persona =
+        Repo.one(
+          from p in Persona,
+            where: p.document_type == ^document_type and p.document_number == ^doc_num
+        )
 
-    profile = linked_profile(persona)
+      profile = linked_profile(persona)
 
-    audit_persona_searched(secretary_account_id, document_type, doc_num)
+      audit_persona_searched(secretary_account_id, document_type, doc_num)
 
-    case persona do
-      nil -> {:ok, nil}
-      %Persona{} = found -> {:ok, %{persona: found, profile: profile}}
+      case persona do
+        nil -> {:ok, nil}
+        %Persona{} = found -> {:ok, %{persona: found, profile: profile}}
+      end
     end
   end
 
   @doc """
-  Registers or reuses a Persona for the assisted booking flow (RF-01, RF-02, BOOK-02).
+  Registers an absent/non-existent patient from Secretary (Issue #276, OpenSpec health-center-beta-core).
   Enforces:
-  1. Document normalization through `Persona.changeset/2`.
-  2. Existing identities are reused without overwriting their identity fields.
-  3. A persona without a linked profile gets a new `PatientProfile` in
-     `pending_completion` with the assisted placeholder email when no email is provided.
-  4. New identities get a `Persona` plus a linked `pending_completion` profile.
-  5. Creation and reuse are audited with the Secretary as actor.
-  Returns `{:ok, %{persona: persona, profile: profile, outcome: :created | :reused}}`
-  or `{:error, changeset}` when the provided attributes are invalid.
+  1. Server authorization: actor must be an active account with role `secretary`.
+     Rejects administrators, professionals, and inactive accounts ({:error, :unauthorized}).
+  2. Mandatory fields: first_name, last_name, document_type, document_number, birthdate, and phone.
+  3. DNI uniqueness: rejects if the document already exists ({:error, changeset}).
+  4. Optional & shared contact email: email is not required; if present, it is stored in contact_email.
+     Shared contact emails do not collide.
+  5. No automatic personal access account: profile.email remains nil (magic link not enabled).
+  6. Phone verification is never required: phone_verified is false.
+  7. Audited in append-only log with Secretary as actor.
+  8. Atomic transaction: validation or collision failures produce no partial DB state.
+  """
+  @spec register_absent_patient(map(), integer()) ::
+          {:ok, %{persona: Persona.t(), profile: PatientProfile.t(), outcome: :created}}
+          | {:error, Ecto.Changeset.t() | :unauthorized}
+  def register_absent_patient(attrs, secretary_account_id) when is_map(attrs) do
+    with :ok <- authorize_secretary(secretary_account_id) do
+      persona_changeset = Persona.assisted_changeset(%Persona{}, attrs)
+
+      if persona_changeset.valid? do
+        doc_type = Ecto.Changeset.get_field(persona_changeset, :document_type)
+        doc_num = Ecto.Changeset.get_field(persona_changeset, :document_number)
+
+        Repo.transaction(fn ->
+          existing_persona =
+            Repo.one(
+              from p in Persona,
+                where: p.document_type == ^doc_type and p.document_number == ^doc_num,
+                lock: "FOR UPDATE"
+            )
+
+          case existing_persona do
+            nil ->
+              create_assisted_persona(persona_changeset, attrs, secretary_account_id)
+
+            %Persona{} ->
+              changeset =
+                persona_changeset
+                |> Ecto.Changeset.add_error(:document_number, "ya ha sido registrado")
+                |> Map.put(:action, :insert)
+
+              Repo.rollback(changeset)
+          end
+        end)
+      else
+        {:error, persona_changeset}
+      end
+    end
+  end
+
+  @doc """
+  Compatibility adapter delegating to `register_absent_patient/2`.
   """
   @spec register_or_reuse_assisted_persona(map(), integer()) ::
-          {:ok, %{persona: Persona.t(), profile: PatientProfile.t(), outcome: :created | :reused}}
-          | {:error, Ecto.Changeset.t()}
-  def register_or_reuse_assisted_persona(attrs, secretary_account_id)
-      when is_map(attrs) and is_integer(secretary_account_id) do
-    persona_changeset = Persona.changeset(%Persona{}, attrs)
-
-    if persona_changeset.valid? do
-      doc_type = Ecto.Changeset.get_field(persona_changeset, :document_type)
-      doc_num = Ecto.Changeset.get_field(persona_changeset, :document_number)
-
-      Repo.transaction(fn ->
-        existing_persona =
-          Repo.one(
-            from p in Persona,
-              where: p.document_type == ^doc_type and p.document_number == ^doc_num,
-              lock: "FOR UPDATE"
-          )
-
-        case existing_persona do
-          nil -> create_assisted_persona(persona_changeset, attrs, secretary_account_id)
-          %Persona{} = persona -> reuse_assisted_persona(persona, attrs, secretary_account_id)
-        end
-      end)
-    else
-      {:error, persona_changeset}
-    end
+          {:ok, %{persona: Persona.t(), profile: PatientProfile.t(), outcome: :created}}
+          | {:error, Ecto.Changeset.t() | :unauthorized}
+  def register_or_reuse_assisted_persona(attrs, secretary_account_id) when is_map(attrs) do
+    register_absent_patient(attrs, secretary_account_id)
   end
 
   defp linked_profile(nil), do: nil
@@ -247,7 +270,7 @@ defmodule Origen.Patients do
   defp create_assisted_persona(persona_changeset, attrs, secretary_account_id) do
     case Repo.insert(persona_changeset) do
       {:ok, persona} ->
-        case insert_assisted_profile(persona, attrs) do
+        case insert_assisted_profile(persona, persona_changeset, attrs) do
           {:ok, profile} ->
             audit_persona_created(secretary_account_id, persona)
             %{persona: persona, profile: profile, outcome: :created}
@@ -261,45 +284,49 @@ defmodule Origen.Patients do
     end
   end
 
-  defp reuse_assisted_persona(%Persona{} = persona, attrs, secretary_account_id) do
-    case linked_profile(persona) do
-      %PatientProfile{} = profile ->
-        audit_persona_reused(secretary_account_id, persona)
-        %{persona: persona, profile: profile, outcome: :reused}
+  defp insert_assisted_profile(%Persona{} = persona, persona_changeset, attrs) do
+    phone =
+      Ecto.Changeset.get_change(persona_changeset, :phone) ||
+        Map.get(attrs, :phone) || Map.get(attrs, "phone")
 
-      nil ->
-        case insert_assisted_profile(persona, attrs) do
-          {:ok, profile} ->
-            audit_persona_reused(secretary_account_id, persona)
-            %{persona: persona, profile: profile, outcome: :reused}
+    contact_email =
+      Ecto.Changeset.get_change(persona_changeset, :email) ||
+        Map.get(attrs, :email) || Map.get(attrs, "email")
 
-          {:error, changeset} ->
-            Repo.rollback(changeset)
-        end
-    end
-  end
+    clean_email =
+      case contact_email do
+        nil -> nil
+        "" -> nil
+        val when is_binary(val) ->
+          trimmed = String.trim(val)
+          if trimmed == "", do: nil, else: String.downcase(trimmed)
+      end
 
-  defp insert_assisted_profile(%Persona{} = persona, attrs) do
     %PatientProfile{}
     |> PatientProfile.changeset(%{
-      email: assisted_email(persona, attrs),
       persona_id: persona.id,
-      state: "pending_completion",
-      phone: Map.get(attrs, :phone) || Map.get(attrs, "phone"),
+      contact_email: clean_email,
+      email: nil,
+      state: "completed",
+      phone: phone,
       phone_verified: false
     })
     |> Repo.insert()
   end
 
-  defp assisted_email(%Persona{} = persona, attrs) do
-    email = Map.get(attrs, :email) || Map.get(attrs, "email")
+  defp authorize_secretary(secretary_account_id) when is_integer(secretary_account_id) do
+    case Repo.query("SELECT id, role, state FROM internal_accounts WHERE id = $1", [
+           secretary_account_id
+         ]) do
+      {:ok, %{rows: [[_id, "secretary", "active"]]}} ->
+        :ok
 
-    if is_binary(email) and String.trim(email) != "" do
-      String.trim(email) |> String.downcase()
-    else
-      "asistido-persona-#{persona.id}@origen.local"
+      _ ->
+        {:error, :unauthorized}
     end
   end
+
+  defp authorize_secretary(_), do: {:error, :unauthorized}
 
   # The actor reference keeps the plain account id: `Events` sanitization rejects
   # references containing "secret" (and therefore any "secretary:<id>" prefix), and
@@ -326,16 +353,6 @@ defmodule Origen.Patients do
   defp audit_persona_created(secretary_account_id, %Persona{} = persona) do
     with {:ok, event} <-
            Events.persona_created(secretary_actor(secretary_account_id), persona_ref(persona)),
-         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
-      :ok
-    else
-      _ -> :ok
-    end
-  end
-
-  defp audit_persona_reused(secretary_account_id, %Persona{} = persona) do
-    with {:ok, event} <-
-           Events.persona_reused(secretary_actor(secretary_account_id), persona_ref(persona)),
          {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
       :ok
     else
