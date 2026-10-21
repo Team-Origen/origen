@@ -140,8 +140,8 @@ defmodule Origen.Booking.Authorization do
 
   defp ensure_verified_phone(_profile), do: {:error, :telefono_no_verificado}
 
-  defp ensure_schedule_agreement(true), do: :ok
-  defp ensure_schedule_agreement(_missing_agreement), do: {:error, :acuerdo_horario_requerido}
+  # Beta requirement (#309 / #310): retiro de exigencia histórica de acuerdo de horario para secretaría asistida.
+  defp ensure_schedule_agreement(_agreement), do: :ok
 
   defp ensure_patient_permitted(patient_id, professional_id) do
     if permitted_by_relationship_table?(patient_id, professional_id) or
