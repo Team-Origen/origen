@@ -82,6 +82,7 @@ defmodule OrigenWeb.Router do
     scope "/dev" do
       pipe_through :browser
 
+      get "/login-secretary", OrigenWeb.PageController, :dev_login_secretary
       live "/professional-availability", OrigenWeb.ProfessionalAvailabilityPreviewLive
       live_dashboard "/dashboard", metrics: OrigenWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
