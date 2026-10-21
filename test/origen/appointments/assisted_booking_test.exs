@@ -70,14 +70,14 @@ defmodule Origen.Appointments.AssistedBookingTest do
       assert rel.first_appointment_id == appt.id
     end
 
-    test "C2: modo de aprobación automática confirma el turno directamente", ctx do
+    test "C2: modo de aprobación automática del profesional confirma el turno directamente desde settings",
+         ctx do
       start_time = ~U[2026-10-15 10:00:00Z]
 
       params = %{
         professional_id: ctx.professional_id,
         consultation_type_id: @consultation_type_id,
-        start_time: start_time,
-        approval_mode: :automatic
+        start_time: start_time
       }
 
       assert {:ok, result} =
@@ -88,14 +88,19 @@ defmodule Origen.Appointments.AssistedBookingTest do
       assert result.status == :confirmed
     end
 
-    test "C3: modo de aprobación manual genera turno en estado requested y crea relación", ctx do
+    test "C3: modo de aprobación manual del profesional genera turno en requested y crea relación desde settings",
+         ctx do
+      manual_prof_id = insert_internal_account!("dr.manual@example.com", "professional", "active")
+      manual_type_id = "018f4a5b-0d62-7a44-8e32-2f608bfcb099"
+      insert_agenda_settings!(manual_prof_id, "manual")
+      insert_consultation_type!(manual_prof_id, manual_type_id, "Consulta Control", "12000.00")
+
       start_time = ~U[2026-10-15 11:00:00Z]
 
       params = %{
-        professional_id: ctx.professional_id,
-        consultation_type_id: @consultation_type_id,
-        start_time: start_time,
-        approval_mode: :manual
+        professional_id: manual_prof_id,
+        consultation_type_id: manual_type_id,
+        start_time: start_time
       }
 
       assert {:ok, result} =
@@ -112,7 +117,7 @@ defmodule Origen.Appointments.AssistedBookingTest do
 
       rel =
         Repo.get_by(ProfessionalPatientRelationship,
-          professional_account_id: ctx.professional_id,
+          professional_account_id: manual_prof_id,
           patient_profile_id: ctx.patient_profile_id
         )
 
@@ -262,13 +267,13 @@ defmodule Origen.Appointments.AssistedBookingTest do
     id
   end
 
-  defp insert_agenda_settings!(owner_account_id) do
+  defp insert_agenda_settings!(owner_account_id, approval_mode \\ "automatic") do
     query = """
-    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, created_at, updated_at)
-    VALUES ($1, 30, clock_timestamp(), clock_timestamp())
+    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, created_at, updated_at)
+    VALUES ($1, 30, $2, clock_timestamp(), clock_timestamp())
     """
 
-    {:ok, _} = SQL.query(Repo, query, [owner_account_id])
+    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode])
     :ok
   end
 

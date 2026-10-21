@@ -68,6 +68,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:selected_consultation_type_id, nil)
        |> assign(:booking_date, Date.utc_today())
        |> assign(:booking_slots, [])
+       |> assign(:selected_prof_approval_mode, :automatic)
        |> assign(:selected_slot_time, nil)
        |> assign(:booking_success, nil)
        |> assign(:booking_error, nil)}
@@ -205,12 +206,16 @@ defmodule OrigenWeb.SecretaryPatientLive do
     duration = (types != [] && hd(types)[:duration_minutes]) || 30
     slots = if prof_id, do: load_slots(prof_id, date, duration), else: []
 
+    approval_mode =
+      if prof_id, do: AssistedBooking.get_professional_approval_mode(prof_id), else: :automatic
+
     {:noreply,
      socket
      |> assign(:assisted_booking_notice, true)
      |> assign(:assisted_booking_active, true)
      |> assign(:booking_professionals, professionals)
      |> assign(:selected_prof_id, prof_id)
+     |> assign(:selected_prof_approval_mode, approval_mode)
      |> assign(:booking_consultation_types, types)
      |> assign(:selected_consultation_type_id, type_id)
      |> assign(:booking_date, date)
@@ -259,10 +264,12 @@ defmodule OrigenWeb.SecretaryPatientLive do
       end
 
     slots = load_slots(prof_id, date, duration)
+    approval_mode = AssistedBooking.get_professional_approval_mode(prof_id)
 
     {:noreply,
      socket
      |> assign(:selected_prof_id, prof_id)
+     |> assign(:selected_prof_approval_mode, approval_mode)
      |> assign(:booking_consultation_types, types)
      |> assign(:selected_consultation_type_id, type_id)
      |> assign(:booking_date, date)
@@ -300,7 +307,8 @@ defmodule OrigenWeb.SecretaryPatientLive do
           reserve_params = %{
             professional_id: prof_id,
             consultation_type_id: type_id,
-            start_time: start_datetime
+            start_time: start_datetime,
+            approval_mode: socket.assigns.selected_prof_approval_mode
           }
 
           case AssistedBooking.reserve(secretary_id, profile_id, reserve_params) do
@@ -833,6 +841,20 @@ defmodule OrigenWeb.SecretaryPatientLive do
                           {prof.name}
                         </option>
                       </select>
+                      <span
+                        :if={@selected_prof_approval_mode == :manual}
+                        id="prof-approval-mode-badge"
+                        class="inline-block text-xs font-medium text-amber-700 mt-1"
+                      >
+                        Aprobación manual requerida (nacerá como Solicitud)
+                      </span>
+                      <span
+                        :if={@selected_prof_approval_mode == :automatic}
+                        id="prof-approval-mode-badge"
+                        class="inline-block text-xs font-medium text-green-700 mt-1"
+                      >
+                        Aprobación automática (confirmación directa)
+                      </span>
                     </div>
 
                     <div>

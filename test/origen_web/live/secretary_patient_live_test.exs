@@ -277,6 +277,7 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       assert has_element?(view, "#booking-professional-select")
       assert has_element?(view, "#booking-consultation-type-select")
       assert has_element?(view, "#booking-date-input")
+      assert has_element?(view, "#prof-approval-mode-badge")
       assert has_element?(view, "#confirm-assisted-booking")
       assert has_element?(view, "#cancel-assisted-booking")
     end

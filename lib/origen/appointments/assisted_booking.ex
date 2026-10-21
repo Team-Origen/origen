@@ -83,12 +83,18 @@ defmodule Origen.Appointments.AssistedBooking do
          :ok <- ensure_active_professional(prof_id),
          {:ok, consultation_type_id} <- validate_consultation_type_id(params),
          {:ok, start_time} <- resolve_start_time(params) do
-      approval_mode = params[:approval_mode] || params["approval_mode"] || :automatic
+      approval_mode =
+        case params[:approval_mode] || params["approval_mode"] do
+          mode when mode in [:manual, "manual", :automatic, "automatic"] ->
+            normalize_mode(mode)
+
+          _ ->
+            get_professional_approval_mode(prof_id)
+        end
 
       status =
         case approval_mode do
           :manual -> :requested
-          "manual" -> :requested
           _ -> :confirmed
         end
 
@@ -131,6 +137,32 @@ defmodule Origen.Appointments.AssistedBooking do
       end
     end
   end
+
+  @doc """
+  Retorna la modalidad de aprobación configurada por el profesional (:automatic o :manual).
+  """
+  @spec get_professional_approval_mode(integer() | String.t()) :: :automatic | :manual
+  def get_professional_approval_mode(professional_id) do
+    with {:ok, owner_id} <- parse_id(professional_id) do
+      query = """
+      SELECT approval_mode FROM public.agenda_settings WHERE owner_account_id = $1
+      """
+
+      case SQL.query(Repo, query, [owner_id]) do
+        {:ok, %{rows: [[mode]]}} when mode in ["manual", "automatic"] ->
+          String.to_existing_atom(mode)
+
+        _ ->
+          :automatic
+      end
+    else
+      _ -> :automatic
+    end
+  end
+
+  defp normalize_mode(:manual), do: :manual
+  defp normalize_mode("manual"), do: :manual
+  defp normalize_mode(_), do: :automatic
 
   @doc """
   Secretaría no tiene permiso para aceptar solicitudes pendientes (reservado a #284).
