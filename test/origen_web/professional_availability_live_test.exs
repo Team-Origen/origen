@@ -90,13 +90,14 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     assert has_element?(view, "#back-to-agenda-button .hero-arrow-left")
   end
 
-  test "prioritizes agenda and consultation types before infrequently changed settings",
+  test "prioritizes profile then agenda and consultation types before infrequently changed settings",
        %{
          conn: conn
        } do
     {:ok, view, _html} = live(conn, @path)
 
     expected = [
+      "professional-profile-entry-heading",
       "weekly-availability-heading",
       "consultation-types-heading",
       "agenda-interval-heading",

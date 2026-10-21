@@ -26,6 +26,8 @@ Este documento prepara [#302 (Backend)](https://github.com/Team-Origen/origen/is
 
 La completitud requiere los cinco datos obligatorios. No se reemplazan datos faltantes con el email de la cuenta, una especialidad fija u otros valores ficticios. Un campo ausente o vacío no satisface la obligatoriedad. La validación de presencia no equivale a verificar credenciales.
 
+**Decisión posterior para #303, aprobada por Santiago:** «apruebo tu recomendacion de guardar cambios. . crera las pantalla. sera en un entrada moqueada no??». Se permite guardar avances parciales; los cinco datos son obligatorios para completar el perfil, no para guardar. El estado completo/incompleto refleja los últimos datos guardados, no el borrador sin guardar. En la preparación frontend, el guardado es simulado y no acredita persistencia ni integración de #302/#304. Ver [alcance y evidencia de la pantalla #303](../frontend/303-perfil-profesional.md).
+
 No se introducen en este contrato longitudes máximas nuevas, unicidad de matrículas, catálogos de especialidades o mensajes literales de error no definidos por la beta. Los detalles de validación y presentación que requieran decisiones adicionales deberán registrarse antes de implementar la operación afectada.
 
 ## Estado y visibilidad
