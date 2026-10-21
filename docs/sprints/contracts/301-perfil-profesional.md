@@ -44,6 +44,8 @@ Para este slice, la elegibilidad del listado reservable consultado por el Pacien
 
 Perder un dato obligatorio debe reflejarse en el siguiente listado consultado, sin borrar catálogo, horarios ni turnos existentes. No se autoriza modificar el ciclo de cuentas ni de turnos.
 
+**Decisión posterior para #302:** Santiago respondió «si» a «¿Aprobás esa corrección exclusiva del Paciente?», referida a revalidar cuenta activa y perfil completo en la reserva autónoma y rechazar IDs fuera del listado en el calendario de Paciente. Esta protección no se extiende a las reservas asistidas de Secretaría ni impide preparar o consultar la agenda con perfil incompleto. Ver [implementación y evidencia de #302](../backend/302-perfil-profesional.md).
+
 ## Propiedad y permisos
 
 ### Decisión acordada

@@ -96,6 +96,55 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
   end
 
   describe "calendar view rendering and navigation" do
+    test "empty eligible list renders safely and forged events cannot create a booking", %{
+      conn: conn,
+      profile: profile,
+      prof_id: prof_id
+    } do
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        Origen.Appointments.DatabaseCalendar
+      )
+
+      Repo.update!(Ecto.Changeset.change(profile, %{phone_verified: true}))
+      before = Repo.query!("SELECT count(*) FROM appointments").rows
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      assert html =~ "No hay profesionales disponibles"
+      refute has_element?(view, "#professional-form")
+      refute has_element?(view, "button[phx-click='select_slot']")
+      refute has_element?(view, "button[phx-click='confirm_booking']")
+
+      for {event, params} <- [
+            {"change_prof", %{"prof_id" => to_string(prof_id)}},
+            {"change_type", %{"type_id" => "forged"}},
+            {"change_date", %{"date" => "2026-09-25"}},
+            {"nav_date", %{"step" => "1"}},
+            {"select_slot", %{"slot_id" => "forged"}},
+            {"confirm_booking", %{}}
+          ] do
+        assert render_click(view, event, params) =~ "No hay profesionales disponibles"
+      end
+
+      assert Repo.query!("SELECT count(*) FROM appointments").rows == before
+    end
+
+    test "rejects a forged Professional selection without changing the selected schedule", %{
+      conn: conn
+    } do
+      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+      render_change(view, "change_date", %{"date" => "2026-09-25"})
+      before = view |> element("#professional-form") |> render()
+      render_change(view, "change_prof", %{"prof_id" => "999999"})
+      assert view |> element("#professional-form") |> render() == before
+      assert has_element?(view, "option[value='PRO-DEMO-001'][selected]")
+      assert has_element?(view, "button[phx-value-slot_id='SLOT-2026-09-25-0900']")
+      refute render(view) =~ "No pudimos cargar la disponibilidad"
+      html = render_change(view, "change_prof", %{"prof_id" => "PRO-DEMO-002"})
+      assert has_element?(view, "option[value='PRO-DEMO-002'][selected]")
+      assert html =~ "09:00"
+    end
+
     test "renders view, slots, unverified warning and navigates dates", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/patient/calendar")
 
@@ -129,6 +178,17 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       )
 
       Application.put_env(:origen, :consultation_type_catalog_adapter, PersistedCatalog)
+
+      {:ok, %{session: owner}} = Origen.Sessions.create_session(prof_id)
+
+      assert {:ok, _} =
+               Origen.ProfessionalProfiles.save_own_profile(owner, %{
+                 first_name: "Sofía",
+                 last_name: "Martínez",
+                 specialty: "Cardiología",
+                 license_type: "Nacional",
+                 license_number: "AB/001"
+               })
 
       friday = next_weekday(Date.utc_today(), 5)
 
@@ -183,8 +243,20 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
     test "unverified patient receives error, verified patient confirms successfully", %{
       conn: conn,
-      profile: profile
+      profile: profile,
+      prof_id: prof_id
     } do
+      {:ok, %{session: principal}} = Origen.Sessions.create_session(prof_id)
+
+      assert {:ok, _} =
+               Origen.ProfessionalProfiles.save_own_profile(principal, %{
+                 first_name: "Sofía",
+                 last_name: "Martínez",
+                 specialty: "Medicina General",
+                 license_type: "Libre",
+                 license_number: "AB/001"
+               })
+
       {:ok, view, _html} = live(conn, ~p"/patient/calendar")
 
       render_change(view, "change_date", %{"date" => "2026-09-25"})
