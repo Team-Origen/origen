@@ -295,8 +295,12 @@ defmodule Origen.Patients do
 
     clean_email =
       case contact_email do
-        nil -> nil
-        "" -> nil
+        nil ->
+          nil
+
+        "" ->
+          nil
+
         val when is_binary(val) ->
           trimmed = String.trim(val)
           if trimmed == "", do: nil, else: String.downcase(trimmed)
