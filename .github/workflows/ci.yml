@@ -25,8 +25,9 @@ jobs:
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
-          if [[ ! "$BODY" =~ (Closes|Fixes|Resolves)\ #[0-9]+ ]]; then
-            echo "Error: Vincular issue aprobada (ej. 'Closes #1')."
+          if [[ ! "$BODY" =~ (Closes|Fixes|Resolves)\ #[0-9]+ ]] && \
+             [[ ! "$BODY" =~ (^|[^[:alnum:]_])Refs\ #[0-9]+($|[^[:alnum:]_]) ]]; then
+            echo "Error: Vincular issue (ej. 'Closes #1' o 'Refs #1' para PRs parciales)."
             exit 1
           fi
 
@@ -67,6 +68,9 @@ jobs:
     steps:
       - name: Checkout del repositorio
         uses: actions/checkout@v4
+
+      - name: Probar validación de referencias de issue
+        run: python3 -m unittest discover -s test/ci -p 'test_*.py'
 
       - name: Configurar Elixir y Erlang
         uses: erlef/setup-beam@v1
