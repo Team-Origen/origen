@@ -13,7 +13,7 @@ defmodule OrigenWeb.PageController do
 
     case Origen.Repo.query(query, []) do
       {:ok, %{rows: [[id]]}} ->
-        {:ok, _session, token} = Origen.Sessions.create_session(id)
+        {:ok, %{token: token}} = Origen.Sessions.create_session(id)
 
         conn
         |> put_session(:internal_session_token, token)
