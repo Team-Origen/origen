@@ -7,7 +7,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   alias OrigenWeb.TimeGrid
   alias OrigenWeb.ProfessionalProfilePreview
 
-  @profile_preview_enabled Application.compile_env(:origen, :env) in [:dev, :test]
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
   @availability_days [
     {:monday, "Lunes"},
@@ -29,11 +28,13 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   @impl true
   def mount(params, _session, socket) do
+    profile_preview_enabled = profile_preview_enabled?()
+
     socket =
       assign(socket,
         page_title: "Configuración",
-        profile_preview_enabled: @profile_preview_enabled,
-        profile_preview: profile_preview(params),
+        profile_preview_enabled: profile_preview_enabled,
+        profile_preview: profile_preview(params, profile_preview_enabled),
         current_interval: nil,
         selected_interval: nil,
         interval_options: @interval_options,
@@ -68,7 +69,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     end
   end
 
-  defp profile_preview(params) do
+  defp profile_preview_enabled? do
+    Application.get_env(:origen, :env) in [:dev, :test]
+  end
+
+  defp profile_preview(params, enabled?) do
     scenario = Map.get(params, "scenario", "incomplete")
 
     scenario =
@@ -76,7 +81,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
         do: scenario,
         else: "incomplete"
 
-    if @profile_preview_enabled do
+    if enabled? do
       case ProfessionalProfilePreview.load(scenario) do
         {:ok, profile} ->
           %{
