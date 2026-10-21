@@ -2,7 +2,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
   @moduledoc """
   LiveView for document-based person search and assisted registration (PLN-12, Issue #67).
 
-  Allows an authenticated Secretary (or Administrator) to search Personas by
+  Allows an active authenticated Secretary to search Personas by
   controlled document type and normalized number, register new identities for
   the assisted booking flow, and review the resulting patient summary before
   starting an assisted reservation (#68).
@@ -42,12 +42,13 @@ defmodule OrigenWeb.SecretaryPatientLive do
     document_number: :string,
     birthdate: :date,
     phone: :string,
+    email: :string,
     gender: :string
   }
 
   @impl true
   def mount(_params, _session, socket) do
-    if socket.assigns.current_role in [:secretary, :administrator] do
+    if socket.assigns.current_role == :secretary do
       {:ok,
        socket
        |> assign(:page_title, "Pacientes")
@@ -57,6 +58,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:search_result, nil)
        |> assign(:registration_form, nil)
        |> assign(:registration_document, nil)
+       |> assign(:registration_identity, nil)
        |> assign(:registration_outcome, nil)
        |> assign(:registration_error, false)
        |> assign(:assisted_booking_notice, false)}
@@ -67,13 +69,17 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   @impl true
   def handle_event("validate_search", %{"search" => params}, socket) do
-    {:noreply, assign(socket, :search_form, to_form(search_changeset(params), as: :search))}
+    {:noreply,
+     socket
+     |> clear_registration()
+     |> assign(:search_form, to_form(search_changeset(params), as: :search))}
   end
 
   def handle_event("validate_search", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("search", %{"search" => params}, socket) do
+    socket = clear_registration(socket)
     changeset = search_changeset(params)
 
     if changeset.valid? do
@@ -85,6 +91,12 @@ defmodule OrigenWeb.SecretaryPatientLive do
              doc_num,
              socket.assigns.current_internal_session.account_id
            ) do
+        {:error, :unauthorized} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "No tienes autorización para buscar pacientes.")
+           |> redirect(to: "/")}
+
         {:ok, nil} ->
           registration_params = %{
             "document_type" => doc_type,
@@ -94,6 +106,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
           {:noreply,
            socket
            |> assign(:search_result, :not_found)
+           |> assign(:registration_identity, {doc_type, doc_num})
            |> assign(
              :registration_form,
              to_form(register_changeset(registration_params), as: :registration)
@@ -122,22 +135,65 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   @impl true
   def handle_event("validate_registration", %{"registration" => params}, socket) do
-    {:noreply,
-     assign(
-       socket,
-       :registration_form,
-       to_form(register_changeset(params), as: :registration)
-     )}
+    if registration_matches_search?(socket, params) do
+      {:noreply,
+       assign(socket, :registration_form, to_form(register_changeset(params), as: :registration))}
+    else
+      {:noreply, clear_registration(socket)}
+    end
   end
 
   def handle_event("validate_registration", _params, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("register", %{"registration" => params}, socket) do
+    if registration_matches_search?(socket, params) do
+      register_patient(socket, params)
+    else
+      {:noreply,
+       socket
+       |> clear_registration()
+       |> put_flash(:error, "Buscá el documento antes de registrar la persona.")}
+    end
+  end
+
+  def handle_event("register", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("new_search", _params, socket) do
+    {:noreply,
+     socket
+     |> clear_registration()
+     |> assign(:search_form, to_form(search_changeset(%{}), as: :search))}
+  end
+
+  @impl true
+  def handle_event("start_assisted_booking", _params, socket) do
+    {:noreply, assign(socket, :assisted_booking_notice, true)}
+  end
+
+  defp registration_matches_search?(socket, params) do
+    socket.assigns.search_result == :not_found and
+      socket.assigns.registration_identity ==
+        {params["document_type"], Persona.normalize_number(params["document_number"])}
+  end
+
+  defp clear_registration(socket) do
+    socket
+    |> assign(:search_result, nil)
+    |> assign(:registration_form, nil)
+    |> assign(:registration_document, nil)
+    |> assign(:registration_identity, nil)
+    |> assign(:registration_outcome, nil)
+    |> assign(:registration_error, false)
+    |> assign(:assisted_booking_notice, false)
+  end
+
+  defp register_patient(socket, params) do
     changeset = register_changeset(params)
 
     if changeset.valid? do
-      case Patients.register_or_reuse_assisted_persona(
+      case Patients.register_absent_patient(
              params,
              socket.assigns.current_internal_session.account_id
            ) do
@@ -151,11 +207,25 @@ defmodule OrigenWeb.SecretaryPatientLive do
            |> assign(:registration_error, false)
            |> assign(:assisted_booking_notice, false)}
 
-        {:error, _changeset} ->
+        {:error, %Changeset{} = backend_changeset} ->
+          doc_errors = Keyword.get_values(backend_changeset.errors, :document_number)
+
+          registration_error_msg =
+            case doc_errors do
+              [{msg, _} | _] -> msg
+              _ -> "Revisá los datos ingresados e intentá nuevamente."
+            end
+
           {:noreply,
            socket
-           |> assign(:registration_error, true)
-           |> assign(:registration_form, to_form(changeset, as: :registration))}
+           |> assign(:registration_error, registration_error_msg)
+           |> assign(:registration_form, to_form(backend_changeset, as: :registration))}
+
+        {:error, :unauthorized} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "No tienes autorización para registrar pacientes.")
+           |> redirect(to: "/")}
       end
     else
       {:noreply,
@@ -163,26 +233,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:registration_error, false)
        |> assign(:registration_form, to_form(changeset, as: :registration))}
     end
-  end
-
-  def handle_event("register", _params, socket), do: {:noreply, socket}
-
-  @impl true
-  def handle_event("new_search", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:search_form, to_form(search_changeset(%{}), as: :search))
-     |> assign(:search_result, nil)
-     |> assign(:registration_form, nil)
-     |> assign(:registration_document, nil)
-     |> assign(:registration_outcome, nil)
-     |> assign(:registration_error, false)
-     |> assign(:assisted_booking_notice, false)}
-  end
-
-  @impl true
-  def handle_event("start_assisted_booking", _params, socket) do
-    {:noreply, assign(socket, :assisted_booking_notice, true)}
   end
 
   defp search_changeset(params) do
@@ -208,10 +258,11 @@ defmodule OrigenWeb.SecretaryPatientLive do
       :document_number,
       :birthdate,
       :phone,
+      :email,
       :gender
     ])
     |> Changeset.validate_required(
-      [:first_name, :last_name, :document_type, :document_number, :birthdate, :phone, :gender],
+      [:first_name, :last_name, :document_type, :document_number, :birthdate, :phone],
       message: "no puede estar en blanco"
     )
     |> Changeset.validate_inclusion(:document_type, Persona.document_types(),
@@ -223,7 +274,31 @@ defmodule OrigenWeb.SecretaryPatientLive do
     |> normalize_doc_number()
     |> validate_document_number_by_type()
     |> validate_birthdate()
+    |> validate_optional_email()
     |> Map.put(:action, :validate)
+  end
+
+  defp validate_optional_email(changeset) do
+    case Changeset.get_change(changeset, :email) do
+      nil ->
+        changeset
+
+      "" ->
+        Changeset.put_change(changeset, :email, nil)
+
+      email when is_binary(email) ->
+        trimmed = String.trim(email)
+
+        if trimmed == "" do
+          Changeset.put_change(changeset, :email, nil)
+        else
+          if Regex.match?(~r/^[^\s]+@[^\s]+$/, trimmed) do
+            changeset
+          else
+            Changeset.add_error(changeset, :email, "debe ser un correo electrónico válido")
+          end
+        end
+    end
   end
 
   defp normalize_doc_number(changeset) do
@@ -397,7 +472,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   with_icon
                 >
                   <strong>No se pudo registrar la persona.</strong>
-                  Revisá los datos ingresados e intentá nuevamente.
+                  {@registration_error}
                 </.alert>
 
                 <.form
@@ -456,15 +531,24 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     />
                   </div>
 
-                  <.field
-                    field={@registration_form[:gender]}
-                    type="select"
-                    label="Género"
-                    options={@gender_options}
-                    prompt="Seleccionar género"
-                    required
-                    no_margin
-                  />
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <.field
+                      field={@registration_form[:email]}
+                      type="email"
+                      label="Correo de contacto (opcional)"
+                      placeholder="ejemplo@correo.com"
+                      no_margin
+                    />
+
+                    <.field
+                      field={@registration_form[:gender]}
+                      type="select"
+                      label="Género"
+                      options={@gender_options}
+                      prompt="Seleccionar género"
+                      no_margin
+                    />
+                  </div>
 
                   <div>
                     <.button type="submit" color="primary">Registrar persona</.button>
@@ -517,6 +601,13 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   <dt class="font-medium">Teléfono</dt>
                   <dd id="patient-summary-phone">
                     {(@search_result.profile && @search_result.profile.phone) || "—"}
+                  </dd>
+
+                  <dt class="font-medium">Correo de contacto</dt>
+                  <dd id="patient-summary-email">
+                    {(@search_result.profile &&
+                        (@search_result.profile.contact_email || @search_result.profile.email)) ||
+                      "No declarado"}
                   </dd>
 
                   <dt class="font-medium">Verificación telefónica</dt>
