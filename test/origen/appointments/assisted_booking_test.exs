@@ -92,7 +92,7 @@ defmodule Origen.Appointments.AssistedBookingTest do
          ctx do
       manual_prof_id = insert_internal_account!("dr.manual@example.com", "professional", "active")
       manual_type_id = "018f4a5b-0d62-7a44-8e32-2f608bfcb099"
-      insert_agenda_settings!(manual_prof_id, "manual")
+      insert_agenda_settings!(manual_prof_id, "manual", "requested")
       insert_consultation_type!(manual_prof_id, manual_type_id, "Consulta Control", "12000.00")
 
       start_time = ~U[2026-10-15 11:00:00Z]
@@ -267,13 +267,17 @@ defmodule Origen.Appointments.AssistedBookingTest do
     id
   end
 
-  defp insert_agenda_settings!(owner_account_id, approval_mode \\ "automatic") do
+  defp insert_agenda_settings!(
+         owner_account_id,
+         approval_mode \\ "automatic",
+         secretary_mode \\ "confirmed"
+       ) do
     query = """
-    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, created_at, updated_at)
-    VALUES ($1, 30, $2, clock_timestamp(), clock_timestamp())
+    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode, created_at, updated_at)
+    VALUES ($1, 30, $2, $3, clock_timestamp(), clock_timestamp())
     """
 
-    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode])
+    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode, secretary_mode])
     :ok
   end
 

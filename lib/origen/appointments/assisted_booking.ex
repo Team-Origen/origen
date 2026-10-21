@@ -83,19 +83,22 @@ defmodule Origen.Appointments.AssistedBooking do
          :ok <- ensure_active_professional(prof_id),
          {:ok, consultation_type_id} <- validate_consultation_type_id(params),
          {:ok, start_time} <- resolve_start_time(params) do
-      approval_mode =
-        case params[:approval_mode] || params["approval_mode"] do
-          mode when mode in [:manual, "manual", :automatic, "automatic"] ->
-            normalize_mode(mode)
-
-          _ ->
-            get_professional_approval_mode(prof_id)
+      approval_cfg =
+        case Booking.get_approval_configuration(prof_id) do
+          {:ok, cfg} -> cfg
+          _ -> %{approval_mode: :automatic, secretary_approval_mode: :confirmed}
         end
 
       status =
-        case approval_mode do
-          :manual -> :requested
-          _ -> :confirmed
+        case params[:approval_mode] || approval_cfg.approval_mode do
+          mode when mode in [:manual, "manual"] ->
+            case params[:secretary_approval_mode] || approval_cfg.secretary_approval_mode do
+              sec_mode when sec_mode in [:requested, "requested"] -> :requested
+              _ -> :confirmed
+            end
+
+          _ ->
+            :confirmed
         end
 
       now = Keyword.get(opts, :now, DateTime.utc_now())
@@ -159,10 +162,6 @@ defmodule Origen.Appointments.AssistedBooking do
       _ -> :automatic
     end
   end
-
-  defp normalize_mode(:manual), do: :manual
-  defp normalize_mode("manual"), do: :manual
-  defp normalize_mode(_), do: :automatic
 
   @doc """
   Secretaría no tiene permiso para aceptar solicitudes pendientes (reservado a #284).
