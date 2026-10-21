@@ -19,7 +19,13 @@ defmodule Origen.Appointments.AssistedBookingTest do
     patient_profile_id = insert_patient_profile!("Juan", "Perez", "35000111")
 
     insert_agenda_settings!(professional_id)
-    insert_consultation_type!(professional_id, @consultation_type_id, "Consulta General", "15000.00")
+
+    insert_consultation_type!(
+      professional_id,
+      @consultation_type_id,
+      "Consulta General",
+      "15000.00"
+    )
 
     %{
       professional_id: professional_id,
@@ -39,7 +45,9 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:ok, result} =
-               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
 
       assert result.status == :confirmed
       assert result.patient_id == ctx.patient_profile_id
@@ -73,7 +81,9 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:ok, result} =
-               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
 
       assert result.status == :confirmed
     end
@@ -89,7 +99,9 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:ok, result} =
-               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
 
       assert result.status == :requested
       assert result.relationship_created? == true
@@ -117,12 +129,16 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:ok, _first} =
-               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
 
       other_patient_id = insert_patient_profile!("Maria", "Gomez", "36000222")
 
       assert {:error, :slot_already_booked} =
-               AssistedBooking.reserve(ctx.secretary_id, other_patient_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, other_patient_id, params,
+                 now: @fixed_now
+               )
     end
 
     test "C5: paciente no encontrado rechaza con :patient_not_found", ctx do
@@ -145,7 +161,9 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:ok, result} =
-               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
 
       assert result.status == :confirmed
     end
@@ -158,7 +176,8 @@ defmodule Origen.Appointments.AssistedBookingTest do
                AssistedBooking.reject_request(ctx.secretary_id, 123)
     end
 
-    test "C8: actor no autorizado (profesional o paciente) no puede operar reserva asistida", ctx do
+    test "C8: actor no autorizado (profesional o paciente) no puede operar reserva asistida",
+         ctx do
       params = %{
         professional_id: ctx.professional_id,
         consultation_type_id: @consultation_type_id,
@@ -166,7 +185,9 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:error, :unauthorized} =
-               AssistedBooking.reserve(ctx.professional_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.professional_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
     end
 
     test "C9: cuenta inexistente rechaza con :unauthorized", ctx do
@@ -181,7 +202,8 @@ defmodule Origen.Appointments.AssistedBookingTest do
     end
 
     test "C10: profesional inactivo rechaza con :invalid_professional", ctx do
-      inactive_prof_id = insert_internal_account!("inactive.dr@example.com", "professional", "pending_activation")
+      inactive_prof_id =
+        insert_internal_account!("inactive.dr@example.com", "professional", "pending_activation")
 
       params = %{
         professional_id: inactive_prof_id,
@@ -190,7 +212,9 @@ defmodule Origen.Appointments.AssistedBookingTest do
       }
 
       assert {:error, :invalid_professional} =
-               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params, now: @fixed_now)
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
     end
   end
 

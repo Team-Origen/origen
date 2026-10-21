@@ -136,7 +136,8 @@ defmodule Origen.Booking.AuthorizationTest do
       assert {:ok, _authorization} = Authorization.authorize_reservation(params)
     end
 
-    test "autoriza con patient_agreed_schedule false (requisito histórico retirado conforme a #309)", ctx do
+    test "autoriza con patient_agreed_schedule false (requisito histórico retirado conforme a #309)",
+         ctx do
       params = %{
         actor: %{role: :secretary, id: ctx.secretary_id},
         patient_id: ctx.patient_profile_id,
@@ -148,7 +149,8 @@ defmodule Origen.Booking.AuthorizationTest do
       assert authorization.actor.role == :secretary
     end
 
-    test "autoriza con patient_agreed_schedule ausente (requisito histórico retirado conforme a #309)", ctx do
+    test "autoriza con patient_agreed_schedule ausente (requisito histórico retirado conforme a #309)",
+         ctx do
       params = %{
         actor: %{role: :secretary, id: ctx.secretary_id},
         patient_id: ctx.patient_profile_id,

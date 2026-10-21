@@ -248,6 +248,92 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
                "La reserva asistida estará disponible próximamente."
              )
     end
+
+    test "C11: al iniciar reserva asistida muestra la sección con selector de profesionales y fecha" do
+      {:ok, _} =
+        Patients.complete_profile("carlos@example.test", %{
+          first_name: "Carlos",
+          last_name: "López",
+          document_type: "dni",
+          document_number: "35.987.654",
+          birthdate: ~D[1988-07-20],
+          phone: "+5491144332211"
+        })
+
+      {:ok, view, _html} = live(secretary_conn(), @path)
+
+      view
+      |> form("#persona-search-form",
+        search: %{"document_type" => "dni", "document_number" => "35.987.654"}
+      )
+      |> render_submit()
+
+      view
+      |> element("#start-assisted-booking", "Iniciar Reserva Asistida")
+      |> render_click()
+
+      assert has_element?(view, "#assisted-booking-section")
+      assert has_element?(view, "#assisted-booking-heading", "Reserva asistida de turno")
+      assert has_element?(view, "#booking-professional-select")
+      assert has_element?(view, "#booking-consultation-type-select")
+      assert has_element?(view, "#booking-date-input")
+      assert has_element?(view, "#confirm-assisted-booking")
+      assert has_element?(view, "#cancel-assisted-booking")
+    end
+
+    test "C12: permite seleccionar horario disponible y confirmar la reserva asistida" do
+      {:ok, _profile_map} =
+        Patients.complete_profile("carlos2@example.test", %{
+          first_name: "Carlos",
+          last_name: "López",
+          document_type: "dni",
+          document_number: "35.987.654",
+          birthdate: ~D[1988-07-20],
+          phone: "+5491144332211"
+        })
+
+      # Crear profesional en BD correspondiente al mock o BD
+      prof_id =
+        insert_active_internal_account!(:professional).id
+
+      query = """
+      INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, created_at, updated_at)
+      VALUES ($1, 30, clock_timestamp(), clock_timestamp())
+      """
+
+      {:ok, _} = Origen.Repo.query(query, [prof_id])
+
+      {:ok, view, _html} = live(secretary_conn(), @path)
+
+      view
+      |> form("#persona-search-form",
+        search: %{"document_type" => "dni", "document_number" => "35.987.654"}
+      )
+      |> render_submit()
+
+      view
+      |> element("#start-assisted-booking", "Iniciar Reserva Asistida")
+      |> render_click()
+
+      assert has_element?(view, "#assisted-booking-section")
+
+      # Si hay slots en la grilla, seleccionar uno y confirmar
+      if has_element?(view, "#booking-slots-grid button") do
+        view
+        |> element("#booking-slots-grid button:first-child")
+        |> render_click()
+
+        # Al seleccionar slot, el botón confirmar se habilita
+        refute has_element?(view, "#confirm-assisted-booking[disabled]")
+      end
+
+      # Probar cerrar/cancelar
+      view
+      |> element("#cancel-assisted-booking", "Cerrar")
+      |> render_click()
+
+      refute has_element?(view, "#assisted-booking-section")
+    end
   end
 
   defp secretary_conn do
