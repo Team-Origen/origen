@@ -13,6 +13,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
   on_mount {OrigenWeb.InternalAuthLive, :ensure_authenticated}
 
   alias Ecto.Changeset
+  alias Origen.Appointments.AssistedBooking
   alias Origen.Patients
   alias Origen.Patients.Persona
 
@@ -59,7 +60,17 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:registration_document, nil)
        |> assign(:registration_outcome, nil)
        |> assign(:registration_error, false)
-       |> assign(:assisted_booking_notice, false)}
+       |> assign(:assisted_booking_active, false)
+       |> assign(:booking_professionals, [])
+       |> assign(:selected_prof_id, nil)
+       |> assign(:booking_consultation_types, [])
+       |> assign(:selected_consultation_type_id, nil)
+       |> assign(:booking_date, Date.utc_today())
+       |> assign(:booking_slots, [])
+       |> assign(:selected_prof_approval_mode, :automatic)
+       |> assign(:selected_slot_time, nil)
+       |> assign(:booking_success, nil)
+       |> assign(:booking_error, nil)}
     else
       {:ok, redirect(socket, to: "/")}
     end
@@ -100,8 +111,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
            )
            |> assign(:registration_document, "#{doc_label(doc_type)} #{doc_num}")
            |> assign(:registration_outcome, nil)
-           |> assign(:registration_error, false)
-           |> assign(:assisted_booking_notice, false)}
+           |> assign(:registration_error, false)}
 
         {:ok, %{persona: persona, profile: profile}} ->
           {:noreply,
@@ -110,8 +120,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
            |> assign(:registration_form, nil)
            |> assign(:registration_document, nil)
            |> assign(:registration_outcome, nil)
-           |> assign(:registration_error, false)
-           |> assign(:assisted_booking_notice, false)}
+           |> assign(:registration_error, false)}
       end
     else
       {:noreply, assign(socket, :search_form, to_form(changeset, as: :search))}
@@ -148,8 +157,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
            |> assign(:registration_form, nil)
            |> assign(:registration_document, nil)
            |> assign(:registration_outcome, outcome)
-           |> assign(:registration_error, false)
-           |> assign(:assisted_booking_notice, false)}
+           |> assign(:registration_error, false)}
 
         {:error, _changeset} ->
           {:noreply,
@@ -177,12 +185,117 @@ defmodule OrigenWeb.SecretaryPatientLive do
      |> assign(:registration_document, nil)
      |> assign(:registration_outcome, nil)
      |> assign(:registration_error, false)
-     |> assign(:assisted_booking_notice, false)}
+     |> assign(:assisted_booking_active, false)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_success, nil)
+     |> assign(:booking_error, nil)}
   end
 
   @impl true
   def handle_event("start_assisted_booking", _params, socket) do
-    {:noreply, assign(socket, :assisted_booking_notice, true)}
+    professionals = load_professionals()
+    prof_id = (professionals != [] && to_string(hd(professionals).id)) || nil
+    types = if prof_id, do: load_consultation_types(prof_id), else: []
+    type_id = (types != [] && to_string(hd(types).id)) || nil
+    date = next_weekday(Date.utc_today())
+    duration = (types != [] && hd(types)[:duration_minutes]) || 30
+    slots = if prof_id, do: load_slots(prof_id, date, duration), else: []
+
+    approval_mode =
+      if prof_id, do: AssistedBooking.get_professional_approval_mode(prof_id), else: :automatic
+
+    {:noreply,
+     socket
+     |> assign(:assisted_booking_active, true)
+     |> assign(:booking_professionals, professionals)
+     |> assign(:selected_prof_id, prof_id)
+     |> assign(:selected_prof_approval_mode, approval_mode)
+     |> assign(:booking_consultation_types, types)
+     |> assign(:selected_consultation_type_id, type_id)
+     |> assign(:booking_date, date)
+     |> assign(:booking_slots, slots)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_success, nil)
+     |> assign(:booking_error, nil)}
+  end
+
+  @impl true
+  def handle_event("update_booking_selection", params, socket) do
+    prof_id = params["professional_id"] || socket.assigns.selected_prof_id
+
+    if is_nil(prof_id) or prof_id == "" do
+      {:noreply, socket}
+    else
+      update_booking_selection(prof_id, params, socket)
+    end
+  end
+
+  @impl true
+  def handle_event("select_slot", %{"time" => time_str}, socket) do
+    {:noreply, assign(socket, :selected_slot_time, time_str)}
+  end
+
+  @impl true
+  def handle_event("confirm_assisted_booking", _params, socket) do
+    secretary_id = socket.assigns.current_internal_session.account_id
+
+    profile_id =
+      case socket.assigns.search_result do
+        %{profile: %{id: id}} -> id
+        _ -> nil
+      end
+
+    prof_id = socket.assigns.selected_prof_id
+    type_id = socket.assigns.selected_consultation_type_id
+    date = socket.assigns.booking_date
+    slot_time = socket.assigns.selected_slot_time
+
+    if is_nil(slot_time) or is_nil(profile_id) or is_nil(prof_id) or is_nil(type_id) do
+      {:noreply,
+       assign(
+         socket,
+         :booking_error,
+         "Por favor seleccioná todos los campos y un horario disponible."
+       )}
+    else
+      case Time.from_iso8601(slot_time <> ":00") do
+        {:ok, time} ->
+          start_datetime = DateTime.new!(date, time, "Etc/UTC")
+
+          reserve_params = %{
+            professional_id: prof_id,
+            consultation_type_id: type_id,
+            start_time: start_datetime
+          }
+
+          case AssistedBooking.reserve(secretary_id, profile_id, reserve_params) do
+            {:ok, result} ->
+              {:noreply,
+               socket
+               |> assign(:booking_success, result)
+               |> assign(:booking_error, nil)
+               |> assign(:selected_slot_time, nil)}
+
+            {:error, reason} ->
+              {:noreply,
+               socket
+               |> assign(:booking_error, format_booking_error(reason))
+               |> assign(:booking_success, nil)}
+          end
+
+        _ ->
+          {:noreply, assign(socket, :booking_error, "Formato de horario inválido.")}
+      end
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_assisted_booking", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:assisted_booking_active, false)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_error, nil)}
   end
 
   defp search_changeset(params) do
@@ -303,6 +416,112 @@ defmodule OrigenWeb.SecretaryPatientLive do
   defp outcome_feedback(:created), do: "Persona registrada correctamente."
   defp outcome_feedback(:reused), do: "La persona ya estaba registrada y fue reutilizada."
 
+  defp load_professionals do
+    case AssistedBooking.list_professionals() do
+      {:ok, list} -> list
+      _ -> []
+    end
+  end
+
+  defp update_booking_selection(prof_id, params, socket) do
+    type_id = params["consultation_type_id"] || socket.assigns.selected_consultation_type_id
+
+    date =
+      case params["date"] do
+        nil ->
+          socket.assigns.booking_date
+
+        "" ->
+          socket.assigns.booking_date
+
+        str ->
+          case Date.from_iso8601(str) do
+            {:ok, d} -> d
+            _ -> socket.assigns.booking_date
+          end
+      end
+
+    types =
+      if prof_id != socket.assigns.selected_prof_id do
+        load_consultation_types(prof_id)
+      else
+        socket.assigns.booking_consultation_types
+      end
+
+    type_id =
+      if Enum.any?(types, &(to_string(&1.id) == to_string(type_id))),
+        do: type_id,
+        else: (types != [] && to_string(hd(types).id)) || nil
+
+    duration =
+      case Enum.find(types, &(to_string(&1.id) == to_string(type_id))) do
+        %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+        _ -> 30
+      end
+
+    slots = load_slots(prof_id, date, duration)
+    approval_mode = AssistedBooking.get_professional_approval_mode(prof_id)
+
+    {:noreply,
+     socket
+     |> assign(:selected_prof_id, prof_id)
+     |> assign(:selected_prof_approval_mode, approval_mode)
+     |> assign(:booking_consultation_types, types)
+     |> assign(:selected_consultation_type_id, type_id)
+     |> assign(:booking_date, date)
+     |> assign(:booking_slots, slots)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_error, nil)}
+  end
+
+  defp load_consultation_types(prof_id) do
+    case AssistedBooking.list_consultation_types(prof_id) do
+      {:ok, types} ->
+        Enum.map(types, fn t ->
+          Map.put_new(t, :duration_minutes, (t[:interval_count] || 1) * 30)
+        end)
+
+      _ ->
+        []
+    end
+  end
+
+  defp load_slots(prof_id, date, duration) do
+    case AssistedBooking.get_daily_schedule(prof_id, date, duration_minutes: duration) do
+      {:ok, %{slots: slots}} when is_list(slots) -> slots
+      _ -> []
+    end
+  end
+
+  defp next_weekday(date) do
+    case Date.day_of_week(date) do
+      6 -> Date.add(date, 2)
+      7 -> Date.add(date, 1)
+      _ -> date
+    end
+  end
+
+  defp format_booking_error(:slot_already_booked),
+    do: "El horario seleccionado ya no está disponible. Por favor seleccioná otro."
+
+  defp format_booking_error(:patient_schedule_conflict),
+    do: "El paciente ya posee otro turno superpuesto con este horario."
+
+  defp format_booking_error(:unauthorized),
+    do: "No tenés autorización para realizar esta reserva asistida."
+
+  defp format_booking_error(:patient_not_found),
+    do: "El paciente no fue encontrado en el sistema."
+
+  defp format_booking_error(:invalid_professional),
+    do: "El profesional seleccionado no está activo o disponible."
+
+  defp format_booking_error(:consultation_type_not_found),
+    do: "El tipo de consulta seleccionado no está disponible."
+
+  defp format_booking_error(_),
+    do: "No se pudo completar la reserva. Verificá los datos e intentá nuevamente."
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -373,6 +592,16 @@ defmodule OrigenWeb.SecretaryPatientLive do
               </.card_content>
             </.card>
           </section>
+
+          <.alert
+            :if={@booking_error}
+            id="booking-error-message"
+            color="danger"
+            variant="callout"
+            with_icon
+          >
+            {@booking_error}
+          </.alert>
 
           <section
             :if={@search_result == :not_found}
@@ -544,16 +773,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   </dd>
                 </dl>
 
-                <.alert
-                  :if={@assisted_booking_notice}
-                  id="assisted-booking-notice"
-                  color="info"
-                  variant="callout"
-                  with_icon
-                >
-                  La reserva asistida estará disponible próximamente.
-                </.alert>
-
                 <div class="flex flex-wrap gap-2">
                   <.button
                     id="start-assisted-booking"
@@ -563,6 +782,172 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     Iniciar Reserva Asistida
                   </.button>
                 </div>
+
+                <section
+                  :if={@assisted_booking_active}
+                  id="assisted-booking-section"
+                  aria-labelledby="assisted-booking-heading"
+                  class="mt-6 border-t border-gray-200 pt-6 flex flex-col gap-4"
+                >
+                  <.h3 id="assisted-booking-heading" no_margin>Reserva asistida de turno</.h3>
+                  <.text_muted>
+                    Seleccioná profesional, tipo de consulta y horario disponible para agendar el turno.
+                  </.text_muted>
+
+                  <.alert
+                    :if={@booking_success}
+                    id="booking-success-message"
+                    color="success"
+                    variant="callout"
+                    with_icon
+                  >
+                    <strong>¡Turno agendado con éxito!</strong>
+                    <p class="text-sm mt-1">
+                      Estado: <strong>{String.capitalize(to_string(@booking_success.status))}</strong>
+                      |
+                      Consulta: {@booking_success.consultation_type_name} |
+                      Horario: {DateTime.to_iso8601(@booking_success.start_time)}
+                    </p>
+                  </.alert>
+
+                  <form
+                    phx-change="update_booking_selection"
+                    id="assisted-booking-form"
+                    class="grid gap-4 sm:grid-cols-3"
+                  >
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                        for="booking-professional-select"
+                      >
+                        Profesional
+                      </label>
+                      <select
+                        id="booking-professional-select"
+                        name="professional_id"
+                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm"
+                      >
+                        <option
+                          :for={prof <- @booking_professionals}
+                          value={prof.id}
+                          selected={to_string(prof.id) == to_string(@selected_prof_id)}
+                        >
+                          {prof.name}
+                        </option>
+                      </select>
+                      <span
+                        :if={@selected_prof_approval_mode == :manual}
+                        id="prof-approval-mode-badge"
+                        class="inline-block text-xs font-medium text-amber-700 mt-1"
+                      >
+                        Aprobación manual requerida (nacerá como Solicitud)
+                      </span>
+                      <span
+                        :if={@selected_prof_approval_mode == :automatic}
+                        id="prof-approval-mode-badge"
+                        class="inline-block text-xs font-medium text-green-700 mt-1"
+                      >
+                        Aprobación automática (confirmación directa)
+                      </span>
+                    </div>
+
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                        for="booking-consultation-type-select"
+                      >
+                        Tipo de consulta
+                      </label>
+                      <select
+                        id="booking-consultation-type-select"
+                        name="consultation_type_id"
+                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm"
+                      >
+                        <option
+                          :for={type <- @booking_consultation_types}
+                          value={type.id}
+                          selected={to_string(type.id) == to_string(@selected_consultation_type_id)}
+                        >
+                          {type.name} ({type[:duration_minutes] || 30} min)
+                        </option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-gray-700 mb-1"
+                        for="booking-date-input"
+                      >
+                        Fecha de turno
+                      </label>
+                      <input
+                        id="booking-date-input"
+                        type="date"
+                        name="date"
+                        value={Date.to_iso8601(@booking_date)}
+                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm"
+                      />
+                    </div>
+                  </form>
+
+                  <div class="mt-2">
+                    <h4 class="text-sm font-semibold text-gray-800 mb-2">Horarios disponibles</h4>
+
+                    <div
+                      :if={@booking_slots == []}
+                      id="no-slots-available"
+                      class="text-sm text-gray-500 italic"
+                    >
+                      No hay horarios disponibles para la fecha y profesional seleccionados.
+                    </div>
+
+                    <div
+                      :if={@booking_slots != []}
+                      id="booking-slots-grid"
+                      class="flex flex-wrap gap-2"
+                    >
+                      <button
+                        :for={slot <- @booking_slots}
+                        type="button"
+                        id={"slot-#{slot.start_formatted}"}
+                        phx-click="select_slot"
+                        phx-value-time={slot.start_formatted}
+                        class={
+                          if slot.start_formatted == @selected_slot_time,
+                            do:
+                              "px-3 py-1.5 rounded bg-blue-600 text-white font-semibold text-sm shadow",
+                            else:
+                              "px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm"
+                        }
+                      >
+                        {slot.start_formatted}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-3 pt-2">
+                    <.button
+                      id="confirm-assisted-booking"
+                      color="primary"
+                      phx-click="confirm_assisted_booking"
+                      disabled={
+                        is_nil(@selected_slot_time) or is_nil(@selected_consultation_type_id) or
+                          is_nil(@selected_prof_id)
+                      }
+                    >
+                      Confirmar reserva asistida
+                    </.button>
+
+                    <.button
+                      id="cancel-assisted-booking"
+                      color="secondary"
+                      variant="outline"
+                      phx-click="cancel_assisted_booking"
+                    >
+                      Cerrar
+                    </.button>
+                  </div>
+                </section>
               </.card_content>
             </.card>
           </section>

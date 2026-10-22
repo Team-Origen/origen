@@ -9,8 +9,8 @@ defmodule Origen.Booking.Authorization do
     estado `completed` (R01) y teléfono verificado (R02). Puede reservar con cualquier
     profesional activo; la relación Profesional-Paciente se establece al reservar (RF-05).
   - **Secretaría asistida**: cuenta interna activa con rol `secretary`. Puede operar
-    perfiles incompletos o completos (RF-02) y el flujo asistido exige declaración
-    de horario acordado con el paciente (`patient_agreed_schedule`).
+    perfiles incompletos o completos (RF-02); el requisito histórico de declaración de
+    horario acordado con el paciente (`patient_agreed_schedule`) fue retirado (#309 / #310).
   - **Profesional**: identidad propia (`actor.id == professional_id`), cuenta interna
     activa con rol `professional` y paciente dentro de su lista permitida (RF-05).
 
@@ -140,8 +140,8 @@ defmodule Origen.Booking.Authorization do
 
   defp ensure_verified_phone(_profile), do: {:error, :telefono_no_verificado}
 
-  defp ensure_schedule_agreement(true), do: :ok
-  defp ensure_schedule_agreement(_missing_agreement), do: {:error, :acuerdo_horario_requerido}
+  # Beta requirement (#309 / #310): retiro de exigencia histórica de acuerdo de horario para secretaría asistida.
+  defp ensure_schedule_agreement(_agreement), do: :ok
 
   defp ensure_patient_permitted(patient_id, professional_id) do
     if permitted_by_relationship_table?(patient_id, professional_id) or
