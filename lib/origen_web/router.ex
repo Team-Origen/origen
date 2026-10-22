@@ -62,6 +62,10 @@ defmodule OrigenWeb.Router do
     pipe_through [:browser, :require_internal_session, :require_professional]
 
     live "/profesional", ConsultationTypeCatalogLive
+
+    if Application.compile_env(:origen, :env) in [:dev, :test] do
+      live "/profesional/perfil", ProfessionalProfileLive
+    end
   end
 
   scope "/api/bootstrap", OrigenWeb do

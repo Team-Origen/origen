@@ -47,37 +47,46 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
       assigns
       |> Map.put(:availability_context, context)
       |> Map.put(:persistence_mode, persistence_mode)
+      |> Map.put_new(:inner_block, [])
 
-    case context.get_own_configuration(principal) do
-      {:ok, configuration} ->
-        {:ok,
-         socket
-         |> assign(component_assigns)
-         |> assign(
-           configuration: configuration,
-           editing: false,
-           dirty: false,
-           draft: nil,
-           local_errors: %{},
-           feedback: nil,
-           validation_errors: nil,
-           load_error: false
-         )}
+    if socket.assigns[:principal] == principal &&
+         socket.assigns[:availability_context] == context &&
+         socket.assigns[:persistence_mode] == persistence_mode do
+      # Parent slot updates must not reset an open availability editor or its draft.
+      # Persisted interval changes use the explicit refresh_after_interval_change update.
+      {:ok, assign(socket, component_assigns)}
+    else
+      case context.get_own_configuration(principal) do
+        {:ok, configuration} ->
+          {:ok,
+           socket
+           |> assign(component_assigns)
+           |> assign(
+             configuration: configuration,
+             editing: false,
+             dirty: false,
+             draft: nil,
+             local_errors: %{},
+             feedback: nil,
+             validation_errors: nil,
+             load_error: false
+           )}
 
-      {:error, _reason} ->
-        {:ok,
-         socket
-         |> assign(component_assigns)
-         |> assign(
-           configuration: nil,
-           editing: false,
-           dirty: false,
-           draft: nil,
-           local_errors: %{},
-           feedback: nil,
-           validation_errors: nil,
-           load_error: true
-         )}
+        {:error, _reason} ->
+          {:ok,
+           socket
+           |> assign(component_assigns)
+           |> assign(
+             configuration: nil,
+             editing: false,
+             dirty: false,
+             draft: nil,
+             local_errors: %{},
+             feedback: nil,
+             validation_errors: nil,
+             load_error: true
+           )}
+      end
     end
   end
 
@@ -637,7 +646,11 @@ defmodule OrigenWeb.ProfessionalAvailabilityComponent do
             </section>
           </form>
         </div>
+      <% end %>
 
+      {render_slot(@inner_block)}
+
+      <%= if @configuration do %>
         <section aria-labelledby="timezone-heading">
           <.card variant="basic">
             <.card_header>

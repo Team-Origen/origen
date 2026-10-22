@@ -26,6 +26,8 @@ Este documento prepara [#302 (Backend)](https://github.com/Team-Origen/origen/is
 
 La completitud requiere los cinco datos obligatorios. No se reemplazan datos faltantes con el email de la cuenta, una especialidad fija u otros valores ficticios. Un campo ausente o vacío no satisface la obligatoriedad. La validación de presencia no equivale a verificar credenciales.
 
+**Decisión posterior para #303, aprobada por Santiago:** «apruebo tu recomendacion de guardar cambios. . crera las pantalla. sera en un entrada moqueada no??». Se permite guardar avances parciales; los cinco datos son obligatorios para completar el perfil, no para guardar. El estado completo/incompleto refleja los últimos datos guardados, no el borrador sin guardar. En la preparación frontend, el guardado es simulado y no acredita persistencia ni integración de #302/#304. Ver [alcance y evidencia de la pantalla #303](../frontend/303-perfil-profesional.md).
+
 No se introducen en este contrato longitudes máximas nuevas, unicidad de matrículas, catálogos de especialidades o mensajes literales de error no definidos por la beta. Los detalles de validación y presentación que requieran decisiones adicionales deberán registrarse antes de implementar la operación afectada.
 
 ## Estado y visibilidad
@@ -41,6 +43,8 @@ No se introducen en este contrato longitudes máximas nuevas, unicidad de matrí
 Para este slice, la elegibilidad del listado reservable consultado por el Paciente es **cuenta profesional activa y perfil completo**. Este filtro no se extiende al listado administrativo de cuentas ni impone un bloqueo adicional a nuevas reservas desde Secretaría por perfil incompleto; esa propuesta no fue aprobada. No se agrega como condición de listado tener foto, un tipo de consulta activo o slots disponibles. Aparecer en el listado no garantiza que exista un turno reservable en cualquier fecha: la consulta de horarios sigue aplicando catálogo, duración, disponibilidad y restricciones temporales.
 
 Perder un dato obligatorio debe reflejarse en el siguiente listado consultado, sin borrar catálogo, horarios ni turnos existentes. No se autoriza modificar el ciclo de cuentas ni de turnos.
+
+**Decisión posterior para #302:** Santiago respondió «si» a «¿Aprobás esa corrección exclusiva del Paciente?», referida a revalidar cuenta activa y perfil completo en la reserva autónoma y rechazar IDs fuera del listado en el calendario de Paciente. Esta protección no se extiende a las reservas asistidas de Secretaría ni impide preparar o consultar la agenda con perfil incompleto. Ver [implementación y evidencia de #302](../backend/302-perfil-profesional.md).
 
 ## Propiedad y permisos
 
