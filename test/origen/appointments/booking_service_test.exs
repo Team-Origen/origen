@@ -3,6 +3,7 @@ defmodule Origen.Appointments.BookingServiceTest do
 
   alias Origen.Appointments.BookingService
   alias Origen.Booking.Appointment
+  alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Patients
   alias Origen.Repo
 
@@ -180,6 +181,46 @@ defmodule Origen.Appointments.BookingServiceTest do
 
       assert {:ok, res} = BookingService.reserve(ctx.profile, params)
       assert res.status == "confirmed"
+    end
+
+    test "manual approval mode books as 'requested' regardless of date proximity and establishes the relationship (Contract #321)",
+         ctx do
+      Repo.query!(
+        """
+        INSERT INTO agenda_settings (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode)
+        VALUES ($1, 30, 'manual', 'confirmed')
+        """,
+        [ctx.prof_id]
+      )
+
+      # 3 days ahead would normally start in 'reserved' (RF-10); manual approval wins.
+      params = %{
+        professional_id: ctx.prof_id,
+        consultation_type_id: ctx.type_id,
+        date: ~D[2026-09-28],
+        slot: %{start_time: ~T[15:00:00]},
+        snapshot_override: %{
+          name: "Consulta general",
+          duration_minutes: 30,
+          exact_price_ars: Decimal.new("18000.00")
+        },
+        now: @fixed_now
+      }
+
+      assert {:ok, res} = BookingService.reserve(ctx.profile, params)
+      assert res.status == "requested"
+
+      persisted = Repo.get!(Appointment, res.appointment_id)
+      assert persisted.status == "requested"
+
+      relationship =
+        Repo.get_by(ProfessionalPatientRelationship,
+          professional_account_id: ctx.prof_id,
+          patient_profile_id: ctx.profile.id
+        )
+
+      assert relationship != nil
+      assert relationship.first_appointment_id == persisted.id
     end
 
     test "refutes booking when patient phone is not verified", ctx do

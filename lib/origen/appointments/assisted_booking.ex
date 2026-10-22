@@ -88,13 +88,21 @@ defmodule Origen.Appointments.AssistedBooking do
          {:ok, consultation_type_id} <- validate_consultation_type_id(params),
          {:ok, start_time} <- resolve_start_time(params) do
       # La modalidad de aprobación se resuelve estrictamente desde la configuración
-      # persistida del profesional (public.agenda_settings) en el momento de reservar.
-      approval_mode = get_professional_approval_mode(prof_id)
+      # persistida del profesional (public.agenda_settings) en el momento de reservar;
+      # los parámetros del llamador (approval_mode / secretary_approval_mode) se ignoran
+      # para impedir que Secretaría o el frontend amplíen su permiso (Contrato #321 §1).
+      approval_cfg =
+        case Booking.get_approval_configuration(prof_id) do
+          {:ok, cfg} -> cfg
+          _ -> %{approval_mode: :automatic, secretary_approval_mode: :confirmed}
+        end
 
       status =
-        case approval_mode do
-          :manual -> :requested
-          _ -> :confirmed
+        if approval_cfg.approval_mode == :manual and
+             approval_cfg.secretary_approval_mode == :requested do
+          :requested
+        else
+          :confirmed
         end
 
       now = Keyword.get(opts, :now, DateTime.utc_now())

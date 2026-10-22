@@ -19,6 +19,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.Authorization
   alias Origen.Booking.Overlap
   alias Origen.Booking.ProfessionalPatientRelationship
+  alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
   alias Origen.Repo
@@ -92,6 +93,26 @@ defmodule Origen.Booking do
           {:ok, %{date: Date.t(), professional_account_id: integer(), appointments: [map()]}}
           | {:error, :unauthorized | :invalid_date}
   defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
+
+  @doc """
+  Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
+  """
+  defdelegate accept_request(actor_account_id, appointment_id), to: RequestResolution
+
+  @doc """
+  Rechaza una solicitud de turno pendiente (Issue #284 / #322), liberando el horario. Exclusivo del profesional dueño.
+  """
+  defdelegate reject_request(actor_account_id, appointment_id), to: RequestResolution
+
+  @doc """
+  Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).
+  """
+  defdelegate get_approval_configuration(professional_id), to: RequestResolution
+
+  @doc """
+  Actualiza la modalidad de aprobación y subconfiguración de secretaría del profesional (Issue #284 / #322).
+  """
+  defdelegate update_approval_configuration(professional_id, attrs), to: RequestResolution
 
   @doc """
   Persiste un turno en la base de datos copiando nombre, duración y precio del tipo

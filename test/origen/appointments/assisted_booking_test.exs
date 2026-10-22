@@ -92,7 +92,7 @@ defmodule Origen.Appointments.AssistedBookingTest do
          ctx do
       manual_prof_id = insert_internal_account!("dr.manual@example.com", "professional", "active")
       manual_type_id = "018f4a5b-0d62-7a44-8e32-2f608bfcb099"
-      insert_agenda_settings!(manual_prof_id, "manual")
+      insert_agenda_settings!(manual_prof_id, "manual", "requested")
       insert_consultation_type!(manual_prof_id, manual_type_id, "Consulta Control", "12000.00")
 
       start_time = ~U[2026-10-15 11:00:00Z]
@@ -242,7 +242,7 @@ defmodule Origen.Appointments.AssistedBookingTest do
         insert_internal_account!("dr.override@example.com", "professional", "active")
 
       manual_type_id = "018f4a5b-0d62-7a44-8e32-2f608bfcb100"
-      insert_agenda_settings!(manual_prof_id, "manual")
+      insert_agenda_settings!(manual_prof_id, "manual", "requested")
       insert_consultation_type!(manual_prof_id, manual_type_id, "Consulta Manual", "12000.00")
 
       params = %{
@@ -318,19 +318,34 @@ defmodule Origen.Appointments.AssistedBookingTest do
     id
   end
 
-  defp insert_agenda_settings!(
-         owner_account_id,
-         approval_mode \\ "automatic",
-         interval_minutes \\ 30
-       ) do
+  defp insert_agenda_settings!(owner_account_id, approval_mode \\ "automatic", third \\ nil)
+
+  # Tercer argumento binario: subconfiguración de secretaría (intervalo por defecto 30).
+  defp insert_agenda_settings!(owner_account_id, approval_mode, secretary_mode)
+       when is_binary(secretary_mode) do
     query = """
-    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, created_at, updated_at)
-    VALUES ($1, $3, $2, clock_timestamp(), clock_timestamp())
+    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode, created_at, updated_at)
+    VALUES ($1, 30, $2, $3, clock_timestamp(), clock_timestamp())
     """
 
-    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode, interval_minutes])
+    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode, secretary_mode])
     :ok
   end
+
+  # Tercer argumento entero: intervalo de agenda (secretaría confirmada por defecto).
+  defp insert_agenda_settings!(owner_account_id, approval_mode, interval_minutes)
+       when is_integer(interval_minutes) do
+    query = """
+    INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode, created_at, updated_at)
+    VALUES ($1, $2, $3, 'confirmed', clock_timestamp(), clock_timestamp())
+    """
+
+    {:ok, _} = SQL.query(Repo, query, [owner_account_id, interval_minutes, approval_mode])
+    :ok
+  end
+
+  defp insert_agenda_settings!(owner_account_id, approval_mode, nil),
+    do: insert_agenda_settings!(owner_account_id, approval_mode, "confirmed")
 
   defp insert_consultation_type!(owner_account_id, uuid_str, name, price_str, interval_count \\ 1) do
     query = """

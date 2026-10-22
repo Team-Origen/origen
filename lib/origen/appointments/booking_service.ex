@@ -11,6 +11,7 @@ defmodule Origen.Appointments.BookingService do
 
   alias Origen.Booking
   alias Origen.Booking.Appointment
+  alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Patients
   alias Origen.Patients.PatientProfile
   alias Origen.Repo
@@ -63,7 +64,18 @@ defmodule Origen.Appointments.BookingService do
          {:ok, prof_id} <- parse_professional_id(Map.fetch!(params, :professional_id)) do
       Repo.transaction(fn ->
         lock_eligible_professional!(prof_id)
-        status = determine_initial_status(date, now)
+
+        status =
+          case Booking.get_approval_configuration(prof_id) do
+            {:ok, %{approval_mode: :manual}} ->
+              # Contrato #321 §1: la reserva autónoma de un profesional con aprobación
+              # manual nace siempre como solicitud, sin importar la proximidad de la fecha.
+              "requested"
+
+            _automatic_or_unavailable ->
+              determine_initial_status(date, now)
+          end
+
         type_id = Map.fetch!(params, :consultation_type_id)
         snapshot = Map.get(params, :snapshot_override)
 
@@ -77,6 +89,8 @@ defmodule Origen.Appointments.BookingService do
 
         case Booking.persist_appointment(attrs, snapshot) do
           {:ok, appointment} ->
+            establish_relationship!(appointment)
+
             %{
               appointment: appointment,
               appointment_id: appointment.id,
@@ -116,6 +130,37 @@ defmodule Origen.Appointments.BookingService do
       {:ok, %{rows: []}} -> Repo.rollback(:professional_not_eligible)
       {:error, _} -> Repo.rollback(:unavailable)
     end
+  end
+
+  # RF-05 / OpenSpec `appointment-booking-and-lifecycle`: completar una solicitud o
+  # un turno establece la relación Profesional-Paciente durable. Viaja en la misma
+  # transacción que la reserva; si ya existe (o otra reserva concurrente la creó),
+  # se trata como establecida.
+  defp establish_relationship!(%Appointment{} = appointment) do
+    %ProfessionalPatientRelationship{}
+    |> ProfessionalPatientRelationship.changeset(%{
+      professional_account_id: appointment.professional_account_id,
+      patient_profile_id: appointment.patient_profile_id,
+      first_appointment_id: appointment.id
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, _relationship} ->
+        :ok
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if constraint_violation?(changeset, "professional_patient_relationships_unique_pair") do
+          :ok
+        else
+          Repo.rollback({:relationship_validation_error, changeset})
+        end
+    end
+  end
+
+  defp constraint_violation?(changeset, constraint_name) do
+    Enum.any?(changeset.errors, fn {_field, {_message, opts}} ->
+      Keyword.get(opts, :constraint_name) == constraint_name
+    end)
   end
 
   @doc """

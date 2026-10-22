@@ -6,6 +6,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
   use OrigenWeb.LiveViewCase
 
+  alias Ecto.Adapters.SQL
   alias Origen.Repo
   alias Origen.Sessions
 
@@ -234,6 +235,183 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     end
   end
 
+  describe "resolución de solicitudes de turno (#323)" do
+    test "C11: muestra botones de aceptar y rechazar exclusivamente para turnos en estado requested",
+         ctx do
+      today = Date.utc_today()
+      start_1 = DateTime.new!(today, ~T[09:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(today, ~T[09:30:00], "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_1.profile_id,
+        start_1,
+        end_1,
+        "requested"
+      )
+
+      start_2 = DateTime.new!(today, ~T[10:00:00], "Etc/UTC")
+      end_2 = DateTime.new!(today, ~T[10:30:00], "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_2.profile_id,
+        start_2,
+        end_2,
+        "confirmed"
+      )
+
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      # El turno solicitado muestra badge Solicitado y botones de acción
+      assert has_element?(view, ".border-indigo-200", "Solicitado")
+      assert has_element?(view, "button[phx-click='accept_request']", "Aceptar")
+      assert has_element?(view, "button[phx-click='reject_request']", "Rechazar")
+
+      # El turno confirmado muestra badge Confirmado
+      assert has_element?(view, ".border-emerald-200", "Confirmado")
+    end
+
+    test "C12: al hacer clic en Aceptar, confirma la solicitud reactivamente", ctx do
+      today = Date.utc_today()
+      start_1 = DateTime.new!(today, ~T[11:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(today, ~T[11:30:00], "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_1.profile_id,
+        start_1,
+        end_1,
+        "requested"
+      )
+
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      view
+      |> element("button[phx-click='accept_request']", "Aceptar")
+      |> render_click()
+
+      assert has_element?(view, ".border-emerald-200", "Confirmado")
+      refute has_element?(view, "button[phx-click='accept_request']")
+    end
+
+    test "C12: al hacer clic en Rechazar, cancela la solicitud y libera el slot", ctx do
+      today = Date.utc_today()
+      start_1 = DateTime.new!(today, ~T[14:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(today, ~T[14:30:00], "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_1.profile_id,
+        start_1,
+        end_1,
+        "requested"
+      )
+
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      view
+      |> element("button[phx-click='reject_request']", "Rechazar")
+      |> render_click()
+
+      assert has_element?(view, ".border-rose-200", "Cancelado")
+      refute has_element?(view, "button[phx-click='reject_request']")
+    end
+
+    test "C13: un ID malformado no tumba la vista y muestra un error claro sin filtrar términos internos",
+         ctx do
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      html = render_click(view, "accept_request", %{"id" => "invalid-id"})
+
+      assert html =~ "El identificador del turno no es válido."
+      refute html =~ "inspect"
+      refute html =~ ":invalid_id"
+
+      # El proceso LiveView sigue vivo y operativo
+      assert render(view) =~ "Agenda Diaria"
+    end
+
+    test "C14: un error de resolución mapea a mensaje claro y recarga la agenda", ctx do
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      html = render_click(view, "reject_request", %{"id" => "999999"})
+
+      assert html =~ "El turno solicitado no fue encontrado."
+      refute html =~ "inspect"
+      refute html =~ ":appointment_not_found"
+      assert render(view) =~ "Agenda Diaria"
+    end
+
+    test "C15: permite configurar modalidad y subconfiguración de Secretaría preservando pendientes y mostrando el aviso de alcance",
+         ctx do
+      today = Date.utc_today()
+      start_1 = DateTime.new!(today, ~T[15:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(today, ~T[15:30:00], "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_1.profile_id,
+        start_1,
+        end_1,
+        "requested"
+      )
+
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      assert has_element?(view, "#approval-config-panel")
+      assert has_element?(view, "#approval-config-form")
+      assert has_element?(view, "#select-approval-mode")
+      assert has_element?(view, "#select-secretary-approval-mode")
+
+      assert has_element?(
+               view,
+               "#approval-mode-notice",
+               "El cambio de modalidad aplica únicamente a reservas nuevas y no resuelve automáticamente las solicitudes pendientes existentes."
+             )
+
+      html =
+        view
+        |> form("#approval-config-form", %{
+          "approval_mode" => "manual",
+          "secretary_approval_mode" => "requested"
+        })
+        |> render_change()
+
+      assert html =~
+               "Configuración de aprobación actualizada. Las solicitudes pendientes existentes conservan su estado."
+
+      assert {:ok, %{approval_mode: :manual, secretary_approval_mode: :requested}} =
+               Origen.Booking.get_approval_configuration(ctx.professional_id)
+
+      # La solicitud pendiente previa sigue en estado Solicitado sin resolverse automáticamente
+      assert has_element?(view, ".border-indigo-200", "Solicitado")
+      assert has_element?(view, "button[phx-click='accept_request']", "Aceptar")
+    end
+
+    test "C16: un valor inválido en la configuración de aprobación muestra un error claro sin romper la vista",
+         ctx do
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      html =
+        render_change(view, "update_approval_config", %{
+          "approval_mode" => "invalid_mode",
+          "secretary_approval_mode" => "confirmed"
+        })
+
+      assert html =~ "La modalidad de aprobación seleccionada no es válida."
+      refute html =~ "inspect"
+      refute html =~ ":invalid_approval_mode"
+    end
+  end
+
   # Helpers para fixtures
 
   defp put_internal_session(conn, token) do
@@ -244,7 +422,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
   defp insert_internal_account(email, role) do
     {:ok, %{rows: [[account_id]]}} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.internal_accounts (email, role, state, password_hash, totp_secret, activated_at, created_at, updated_at)
@@ -259,7 +437,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
   defp insert_agenda_settings(owner_account_id) do
     {:ok, _} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, created_at, updated_at)
@@ -274,7 +452,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
   defp insert_consultation_type(owner_account_id) do
     {:ok, _} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.consultation_types (
@@ -294,7 +472,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     unique = System.unique_integer([:positive])
 
     {:ok, %{rows: [[persona_id]]}} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.personas (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
@@ -305,7 +483,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       )
 
     {:ok, %{rows: [[profile_id]]}} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.patient_profiles (persona_id, email, state, phone, phone_verified, created_at, updated_at)
@@ -320,7 +498,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
   defp insert_appointment!(prof_id, patient_id, start_time, end_time, status) do
     {:ok, _} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.appointments (
