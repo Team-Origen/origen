@@ -221,6 +221,47 @@ defmodule Origen.Appointments.AssistedBookingTest do
                  now: @fixed_now
                )
     end
+
+    test "C11: administrator activo no puede crear turnos asistidos (contrato #309: Denegado)",
+         ctx do
+      admin_id = insert_internal_account!("admin@example.com", "administrator", "active")
+
+      params = %{
+        professional_id: ctx.professional_id,
+        consultation_type_id: @consultation_type_id,
+        start_time: ~U[2026-10-15 18:00:00Z]
+      }
+
+      assert {:error, :unauthorized} =
+               AssistedBooking.reserve(admin_id, ctx.patient_profile_id, params, now: @fixed_now)
+    end
+
+    test "C12: approval_mode en params se ignora y decide el modo persistido en agenda_settings",
+         ctx do
+      manual_prof_id =
+        insert_internal_account!("dr.override@example.com", "professional", "active")
+
+      manual_type_id = "018f4a5b-0d62-7a44-8e32-2f608bfcb100"
+      insert_agenda_settings!(manual_prof_id, "manual")
+      insert_consultation_type!(manual_prof_id, manual_type_id, "Consulta Manual", "12000.00")
+
+      params = %{
+        professional_id: manual_prof_id,
+        consultation_type_id: manual_type_id,
+        start_time: ~U[2026-10-15 19:00:00Z],
+        approval_mode: :automatic
+      }
+
+      assert {:ok, result} =
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
+
+      assert result.status == :requested
+
+      appt = Repo.get!(Appointment, result.appointment_id)
+      assert appt.status == "requested"
+    end
   end
 
   describe "consultas auxiliares de catálogo y agenda" do
@@ -240,6 +281,16 @@ defmodule Origen.Appointments.AssistedBookingTest do
                )
 
       assert is_list(schedule.slots)
+    end
+
+    test "list_consultation_types/1 calcula duration_minutes desde interval_minutes del profesional" do
+      prof_id = insert_internal_account!("dr.interval@example.com", "professional", "active")
+      type_id = "018f4a5b-0d62-7a44-8e32-2f608bfcb101"
+      insert_agenda_settings!(prof_id, "automatic", 20)
+      insert_consultation_type!(prof_id, type_id, "Consulta Doble", "20000.00", 2)
+
+      assert {:ok, types} = AssistedBooking.list_consultation_types(prof_id)
+      assert [%{duration_minutes: 40, interval_count: 2}] = types
     end
   end
 
@@ -267,22 +318,26 @@ defmodule Origen.Appointments.AssistedBookingTest do
     id
   end
 
-  defp insert_agenda_settings!(owner_account_id, approval_mode \\ "automatic") do
+  defp insert_agenda_settings!(
+         owner_account_id,
+         approval_mode \\ "automatic",
+         interval_minutes \\ 30
+       ) do
     query = """
     INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, approval_mode, created_at, updated_at)
-    VALUES ($1, 30, $2, clock_timestamp(), clock_timestamp())
+    VALUES ($1, $3, $2, clock_timestamp(), clock_timestamp())
     """
 
-    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode])
+    {:ok, _} = SQL.query(Repo, query, [owner_account_id, approval_mode, interval_minutes])
     :ok
   end
 
-  defp insert_consultation_type!(owner_account_id, uuid_str, name, price_str) do
+  defp insert_consultation_type!(owner_account_id, uuid_str, name, price_str, interval_count \\ 1) do
     query = """
     INSERT INTO public.consultation_types (
       id, owner_account_id, name, exact_price_ars, color, interval_count, status, created_at, updated_at
     ) VALUES (
-      $1, $2, $3, $4, '#112233', 1, 'active', clock_timestamp(), clock_timestamp()
+      $1, $2, $3, $4, '#112233', $5, 'active', clock_timestamp(), clock_timestamp()
     )
     """
 
@@ -291,7 +346,8 @@ defmodule Origen.Appointments.AssistedBookingTest do
         Ecto.UUID.dump!(uuid_str),
         owner_account_id,
         name,
-        Decimal.new(price_str)
+        Decimal.new(price_str),
+        interval_count
       ])
 
     :ok

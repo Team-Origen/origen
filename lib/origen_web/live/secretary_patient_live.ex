@@ -60,7 +60,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:registration_document, nil)
        |> assign(:registration_outcome, nil)
        |> assign(:registration_error, false)
-       |> assign(:assisted_booking_notice, false)
        |> assign(:assisted_booking_active, false)
        |> assign(:booking_professionals, [])
        |> assign(:selected_prof_id, nil)
@@ -112,8 +111,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
            )
            |> assign(:registration_document, "#{doc_label(doc_type)} #{doc_num}")
            |> assign(:registration_outcome, nil)
-           |> assign(:registration_error, false)
-           |> assign(:assisted_booking_notice, false)}
+           |> assign(:registration_error, false)}
 
         {:ok, %{persona: persona, profile: profile}} ->
           {:noreply,
@@ -122,8 +120,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
            |> assign(:registration_form, nil)
            |> assign(:registration_document, nil)
            |> assign(:registration_outcome, nil)
-           |> assign(:registration_error, false)
-           |> assign(:assisted_booking_notice, false)}
+           |> assign(:registration_error, false)}
       end
     else
       {:noreply, assign(socket, :search_form, to_form(changeset, as: :search))}
@@ -160,8 +157,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
            |> assign(:registration_form, nil)
            |> assign(:registration_document, nil)
            |> assign(:registration_outcome, outcome)
-           |> assign(:registration_error, false)
-           |> assign(:assisted_booking_notice, false)}
+           |> assign(:registration_error, false)}
 
         {:error, _changeset} ->
           {:noreply,
@@ -189,7 +185,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
      |> assign(:registration_document, nil)
      |> assign(:registration_outcome, nil)
      |> assign(:registration_error, false)
-     |> assign(:assisted_booking_notice, false)
      |> assign(:assisted_booking_active, false)
      |> assign(:selected_slot_time, nil)
      |> assign(:booking_success, nil)
@@ -211,7 +206,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
     {:noreply,
      socket
-     |> assign(:assisted_booking_notice, true)
      |> assign(:assisted_booking_active, true)
      |> assign(:booking_professionals, professionals)
      |> assign(:selected_prof_id, prof_id)
@@ -228,54 +222,12 @@ defmodule OrigenWeb.SecretaryPatientLive do
   @impl true
   def handle_event("update_booking_selection", params, socket) do
     prof_id = params["professional_id"] || socket.assigns.selected_prof_id
-    type_id = params["consultation_type_id"] || socket.assigns.selected_consultation_type_id
 
-    date =
-      case params["date"] do
-        nil ->
-          socket.assigns.booking_date
-
-        "" ->
-          socket.assigns.booking_date
-
-        str ->
-          case Date.from_iso8601(str) do
-            {:ok, d} -> d
-            _ -> socket.assigns.booking_date
-          end
-      end
-
-    types =
-      if prof_id != socket.assigns.selected_prof_id do
-        load_consultation_types(prof_id)
-      else
-        socket.assigns.booking_consultation_types
-      end
-
-    type_id =
-      if Enum.any?(types, &(to_string(&1.id) == to_string(type_id))),
-        do: type_id,
-        else: (types != [] && to_string(hd(types).id)) || nil
-
-    duration =
-      case Enum.find(types, &(to_string(&1.id) == to_string(type_id))) do
-        %{duration_minutes: d} when is_integer(d) and d > 0 -> d
-        _ -> 30
-      end
-
-    slots = load_slots(prof_id, date, duration)
-    approval_mode = AssistedBooking.get_professional_approval_mode(prof_id)
-
-    {:noreply,
-     socket
-     |> assign(:selected_prof_id, prof_id)
-     |> assign(:selected_prof_approval_mode, approval_mode)
-     |> assign(:booking_consultation_types, types)
-     |> assign(:selected_consultation_type_id, type_id)
-     |> assign(:booking_date, date)
-     |> assign(:booking_slots, slots)
-     |> assign(:selected_slot_time, nil)
-     |> assign(:booking_error, nil)}
+    if is_nil(prof_id) or prof_id == "" do
+      {:noreply, socket}
+    else
+      update_booking_selection(prof_id, params, socket)
+    end
   end
 
   @impl true
@@ -286,7 +238,13 @@ defmodule OrigenWeb.SecretaryPatientLive do
   @impl true
   def handle_event("confirm_assisted_booking", _params, socket) do
     secretary_id = socket.assigns.current_internal_session.account_id
-    profile_id = socket.assigns.search_result.profile && socket.assigns.search_result.profile.id
+
+    profile_id =
+      case socket.assigns.search_result do
+        %{profile: %{id: id}} -> id
+        _ -> nil
+      end
+
     prof_id = socket.assigns.selected_prof_id
     type_id = socket.assigns.selected_consultation_type_id
     date = socket.assigns.booking_date
@@ -307,8 +265,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
           reserve_params = %{
             professional_id: prof_id,
             consultation_type_id: type_id,
-            start_time: start_datetime,
-            approval_mode: socket.assigns.selected_prof_approval_mode
+            start_time: start_datetime
           }
 
           case AssistedBooking.reserve(secretary_id, profile_id, reserve_params) do
@@ -466,22 +423,66 @@ defmodule OrigenWeb.SecretaryPatientLive do
     end
   end
 
+  defp update_booking_selection(prof_id, params, socket) do
+    type_id = params["consultation_type_id"] || socket.assigns.selected_consultation_type_id
+
+    date =
+      case params["date"] do
+        nil ->
+          socket.assigns.booking_date
+
+        "" ->
+          socket.assigns.booking_date
+
+        str ->
+          case Date.from_iso8601(str) do
+            {:ok, d} -> d
+            _ -> socket.assigns.booking_date
+          end
+      end
+
+    types =
+      if prof_id != socket.assigns.selected_prof_id do
+        load_consultation_types(prof_id)
+      else
+        socket.assigns.booking_consultation_types
+      end
+
+    type_id =
+      if Enum.any?(types, &(to_string(&1.id) == to_string(type_id))),
+        do: type_id,
+        else: (types != [] && to_string(hd(types).id)) || nil
+
+    duration =
+      case Enum.find(types, &(to_string(&1.id) == to_string(type_id))) do
+        %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+        _ -> 30
+      end
+
+    slots = load_slots(prof_id, date, duration)
+    approval_mode = AssistedBooking.get_professional_approval_mode(prof_id)
+
+    {:noreply,
+     socket
+     |> assign(:selected_prof_id, prof_id)
+     |> assign(:selected_prof_approval_mode, approval_mode)
+     |> assign(:booking_consultation_types, types)
+     |> assign(:selected_consultation_type_id, type_id)
+     |> assign(:booking_date, date)
+     |> assign(:booking_slots, slots)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_error, nil)}
+  end
+
   defp load_consultation_types(prof_id) do
     case AssistedBooking.list_consultation_types(prof_id) do
-      {:ok, types} when types != [] ->
+      {:ok, types} ->
         Enum.map(types, fn t ->
           Map.put_new(t, :duration_minutes, (t[:interval_count] || 1) * 30)
         end)
 
       _ ->
-        [
-          %{
-            id: "e5b8c9d0-1234-4567-89ab-cdef01234567",
-            name: "Consulta General",
-            duration_minutes: 30,
-            exact_price_ars: Decimal.new("15000.00")
-          }
-        ]
+        []
     end
   end
 
@@ -514,6 +515,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   defp format_booking_error(:invalid_professional),
     do: "El profesional seleccionado no está activo o disponible."
+
+  defp format_booking_error(:consultation_type_not_found),
+    do: "El tipo de consulta seleccionado no está disponible."
 
   defp format_booking_error(_),
     do: "No se pudo completar la reserva. Verificá los datos e intentá nuevamente."
@@ -588,6 +592,16 @@ defmodule OrigenWeb.SecretaryPatientLive do
               </.card_content>
             </.card>
           </section>
+
+          <.alert
+            :if={@booking_error}
+            id="booking-error-message"
+            color="danger"
+            variant="callout"
+            with_icon
+          >
+            {@booking_error}
+          </.alert>
 
           <section
             :if={@search_result == :not_found}
@@ -759,16 +773,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   </dd>
                 </dl>
 
-                <.alert
-                  :if={@assisted_booking_notice}
-                  id="assisted-booking-notice"
-                  color="info"
-                  variant="callout"
-                  with_icon
-                >
-                  La reserva asistida estará disponible próximamente.
-                </.alert>
-
                 <div class="flex flex-wrap gap-2">
                   <.button
                     id="start-assisted-booking"
@@ -804,16 +808,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       Consulta: {@booking_success.consultation_type_name} |
                       Horario: {DateTime.to_iso8601(@booking_success.start_time)}
                     </p>
-                  </.alert>
-
-                  <.alert
-                    :if={@booking_error}
-                    id="booking-error-message"
-                    color="danger"
-                    variant="callout"
-                    with_icon
-                  >
-                    {@booking_error}
                   </.alert>
 
                   <form
@@ -936,7 +930,10 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       id="confirm-assisted-booking"
                       color="primary"
                       phx-click="confirm_assisted_booking"
-                      disabled={is_nil(@selected_slot_time)}
+                      disabled={
+                        is_nil(@selected_slot_time) or is_nil(@selected_consultation_type_id) or
+                          is_nil(@selected_prof_id)
+                      }
                     >
                       Confirmar reserva asistida
                     </.button>
