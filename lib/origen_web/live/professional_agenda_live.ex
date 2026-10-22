@@ -75,6 +75,42 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
     {:noreply, load_agenda(socket, socket.assigns.date)}
   end
 
+  @impl true
+  def handle_event("accept_request", %{"id" => id_str}, socket) do
+    actor_id = socket.assigns.current_internal_session.account_id
+    appt_id = String.to_integer(id_str)
+
+    case Booking.accept_request(actor_id, appt_id) do
+      {:ok, _updated} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Solicitud aceptada y turno confirmado.")
+         |> load_agenda(socket.assigns.date)}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "No se pudo aceptar la solicitud: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("reject_request", %{"id" => id_str}, socket) do
+    actor_id = socket.assigns.current_internal_session.account_id
+    appt_id = String.to_integer(id_str)
+
+    case Booking.reject_request(actor_id, appt_id) do
+      {:ok, _updated} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Solicitud rechazada y horario liberado.")
+         |> load_agenda(socket.assigns.date)}
+
+      {:error, reason} ->
+        {:noreply,
+         put_flash(socket, :error, "No se pudo rechazar la solicitud: #{inspect(reason)}")}
+    end
+  end
+
   defp load_agenda(socket, date) do
     principal = socket.assigns.current_internal_session
 
@@ -249,6 +285,31 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       • {appt.duration_minutes} min
                     </span>
                   </p>
+
+                  <div
+                    :if={to_string(appt.status) == "requested"}
+                    id={"request-actions-#{appt.id}"}
+                    class="pt-2 flex items-center gap-2"
+                  >
+                    <button
+                      type="button"
+                      id={"accept-request-#{appt.id}"}
+                      phx-click="accept_request"
+                      phx-value-id={appt.id}
+                      class="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
+                    >
+                      Aceptar
+                    </button>
+                    <button
+                      type="button"
+                      id={"reject-request-#{appt.id}"}
+                      phx-click="reject_request"
+                      phx-value-id={appt.id}
+                      class="px-2.5 py-1 text-xs font-semibold rounded border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 shadow-sm transition"
+                    >
+                      Rechazar
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Datos no clínicos del Paciente -->
