@@ -2,7 +2,8 @@ defmodule Origen.Appointments.AssistedBooking do
   @moduledoc """
   Coordinación de reserva de turnos asistida por Secretaría para pacientes existentes (Issue #281 / #310).
 
-  Permite a un integrante autenticado con rol `secretary` (o `administrator`):
+  Permite a un integrante autenticado con rol `secretary` (los administradores están
+  expresamente excluidos de crear turnos, contrato #309):
   - Consultar los profesionales activos del centro y sus agendas.
   - Consultar los tipos de consulta activos de cada profesional.
   - Consultar la disponibilidad diaria real y calcular slots de turnos.
@@ -41,16 +42,18 @@ defmodule Origen.Appointments.AssistedBooking do
   def list_consultation_types(professional_id) do
     with {:ok, owner_id} <- parse_id(professional_id) do
       query = """
-      SELECT id, name, exact_price_ars, color, interval_count, status
-      FROM public.consultation_types
-      WHERE owner_account_id = $1 AND status = 'active'
-      ORDER BY name ASC
+      SELECT ct.id, ct.name, ct.exact_price_ars, ct.color, ct.interval_count, ct.status,
+             COALESCE(s.interval_minutes, 30) AS agenda_interval
+      FROM public.consultation_types ct
+      LEFT JOIN public.agenda_settings s ON s.owner_account_id = ct.owner_account_id
+      WHERE ct.owner_account_id = $1 AND ct.status = 'active'
+      ORDER BY ct.name ASC
       """
 
       case SQL.query(Repo, query, [owner_id]) do
         {:ok, %{rows: rows}} ->
           types =
-            Enum.map(rows, fn [id, name, price, color, intervals, status] ->
+            Enum.map(rows, fn [id, name, price, color, intervals, status, agenda_interval] ->
               {:ok, uuid_str} = Ecto.UUID.load(id)
 
               %{
@@ -59,6 +62,7 @@ defmodule Origen.Appointments.AssistedBooking do
                 exact_price_ars: price,
                 color: color,
                 interval_count: intervals,
+                duration_minutes: intervals * agenda_interval,
                 status: String.to_existing_atom(status)
               }
             end)
@@ -83,6 +87,10 @@ defmodule Origen.Appointments.AssistedBooking do
          :ok <- ensure_active_professional(prof_id),
          {:ok, consultation_type_id} <- validate_consultation_type_id(params),
          {:ok, start_time} <- resolve_start_time(params) do
+      # La modalidad de aprobación se resuelve estrictamente desde la configuración
+      # persistida del profesional (public.agenda_settings) en el momento de reservar;
+      # los parámetros del llamador (approval_mode / secretary_approval_mode) se ignoran
+      # para impedir que Secretaría o el frontend amplíen su permiso (Contrato #321 §1).
       approval_cfg =
         case Booking.get_approval_configuration(prof_id) do
           {:ok, cfg} -> cfg
@@ -90,15 +98,11 @@ defmodule Origen.Appointments.AssistedBooking do
         end
 
       status =
-        case params[:approval_mode] || approval_cfg.approval_mode do
-          mode when mode in [:manual, "manual"] ->
-            case params[:secretary_approval_mode] || approval_cfg.secretary_approval_mode do
-              sec_mode when sec_mode in [:requested, "requested"] -> :requested
-              _ -> :confirmed
-            end
-
-          _ ->
-            :confirmed
+        if approval_cfg.approval_mode == :manual and
+             approval_cfg.secretary_approval_mode == :requested do
+          :requested
+        else
+          :confirmed
         end
 
       now = Keyword.get(opts, :now, DateTime.utc_now())
@@ -190,7 +194,7 @@ defmodule Origen.Appointments.AssistedBooking do
   defp authorize_secretary(account_id) when is_integer(account_id) do
     query = """
     SELECT role, state FROM public.internal_accounts
-    WHERE id = $1 AND role IN ('secretary', 'administrator') AND state = 'active'
+    WHERE id = $1 AND role = 'secretary' AND state = 'active'
     """
 
     case SQL.query(Repo, query, [account_id]) do

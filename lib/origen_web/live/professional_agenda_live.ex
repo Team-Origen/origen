@@ -77,39 +77,84 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
   @impl true
   def handle_event("accept_request", %{"id" => id_str}, socket) do
-    actor_id = socket.assigns.current_internal_session.account_id
-    appt_id = String.to_integer(id_str)
+    case parse_appointment_id(id_str) do
+      {:ok, appt_id} ->
+        actor_id = socket.assigns.current_internal_session.account_id
 
-    case Booking.accept_request(actor_id, appt_id) do
-      {:ok, _updated} ->
+        case Booking.accept_request(actor_id, appt_id) do
+          {:ok, _updated} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Solicitud aceptada y turno confirmado.")
+             |> load_agenda(socket.assigns.date)}
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, resolution_error_message(reason))
+             |> load_agenda(socket.assigns.date)}
+        end
+
+      :error ->
         {:noreply,
          socket
-         |> put_flash(:info, "Solicitud aceptada y turno confirmado.")
+         |> put_flash(:error, "El identificador del turno no es válido.")
          |> load_agenda(socket.assigns.date)}
-
-      {:error, reason} ->
-        {:noreply,
-         put_flash(socket, :error, "No se pudo aceptar la solicitud: #{inspect(reason)}")}
     end
   end
 
   @impl true
   def handle_event("reject_request", %{"id" => id_str}, socket) do
-    actor_id = socket.assigns.current_internal_session.account_id
-    appt_id = String.to_integer(id_str)
+    case parse_appointment_id(id_str) do
+      {:ok, appt_id} ->
+        actor_id = socket.assigns.current_internal_session.account_id
 
-    case Booking.reject_request(actor_id, appt_id) do
-      {:ok, _updated} ->
+        case Booking.reject_request(actor_id, appt_id) do
+          {:ok, _updated} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Solicitud rechazada y horario liberado.")
+             |> load_agenda(socket.assigns.date)}
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, resolution_error_message(reason))
+             |> load_agenda(socket.assigns.date)}
+        end
+
+      :error ->
         {:noreply,
          socket
-         |> put_flash(:info, "Solicitud rechazada y horario liberado.")
+         |> put_flash(:error, "El identificador del turno no es válido.")
          |> load_agenda(socket.assigns.date)}
-
-      {:error, reason} ->
-        {:noreply,
-         put_flash(socket, :error, "No se pudo rechazar la solicitud: #{inspect(reason)}")}
     end
   end
+
+  # Un ID malformado nunca debe tumbar el proceso LiveView: se parsea de forma
+  # segura y ante fallo se informa con un mensaje claro y se recarga la agenda
+  # para refrescar botones obsoletos.
+  defp parse_appointment_id(id_str) do
+    case Integer.parse(to_string(id_str)) do
+      {id, ""} when id > 0 -> {:ok, id}
+      _other -> :error
+    end
+  end
+
+  # Los motivos de error se mapean a mensajes claros en español; nunca se filtra
+  # el término interno (`inspect/1`) hacia la interfaz.
+
+  defp resolution_error_message(:invalid_status_transition),
+    do: "La solicitud ya fue procesada o cambió de estado."
+
+  defp resolution_error_message(:appointment_not_found),
+    do: "El turno solicitado no fue encontrado."
+
+  defp resolution_error_message(:unauthorized),
+    do: "No tenés permiso para resolver esta solicitud."
+
+  defp resolution_error_message(_other),
+    do: "No se pudo procesar la solicitud."
 
   defp load_agenda(socket, date) do
     principal = socket.assigns.current_internal_session
@@ -146,6 +191,27 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
     ~H"""
     <div class="min-h-screen bg-[#F6F6F4] py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
       <div class="max-w-4xl mx-auto space-y-6">
+        <!-- Mensajes de resultado de la resolución de solicitudes -->
+        <div
+          :if={Phoenix.Flash.get(@flash, :error)}
+          id="agenda-flash-error"
+          role="alert"
+          class="p-4 rounded-xl bg-red-50 text-red-800 text-sm flex items-center gap-2 border border-red-200"
+        >
+          <.icon name="hero-exclamation-circle" class="w-5 h-5 text-red-600 shrink-0" />
+          <span>{Phoenix.Flash.get(@flash, :error)}</span>
+        </div>
+
+        <div
+          :if={Phoenix.Flash.get(@flash, :info)}
+          id="agenda-flash-info"
+          role="status"
+          class="p-4 rounded-xl bg-emerald-50 text-emerald-800 text-sm flex items-center gap-2 border border-emerald-200"
+        >
+          <.icon name="hero-check-circle" class="w-5 h-5 text-emerald-600 shrink-0" />
+          <span>{Phoenix.Flash.get(@flash, :info)}</span>
+        </div>
+
         <!-- Header con navegación por fecha -->
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-5 sm:p-6 space-y-4">
           <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

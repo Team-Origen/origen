@@ -5,6 +5,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   alias Origen.ConsultationTypes
   alias OrigenWeb.TimeGrid
+  alias OrigenWeb.ProfessionalProfilePreview
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
   @availability_days [
@@ -26,10 +27,14 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   @ars_price_pattern ~r/^(?<sign>-?)(?<whole>(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+))(?:,(?<fraction>\d+))?$/
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
+    profile_preview_enabled = profile_preview_enabled?()
+
     socket =
       assign(socket,
         page_title: "Configuración",
+        profile_preview_enabled: profile_preview_enabled,
+        profile_preview: profile_preview(params, profile_preview_enabled),
         current_interval: nil,
         selected_interval: nil,
         interval_options: @interval_options,
@@ -61,6 +66,36 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
       {:error, _reason} ->
         {:ok, assign(socket, catalog: [], catalog_error: :unavailable)}
+    end
+  end
+
+  defp profile_preview_enabled? do
+    Application.get_env(:origen, :env) in [:dev, :test]
+  end
+
+  defp profile_preview(params, enabled?) do
+    scenario = Map.get(params, "scenario", "incomplete")
+
+    scenario =
+      if scenario in ~w(empty incomplete complete load-error save-error),
+        do: scenario,
+        else: "incomplete"
+
+    if enabled? do
+      case ProfessionalProfilePreview.load(scenario) do
+        {:ok, profile} ->
+          %{
+            patient: ProfessionalProfilePreview.patient_projection(profile),
+            missing: ProfessionalProfilePreview.missing_fields(profile),
+            has_data: ProfessionalProfilePreview.has_data?(profile),
+            editor_path:
+              "/configuracion/profesional/perfil" <>
+                if(scenario == "incomplete", do: "", else: "?scenario=" <> scenario)
+          }
+
+        {:error, _} ->
+          nil
+      end
     end
   end
 
@@ -443,6 +478,93 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             </.button>
           </header>
 
+          <section
+            :if={@profile_preview_enabled}
+            id="professional-profile-entry"
+            aria-labelledby="professional-profile-entry-heading"
+          >
+            <.card>
+              <.card_header>
+                <.h2 id="professional-profile-entry-heading" no_margin>Perfil profesional</.h2>
+                <.text_muted>
+                  Vista previa · Datos simulados, sin guardado permanente.
+                </.text_muted>
+              </.card_header>
+              <.card_content class="flex flex-col gap-4">
+                <%= if @profile_preview do %>
+                  <div
+                    id="profile-patient-preview"
+                    class="space-y-2"
+                    aria-label="Vista previa para pacientes"
+                  >
+                    <.text_muted>Así se verían tus datos en el listado de pacientes.</.text_muted>
+                    <.h3 id="profile-patient-name" no_margin>
+                      {if @profile_preview.patient.name == "",
+                        do: "Nombre y apellido pendientes",
+                        else: @profile_preview.patient.name}
+                    </.h3>
+                    <p id="profile-patient-specialty">
+                      {if @profile_preview.patient.specialty == "",
+                        do: "Especialidad pendiente",
+                        else: @profile_preview.patient.specialty}
+                    </p>
+                  </div>
+                  <.alert
+                    id="profile-entry-status"
+                    color={if @profile_preview.missing == [], do: "success", else: "warning"}
+                    variant="callout"
+                    with_icon
+                  >
+                    <%= if @profile_preview.missing == [] do %>
+                      <strong>Perfil completo.</strong> En el recorrido real, una cuenta activa podría
+                      aparecer para pacientes; esto no garantiza horarios disponibles.
+                    <% else %>
+                      <strong>Perfil incompleto.</strong>
+                      En el recorrido real no aparece para pacientes.
+                      Falta completar: {Enum.map_join(@profile_preview.missing, ", ", fn {_, label} ->
+                        label
+                      end)}.
+                      Podés seguir preparando tus ajustes.
+                    <% end %>
+                  </.alert>
+                  <div class="flex justify-end">
+                    <.button
+                      id="profile-entry-action"
+                      link_type="a"
+                      to={@profile_preview.editor_path}
+                      icon="hero-user-circle"
+                    >
+                      {if @profile_preview.has_data, do: "Editar perfil", else: "Completar perfil"}
+                    </.button>
+                  </div>
+                <% else %>
+                  <.alert id="profile-entry-error" color="danger" variant="callout" with_icon>
+                    No se pudo cargar el perfil de muestra. No se muestran datos parciales.
+                  </.alert>
+                <% end %>
+                <nav aria-label="Muestras del resumen de perfil" class="flex flex-wrap gap-2">
+                  <.button
+                    :for={
+                      {label, scenario} <- [
+                        {"Sin datos", "empty"},
+                        {"Incompleto", "incomplete"},
+                        {"Completo", "complete"},
+                        {"Error de carga", "load-error"}
+                      ]
+                    }
+                    link_type="a"
+                    to={"/configuracion/profesional?scenario=" <> scenario}
+                    color="gray"
+                    variant="outline"
+                    size="sm"
+                  >
+                    {label}
+                  </.button>
+                </nav>
+              </.card_content>
+            </.card>
+          </section>
+
           <.alert
             :if={@catalog_error}
             id="configuration-load-error"
@@ -455,241 +577,241 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
           </.alert>
 
           <div :if={is_nil(@catalog_error)} class="flex flex-col gap-6 sm:gap-8">
-            <section aria-labelledby="agenda-interval-heading">
-              <.card variant="basic">
-                <.card_header>
-                  <.h2 id="agenda-interval-heading" no_margin>Intervalo de Agenda</.h2>
-
-                  <.text_muted>
-                    Unidad de tiempo utilizada para organizar la agenda profesional.
-                  </.text_muted>
-                </.card_header>
-
-                <.card_content class="flex flex-col gap-6">
-                  <dl class="grid gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline sm:gap-4">
-                    <dt class="font-medium">Intervalo aplicado</dt>
-
-                    <dd id="current-agenda-interval" class="font-semibold">
-                      {@current_interval} minutos
-                    </dd>
-                  </dl>
-
-                  <form
-                    id="agenda-interval-form"
-                    phx-change="select_interval"
-                    class="flex flex-col gap-4 sm:max-w-xl"
-                  >
-                    <.field
-                      id="agenda-interval-select"
-                      type="select"
-                      name="interval_minutes"
-                      label="Nuevo intervalo"
-                      value={@selected_interval}
-                      options={@interval_options}
-                      help_text="Valores permitidos: de 5 a 240 minutos, en pasos de 5."
-                      no_margin
-                    />
-                    <.alert
-                      :if={@interval_feedback == :availability_dirty}
-                      id="interval-availability-draft-warning"
-                      color="warning"
-                      variant="callout"
-                      with_icon
-                    >
-                      <strong>Hay cambios de disponibilidad sin guardar.</strong>
-                      Guarde o cancele ese borrador antes de cambiar el intervalo de la agenda.
-                    </.alert>
-
-                    <.alert
-                      :if={@interval_feedback == :applied}
-                      id="interval-apply-success"
-                      color="success"
-                      variant="callout"
-                      with_icon
-                    >
-                      El intervalo se aplicó correctamente. Las cantidades se conservaron y se recalcularon las duraciones de los tipos activos.
-                    </.alert>
-
-                    <.alert
-                      :if={@interval_feedback == :invalid}
-                      id="interval-apply-error"
-                      color="danger"
-                      variant="callout"
-                      with_icon
-                    >
-                      <strong>No se aplicó el intervalo.</strong>
-                      El valor debe estar entre 5 y 240 minutos y ser divisible por 5.
-                    </.alert>
-
-                    <div>
-                      <.button
-                        :if={@selected_interval != @current_interval}
-                        id="open-interval-change-modal"
-                        type="button"
-                        color="primary"
-                        phx-click="open_interval_change"
-                      >
-                        Revisar cambios
-                      </.button>
-                      <.button
-                        :if={@selected_interval == @current_interval}
-                        type="button"
-                        color="primary"
-                        disabled
-                      >
-                        Revisar cambios
-                      </.button>
-                    </div>
-                  </form>
-                </.card_content>
-              </.card>
-            </section>
-
             <.live_component
               module={OrigenWeb.ProfessionalAvailabilityComponent}
               id="professional-availability"
               principal={@current_internal_session}
-            />
+            >
+              <section aria-labelledby="consultation-types-heading">
+                <.card variant="basic">
+                  <.card_header>
+                    <.h2 id="consultation-types-heading" no_margin>Tipos de consulta</.h2>
 
-            <section aria-labelledby="consultation-types-heading">
-              <.card variant="basic">
-                <.card_header>
-                  <.h2 id="consultation-types-heading" no_margin>Tipos de consulta</.h2>
+                    <:action>
+                      <.button
+                        color="primary"
+                        size="sm"
+                        icon="hero-plus"
+                        phx-click="open_new_type"
+                      >
+                        Nuevo tipo de consulta
+                      </.button>
+                    </:action>
+                  </.card_header>
 
-                  <:action>
-                    <.button
-                      color="primary"
-                      size="sm"
-                      icon="hero-plus"
-                      phx-click="open_new_type"
-                    >
-                      Nuevo tipo de consulta
-                    </.button>
-                  </:action>
-                </.card_header>
-
-                <.card_content class="flex flex-col gap-4">
-                  <.reactivation_alert
-                    :if={match?({:incompatible, _, _}, @reactivation_feedback)}
-                    feedback={@reactivation_feedback}
-                  />
-                  <form id="consultation-types-filter" phx-change="toggle_inactive">
-                    <.field
-                      id="show-inactive-consultation-types"
-                      type="checkbox"
-                      name="show_inactive"
-                      label="Mostrar consultas inactivas"
-                      checked={@show_inactive}
-                      no_margin
+                  <.card_content class="flex flex-col gap-4">
+                    <.reactivation_alert
+                      :if={match?({:incompatible, _, _}, @reactivation_feedback)}
+                      feedback={@reactivation_feedback}
                     />
-                  </form>
+                    <form id="consultation-types-filter" phx-change="toggle_inactive">
+                      <.field
+                        id="show-inactive-consultation-types"
+                        type="checkbox"
+                        name="show_inactive"
+                        label="Mostrar consultas inactivas"
+                        checked={@show_inactive}
+                        no_margin
+                      />
+                    </form>
 
-                  <div
-                    id="consultation-types-table-view"
-                    class="hidden md:block"
-                    aria-label="Vista de tabla del catálogo"
-                  >
-                    <.table
-                      rows={@visible_catalog}
-                      row_id={&"consultation-type-#{&1.id}"}
-                      density="compact"
-                      variant="basic"
-                      striped
+                    <div
+                      id="consultation-types-table-view"
+                      class="hidden md:block"
+                      aria-label="Vista de tabla del catálogo"
                     >
-                      <:col :let={type} label="Nombre">
-                        <span class="inline-flex items-center gap-2">
-                          <.color_swatch color={type.color} name={type.name} />
-                          <span>{type.name}</span>
-                        </span>
-                      </:col>
-
-                      <:col :let={type} label="Cantidad de intervalos">
-                        <span class="sr-only">Cantidad de intervalos </span>{type.interval_count}
-                      </:col>
-
-                      <:col :let={type} label="Duración">
-                        Duración: {duration_minutes(type, @current_interval)} minutos
-                      </:col>
-
-                      <:col :let={type} label="Precio">{format_ars(type.exact_price_ars)}</:col>
-
-                      <:col :let={type} label="Estado">
-                        <.status_badge status={type.status} />
-                      </:col>
-
-                      <:col :let={type} label="Acciones">
-                        <.prepared_actions type={type} presentation="desktop" />
-                      </:col>
-                    </.table>
-                  </div>
-
-                  <div
-                    id="consultation-types-mobile-view"
-                    class="grid gap-4 md:hidden"
-                    role="list"
-                    aria-label="Vista móvil del catálogo"
-                  >
-                    <article
-                      :for={type <- @visible_catalog}
-                      id={"consultation-type-mobile-#{type.id}"}
-                      role="listitem"
-                      aria-label={"Tipo de consulta #{type.name}"}
-                    >
-                      <.card variant="muted">
-                        <.card_header>
-                          <span class="inline-flex items-center gap-2 font-semibold">
+                      <.table
+                        rows={@visible_catalog}
+                        row_id={&"consultation-type-#{&1.id}"}
+                        density="compact"
+                        variant="basic"
+                        striped
+                      >
+                        <:col :let={type} label="Nombre">
+                          <span class="inline-flex items-center gap-2">
                             <.color_swatch color={type.color} name={type.name} />
                             <span>{type.name}</span>
                           </span>
+                        </:col>
 
-                          <:action>
-                            <.status_badge status={type.status} />
-                          </:action>
-                        </.card_header>
+                        <:col :let={type} label="Cantidad de intervalos">
+                          <span class="sr-only">Cantidad de intervalos </span>{type.interval_count}
+                        </:col>
 
-                        <.card_content>
-                          <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 text-sm">
-                            <dt class="font-medium">Cantidad de intervalos</dt>
+                        <:col :let={type} label="Duración">
+                          Duración: {duration_minutes(type, @current_interval)} minutos
+                        </:col>
 
-                            <dd class="text-right">{type.interval_count}</dd>
+                        <:col :let={type} label="Precio">{format_ars(type.exact_price_ars)}</:col>
 
-                            <dt class="font-medium">Duración</dt>
+                        <:col :let={type} label="Estado">
+                          <.status_badge status={type.status} />
+                        </:col>
 
-                            <dd class="text-right">
-                              Duración: {duration_minutes(type, @current_interval)} minutos
-                            </dd>
+                        <:col :let={type} label="Acciones">
+                          <.prepared_actions type={type} presentation="desktop" />
+                        </:col>
+                      </.table>
+                    </div>
 
-                            <dt class="font-medium">Precio</dt>
+                    <div
+                      id="consultation-types-mobile-view"
+                      class="grid gap-4 md:hidden"
+                      role="list"
+                      aria-label="Vista móvil del catálogo"
+                    >
+                      <article
+                        :for={type <- @visible_catalog}
+                        id={"consultation-type-mobile-#{type.id}"}
+                        role="listitem"
+                        aria-label={"Tipo de consulta #{type.name}"}
+                      >
+                        <.card variant="muted">
+                          <.card_header>
+                            <span class="inline-flex items-center gap-2 font-semibold">
+                              <.color_swatch color={type.color} name={type.name} />
+                              <span>{type.name}</span>
+                            </span>
 
-                            <dd class="text-right font-semibold">
-                              {format_ars(type.exact_price_ars)}
-                            </dd>
-                          </dl>
-                        </.card_content>
+                            <:action>
+                              <.status_badge status={type.status} />
+                            </:action>
+                          </.card_header>
 
-                        <.card_footer>
-                          <.prepared_actions type={type} presentation="mobile" />
-                        </.card_footer>
-                      </.card>
-                    </article>
-                  </div>
+                          <.card_content>
+                            <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 text-sm">
+                              <dt class="font-medium">Cantidad de intervalos</dt>
 
-                  <%= for type <- @catalog do %>
-                    <.alert_dialog
-                      :if={type.status == :active}
-                      id={deactivation_dialog_id(type.id)}
-                      title="Desactivar tipo de consulta"
-                      description="Los turnos ya reservados con este tipo de consulta se mantendrán sin cambios. Al desactivarlo, dejará de estar disponible únicamente para nuevas reservas."
-                      confirm_label="Desactivar"
-                      cancel_label="Cancelar"
-                      variant="default"
-                      on_confirm={JS.push("deactivate_type", value: %{id: type.id})}
-                      on_cancel={JS.push("cancel_deactivate_type", value: %{id: type.id})}
-                    />
-                  <% end %>
-                </.card_content>
-              </.card>
-            </section>
+                              <dd class="text-right">{type.interval_count}</dd>
+
+                              <dt class="font-medium">Duración</dt>
+
+                              <dd class="text-right">
+                                Duración: {duration_minutes(type, @current_interval)} minutos
+                              </dd>
+
+                              <dt class="font-medium">Precio</dt>
+
+                              <dd class="text-right font-semibold">
+                                {format_ars(type.exact_price_ars)}
+                              </dd>
+                            </dl>
+                          </.card_content>
+
+                          <.card_footer>
+                            <.prepared_actions type={type} presentation="mobile" />
+                          </.card_footer>
+                        </.card>
+                      </article>
+                    </div>
+
+                    <%= for type <- @catalog do %>
+                      <.alert_dialog
+                        :if={type.status == :active}
+                        id={deactivation_dialog_id(type.id)}
+                        title="Desactivar tipo de consulta"
+                        description="Los turnos ya reservados con este tipo de consulta se mantendrán sin cambios. Al desactivarlo, dejará de estar disponible únicamente para nuevas reservas."
+                        confirm_label="Desactivar"
+                        cancel_label="Cancelar"
+                        variant="default"
+                        on_confirm={JS.push("deactivate_type", value: %{id: type.id})}
+                        on_cancel={JS.push("cancel_deactivate_type", value: %{id: type.id})}
+                      />
+                    <% end %>
+                  </.card_content>
+                </.card>
+              </section>
+
+              <section aria-labelledby="agenda-interval-heading">
+                <.card variant="basic">
+                  <.card_header>
+                    <.h2 id="agenda-interval-heading" no_margin>Intervalo de Agenda</.h2>
+
+                    <.text_muted>
+                      Unidad de tiempo utilizada para organizar la agenda profesional.
+                    </.text_muted>
+                  </.card_header>
+
+                  <.card_content class="flex flex-col gap-6">
+                    <dl class="grid gap-1 sm:grid-cols-[12rem_1fr] sm:items-baseline sm:gap-4">
+                      <dt class="font-medium">Intervalo aplicado</dt>
+
+                      <dd id="current-agenda-interval" class="font-semibold">
+                        {@current_interval} minutos
+                      </dd>
+                    </dl>
+
+                    <form
+                      id="agenda-interval-form"
+                      phx-change="select_interval"
+                      class="flex flex-col gap-4 sm:max-w-xl"
+                    >
+                      <.field
+                        id="agenda-interval-select"
+                        type="select"
+                        name="interval_minutes"
+                        label="Nuevo intervalo"
+                        value={@selected_interval}
+                        options={@interval_options}
+                        help_text="Valores permitidos: de 5 a 240 minutos, en pasos de 5."
+                        no_margin
+                      />
+                      <.alert
+                        :if={@interval_feedback == :availability_dirty}
+                        id="interval-availability-draft-warning"
+                        color="warning"
+                        variant="callout"
+                        with_icon
+                      >
+                        <strong>Hay cambios de disponibilidad sin guardar.</strong>
+                        Guarde o cancele ese borrador antes de cambiar el intervalo de la agenda.
+                      </.alert>
+
+                      <.alert
+                        :if={@interval_feedback == :applied}
+                        id="interval-apply-success"
+                        color="success"
+                        variant="callout"
+                        with_icon
+                      >
+                        El intervalo se aplicó correctamente. Las cantidades se conservaron y se recalcularon las duraciones de los tipos activos.
+                      </.alert>
+
+                      <.alert
+                        :if={@interval_feedback == :invalid}
+                        id="interval-apply-error"
+                        color="danger"
+                        variant="callout"
+                        with_icon
+                      >
+                        <strong>No se aplicó el intervalo.</strong>
+                        El valor debe estar entre 5 y 240 minutos y ser divisible por 5.
+                      </.alert>
+
+                      <div>
+                        <.button
+                          :if={@selected_interval != @current_interval}
+                          id="open-interval-change-modal"
+                          type="button"
+                          color="primary"
+                          phx-click="open_interval_change"
+                        >
+                          Revisar cambios
+                        </.button>
+                        <.button
+                          :if={@selected_interval == @current_interval}
+                          type="button"
+                          color="primary"
+                          disabled
+                        >
+                          Revisar cambios
+                        </.button>
+                      </div>
+                    </form>
+                  </.card_content>
+                </.card>
+              </section>
+            </.live_component>
           </div>
 
           <.modal

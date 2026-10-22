@@ -3,6 +3,7 @@ defmodule Origen.Appointments.BookingServiceTest do
 
   alias Origen.Appointments.BookingService
   alias Origen.Booking.Appointment
+  alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Patients
   alias Origen.Repo
 
@@ -40,6 +41,8 @@ defmodule Origen.Appointments.BookingServiceTest do
       """)
 
     prof_id = hd(res.rows) |> hd()
+    {:ok, %{session: principal}} = Origen.Sessions.create_session(prof_id)
+    assert {:ok, _} = Origen.ProfessionalProfiles.save_own_profile(principal, complete_profile())
     type_id = Ecto.UUID.generate()
 
     Repo.query!(
@@ -53,11 +56,78 @@ defmodule Origen.Appointments.BookingServiceTest do
     %{
       profile: verified_profile,
       prof_id: prof_id,
-      type_id: type_id
+      type_id: type_id,
+      principal: principal
     }
   end
 
   describe "reserve/2 - autonomous booking execution" do
+    test "rejects every incomplete profile and inactive account without writing reservations",
+         ctx do
+      params = %{
+        professional_id: ctx.prof_id,
+        consultation_type_id: ctx.type_id,
+        date: ~D[2026-09-28],
+        slot: %{start_time: ~T[10:00:00]},
+        snapshot_override: %{
+          name: "Consulta general",
+          duration_minutes: 30,
+          exact_price_ars: Decimal.new("18000.00")
+        },
+        now: @fixed_now
+      }
+
+      before = Repo.all(Appointment)
+
+      for field <- Map.keys(complete_profile()) do
+        assert {:ok, _} =
+                 Origen.ProfessionalProfiles.save_own_profile(ctx.principal, %{field => nil})
+
+        assert {:error, :professional_not_eligible} = BookingService.reserve(ctx.profile, params)
+        assert Repo.all(Appointment) == before
+
+        assert {:ok, _} =
+                 Origen.ProfessionalProfiles.save_own_profile(ctx.principal, complete_profile())
+      end
+
+      Repo.query!(
+        "UPDATE internal_accounts SET state = 'pending_activation', password_hash = NULL, totp_secret = NULL, activated_at = NULL WHERE id = $1",
+        [ctx.prof_id]
+      )
+
+      assert {:error, :professional_not_eligible} = BookingService.reserve(ctx.profile, params)
+      assert Repo.all(Appointment) == before
+    end
+
+    test "rejects a professional without a profile even when their catalog exists", ctx do
+      [[other_id]] =
+        Repo.query!(
+          "INSERT INTO internal_accounts (role,state,password_hash,totp_secret,activated_at) VALUES ('professional','active','hash',decode('0102','hex'),NOW()) RETURNING id"
+        ).rows
+
+      other_type = Ecto.UUID.generate()
+
+      Repo.query!(
+        """
+        INSERT INTO consultation_types
+          (id, owner_account_id, name, exact_price_ars, color, interval_count, status)
+        VALUES ($1, $2, 'Consulta general', 18000.00, '#0A7C86', 2, 'active')
+        """,
+        [Ecto.UUID.dump!(other_type), other_id]
+      )
+
+      params = %{
+        professional_id: other_id,
+        consultation_type_id: other_type,
+        date: ~D[2026-09-28],
+        slot: %{start_time: ~T[10:00:00]},
+        now: @fixed_now
+      }
+
+      assert {:error, :professional_not_eligible} = BookingService.reserve(ctx.profile, params)
+      assert Repo.all(Appointment) == []
+    end
+
     test "successfully reserves appointment and persists historical snapshots", ctx do
       # 3 days ahead -> RF-10 'reserved'
       future_date = ~D[2026-09-28]
@@ -113,6 +183,46 @@ defmodule Origen.Appointments.BookingServiceTest do
       assert res.status == "confirmed"
     end
 
+    test "manual approval mode books as 'requested' regardless of date proximity and establishes the relationship (Contract #321)",
+         ctx do
+      Repo.query!(
+        """
+        INSERT INTO agenda_settings (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode)
+        VALUES ($1, 30, 'manual', 'confirmed')
+        """,
+        [ctx.prof_id]
+      )
+
+      # 3 days ahead would normally start in 'reserved' (RF-10); manual approval wins.
+      params = %{
+        professional_id: ctx.prof_id,
+        consultation_type_id: ctx.type_id,
+        date: ~D[2026-09-28],
+        slot: %{start_time: ~T[15:00:00]},
+        snapshot_override: %{
+          name: "Consulta general",
+          duration_minutes: 30,
+          exact_price_ars: Decimal.new("18000.00")
+        },
+        now: @fixed_now
+      }
+
+      assert {:ok, res} = BookingService.reserve(ctx.profile, params)
+      assert res.status == "requested"
+
+      persisted = Repo.get!(Appointment, res.appointment_id)
+      assert persisted.status == "requested"
+
+      relationship =
+        Repo.get_by(ProfessionalPatientRelationship,
+          professional_account_id: ctx.prof_id,
+          patient_profile_id: ctx.profile.id
+        )
+
+      assert relationship != nil
+      assert relationship.first_appointment_id == persisted.id
+    end
+
     test "refutes booking when patient phone is not verified", ctx do
       unverified =
         ctx.profile
@@ -158,5 +268,15 @@ defmodule Origen.Appointments.BookingServiceTest do
 
       assert {:error, :invalid_professional_id} = BookingService.reserve(ctx.profile, params)
     end
+  end
+
+  defp complete_profile do
+    %{
+      first_name: "Ana",
+      last_name: "Pérez",
+      specialty: "Cardiología",
+      license_type: "Libre",
+      license_number: "AB/001"
+    }
   end
 end

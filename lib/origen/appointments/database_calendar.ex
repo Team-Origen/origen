@@ -30,20 +30,23 @@ defmodule Origen.Appointments.DatabaseCalendar do
   @impl true
   def list_professionals do
     query = """
-    SELECT id, email FROM internal_accounts
-    WHERE role = 'professional' AND state = 'active'
-    ORDER BY id ASC
+    SELECT a.id, p.first_name, p.last_name, p.specialty
+    FROM internal_accounts a
+    JOIN professional_profiles p ON p.owner_account_id = a.id
+    WHERE a.role = 'professional' AND a.state = 'active'
+      AND NULLIF(btrim(p.first_name, E' \\t\\n\\r'), '') IS NOT NULL
+      AND NULLIF(btrim(p.last_name, E' \\t\\n\\r'), '') IS NOT NULL
+      AND NULLIF(btrim(p.specialty, E' \\t\\n\\r'), '') IS NOT NULL
+      AND NULLIF(btrim(p.license_type, E' \\t\\n\\r'), '') IS NOT NULL
+      AND NULLIF(btrim(p.license_number, E' \\t\\n\\r'), '') IS NOT NULL
+    ORDER BY a.id ASC
     """
 
     case Repo.query(query, []) do
       {:ok, %{rows: rows}} ->
         professionals =
-          Enum.map(rows, fn [id, email] ->
-            %{
-              id: to_string(id),
-              name: "Dr/a. #{email}",
-              specialty: "Medicina General"
-            }
+          Enum.map(rows, fn [id, first_name, last_name, specialty] ->
+            %{id: to_string(id), name: "#{first_name} #{last_name}", specialty: specialty}
           end)
 
         {:ok, professionals}

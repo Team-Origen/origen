@@ -130,6 +130,81 @@ defmodule Origen.Booking.RequestResolutionTest do
       assert {:error, :invalid_status_transition} =
                RequestResolution.reject_request(ctx.prof_a_id, confirmed_appt.id)
     end
+
+    test "C7a: aceptar una solicitud registra el evento de auditoría append-only appointment_confirmed",
+         ctx do
+      appt =
+        insert_appointment!(ctx.patient_id, ctx.prof_a_id, ~U[2026-10-15 16:30:00Z], "requested")
+
+      assert {:ok, _updated} = RequestResolution.accept_request(ctx.prof_a_id, appt.id)
+
+      prof_ref = "internal_account:#{ctx.prof_a_id}"
+      entity_ref = "appointment:#{appt.id}"
+
+      assert [
+               %{
+                 actor_kind: "professional",
+                 actor_ref: ^prof_ref,
+                 event: "appointment_confirmed",
+                 entity_kind: "appointment",
+                 entity_ref: ^entity_ref,
+                 result: "succeeded"
+               }
+             ] = audit_events_for(appt.id)
+    end
+
+    test "C7b: rechazar una solicitud registra el evento de auditoría append-only appointment_cancelled",
+         ctx do
+      appt =
+        insert_appointment!(ctx.patient_id, ctx.prof_a_id, ~U[2026-10-15 16:45:00Z], "requested")
+
+      assert {:ok, _updated} = RequestResolution.reject_request(ctx.prof_a_id, appt.id)
+
+      prof_ref = "internal_account:#{ctx.prof_a_id}"
+      entity_ref = "appointment:#{appt.id}"
+
+      assert [
+               %{
+                 actor_kind: "professional",
+                 actor_ref: ^prof_ref,
+                 event: "appointment_cancelled",
+                 entity_kind: "appointment",
+                 entity_ref: ^entity_ref,
+                 result: "succeeded"
+               }
+             ] = audit_events_for(appt.id)
+    end
+
+    test "C7c: actor no autorizado con turno inexistente recibe :unauthorized y no :appointment_not_found",
+         ctx do
+      assert {:error, :unauthorized} =
+               RequestResolution.accept_request(ctx.secretary_id, 999_999)
+
+      assert {:error, :unauthorized} =
+               RequestResolution.reject_request(ctx.admin_id, 999_999)
+
+      inactive_prof_id =
+        insert_internal_account!("prof.inactive@example.com", "professional", "active")
+
+      # Inactivar sin violar internal_accounts_state_fields_check (debe perder credenciales).
+      {:ok, _} =
+        SQL.query(
+          Repo,
+          """
+          UPDATE public.internal_accounts
+          SET state = 'pending_activation', password_hash = NULL, totp_secret = NULL, activated_at = NULL
+          WHERE id = $1
+          """,
+          [inactive_prof_id]
+        )
+
+      assert {:error, :unauthorized} =
+               RequestResolution.accept_request(inactive_prof_id, 999_999)
+
+      # Un profesional activo válido sí distingue el turno inexistente.
+      assert {:error, :appointment_not_found} =
+               RequestResolution.accept_request(ctx.prof_a_id, 999_999)
+    end
   end
 
   describe "configuración de aprobación y subconfiguración de secretaría" do
@@ -212,9 +287,72 @@ defmodule Origen.Booking.RequestResolutionTest do
 
       assert result.status == :requested
     end
+
+    test "C11: actualizar sólo approval_mode preserva secretary_approval_mode existente y viceversa",
+         ctx do
+      # Estado inicial: manual + requested
+      assert {:ok, _} =
+               RequestResolution.update_approval_configuration(ctx.prof_a_id, %{
+                 approval_mode: :manual,
+                 secretary_approval_mode: "requested"
+               })
+
+      # Actualizar sólo approval_mode: la subconfiguración se preserva
+      assert {:ok, cfg} =
+               RequestResolution.update_approval_configuration(ctx.prof_a_id, %{
+                 approval_mode: :manual
+               })
+
+      assert cfg.approval_mode == :manual
+      assert cfg.secretary_approval_mode == :requested
+
+      # Actualizar sólo secretary_approval_mode: la modalidad se preserva
+      assert {:ok, cfg2} =
+               RequestResolution.update_approval_configuration(ctx.prof_a_id, %{
+                 secretary_approval_mode: :confirmed
+               })
+
+      assert cfg2.approval_mode == :manual
+      assert cfg2.secretary_approval_mode == :confirmed
+
+      # Una clave provista con valor inválido sigue siendo error explícito
+      assert {:error, :invalid_approval_mode} =
+               RequestResolution.update_approval_configuration(ctx.prof_a_id, %{
+                 approval_mode: :bogus
+               })
+
+      assert {:error, :invalid_secretary_approval_mode} =
+               RequestResolution.update_approval_configuration(ctx.prof_a_id, %{
+                 secretary_approval_mode: "bogus"
+               })
+    end
   end
 
   # Helpers privados de inserción
+
+  defp audit_events_for(appointment_id) do
+    {:ok, %{rows: rows}} =
+      SQL.query(
+        Repo,
+        """
+        SELECT actor_kind, actor_ref, event, entity_kind, entity_ref, result
+        FROM public.audit_events
+        WHERE entity_ref = $1
+        """,
+        ["appointment:#{appointment_id}"]
+      )
+
+    Enum.map(rows, fn [actor_kind, actor_ref, event, entity_kind, entity_ref, result] ->
+      %{
+        actor_kind: actor_kind,
+        actor_ref: actor_ref,
+        event: event,
+        entity_kind: entity_kind,
+        entity_ref: entity_ref,
+        result: result
+      }
+    end)
+  end
 
   defp insert_internal_account!(email, role, state) do
     query = """

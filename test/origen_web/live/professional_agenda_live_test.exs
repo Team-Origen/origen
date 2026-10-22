@@ -320,6 +320,33 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       assert has_element?(view, ".border-rose-200", "Cancelado")
       refute has_element?(view, "button[phx-click='reject_request']")
     end
+
+    test "C13: un ID malformado no tumba la vista y muestra un error claro sin filtrar términos internos",
+         ctx do
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      html = render_click(view, "accept_request", %{"id" => "invalid-id"})
+
+      assert html =~ "El identificador del turno no es válido."
+      refute html =~ "inspect"
+      refute html =~ ":invalid_id"
+
+      # El proceso LiveView sigue vivo y operativo
+      assert render(view) =~ "Agenda Diaria"
+    end
+
+    test "C14: un error de resolución mapea a mensaje claro y recarga la agenda", ctx do
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      html = render_click(view, "reject_request", %{"id" => "999999"})
+
+      assert html =~ "El turno solicitado no fue encontrado."
+      refute html =~ "inspect"
+      refute html =~ ":appointment_not_found"
+      assert render(view) =~ "Agenda Diaria"
+    end
   end
 
   # Helpers para fixtures
