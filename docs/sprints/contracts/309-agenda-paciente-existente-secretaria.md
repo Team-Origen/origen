@@ -50,7 +50,7 @@ Conforme a la especificación beta (`specs/appointment-booking-and-lifecycle/spe
 - **Aprobación automática del profesional:**
   - El turno creado por Secretaría nace en estado **`confirmed`**.
 - **Aprobación manual del profesional:**
-  - Por subconfiguración del centro/profesional, las reservas de Secretaría pueden nacer directamente como **`confirmed`** (modo asistido preferente) o como **`requested`** (si el profesional requiere validar manualmente todo turno agendado). Por defecto en la beta, si no hay subconfiguración que fuerce confirmación directa en modo manual, nace como **`confirmed`** cuando Secretaría opera de forma asistida directa o **`requested`** si el profesional tiene aprobación manual estricta.
+  - En modo manual estricto, el turno creado por Secretaría nace por defecto en estado **`requested`**, a menos que el profesional cuente con una subconfiguración explícita (`secretary_approval_mode: "confirmed"`) que habilite confirmación directa para el canal de Secretaría.
   - En ambos casos (`confirmed` o `requested`), el slot queda **inmediatamente ocupado** impidiendo solapamientos.
   - En ambos casos se establece la relación durable `ProfessionalPatientRelationship` entre el profesional seleccionado y el paciente.
 
@@ -59,10 +59,11 @@ Conforme a la especificación beta (`specs/appointment-booking-and-lifecycle/spe
 | --- | --- | --- |
 | Buscar pacientes por documento | **Permitido** | Permitido sólo en creación de turno (DNI exacto) |
 | Ver todas las agendas del centro | **Permitido** | Denegado (sólo ve su agenda propia) |
+| Ver turnos de agenda de otros profesionales del centro | **Permitido** (gestión centralizada) | **Denegado** (sólo ve su agenda propia) |
 | Agendar turno para paciente existente | **Permitido** | Permitido sólo en su propia agenda |
 | Aceptar o rechazar solicitudes pendientes | **Denegado** (exclusivo de #284) | **Permitido** (sólo de su agenda propia) |
 | Leer o modificar perfil/ajustes profesionales | **Denegado** (exclusivo del profesional) | **Permitido** (sólo propios) |
-| Ver historial clínico o turnos con otros profesionales | **Denegado** | **Denegado** |
+| Ver historial clínico y notas médicas | **Denegado** | **Denegado** |
 
 Secretaría **nunca** aprueba ni rechaza solicitudes pendientes. Si un turno queda en estado `requested`, la resolución de dicha solicitud queda bajo el alcance de la issue [#284](https://github.com/Team-Origen/origen/issues/284).
 
@@ -73,10 +74,10 @@ Secretaría **nunca** aprueba ni rechaza solicitudes pendientes. Si un turno que
 | Actor | Sesión requerida | Operación | Resultado esperado |
 | --- | --- | --- | --- |
 | Secretaría activa | `role: "secretary"`, `state: "active"` | Crear turno asistido para paciente existente | Autorizado (`{:ok, appointment}`) |
-| Administrador activo | `role: "administrator"`, `state: "active"` | Crear turno asistido para paciente existente | Autorizado (co-operación de soporte administrativo) |
+| Administrador activo | `role: "administrator"`, `state: "active"` | Crear turno asistido para paciente existente | Denegado (`{:error, :unauthorized}`) |
 | Profesional | `role: "professional"` | Crear turno en agenda ajena | Denegado (`{:error, :unauthorized}`) |
 | Paciente | `role: "patient"` | Crear turno en nombre de otro paciente | Denegado (`{:error, :unauthorized}`) |
-| Anónimo / Sesión inválida | Sin sesión o inactiva | Cualquier operación de agenda | Denegado (`{:error, :unauthenticated}`) |
+| Anónimo / Sesión inválida | Sin sesión o inactiva | Cualquier operación de agenda | Denegado (`{:error, :unauthorized}`) |
 | Secretaría | `role: "secretary"` | Aceptar/Rechazar solicitud pendiente | Denegado (`{:error, :unauthorized}`) |
 | Secretaría | `role: "secretary"` | Modificar disponibilidad o catálogo profesional | Denegado (`{:error, :unauthorized}`) |
 
@@ -87,9 +88,9 @@ Secretaría **nunca** aprueba ni rechaza solicitudes pendientes. Si un turno que
 | Clasificación | Componente / Archivo | Detalle |
 | --- | --- | --- |
 | **Reutilizar** | `lib/origen/patients.ex` (`search_persona_by_document/3`) | Búsqueda auditada de paciente existente por tipo y número de documento. |
-| **Reutilizar** | `lib/origen/booking.ex` (`persist_appointment/2`, `determine_initial_status/3`) | Persistencia atómica con snapshots inmutables de consulta (nombre, duración, precio). |
+| **Adaptar** | `lib/origen/booking.ex` (`reserve_appointment/2`, `establish_relationship/3`) | La transacción atómica completa debe incluir `:requested` dentro de `@relationship_establishing_statuses` para el flujo asistido de secretaría, garantizando tanto la creación de la relación Profesional–Paciente como el evento de auditoría. |
 | **Reutilizar** | `lib/origen/booking/overlap.ex` | Validación de conflictos de agenda para evitar dobles reservas. |
-| **Reutilizar** | `lib/origen/appointments/database_calendar.ex` | Consulta de profesionales activos y cálculo de slots con `Availability`. |
+| **Adaptar** | `lib/origen/appointments/database_calendar.ex` | Alimentar `:occupancies` consultando los `appointments` activos (`reserved`, `confirmed`, `requested`) para no mostrar horarios tomados como libres, y proyectar `first_name`/`last_name` y especialidad desde perfiles profesionales en lugar de exponer el email interno (`Dr/a. #{email}`). |
 | **Adaptar** | `lib/origen/booking/authorization.ex` | Retirar la condición obligatoria `ensure_schedule_agreement` para el rol `:secretary` conforme a la especificación beta. |
 | **Adaptar** | `lib/origen_web/live/secretary_patient_live.ex` | Reemplazar el aviso temporal `#assisted-booking-notice` ("disponible próximamente") por el flujo interactivo de selección de profesional, fecha y horario. |
 | **Crear (#310)** | `lib/origen/appointments/assisted_booking.ex` (o función de contexto en `Booking`) | Módulo/función de backend para coordinar la reserva asistida de secretaría con validaciones completas, creación de relación y auditoría. |
