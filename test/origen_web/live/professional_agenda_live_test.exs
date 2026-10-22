@@ -347,6 +347,69 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       refute html =~ ":appointment_not_found"
       assert render(view) =~ "Agenda Diaria"
     end
+
+    test "C15: permite configurar modalidad y subconfiguración de Secretaría preservando pendientes y mostrando el aviso de alcance",
+         ctx do
+      today = Date.utc_today()
+      start_1 = DateTime.new!(today, ~T[15:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(today, ~T[15:30:00], "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_1.profile_id,
+        start_1,
+        end_1,
+        "requested"
+      )
+
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      assert has_element?(view, "#approval-config-panel")
+      assert has_element?(view, "#approval-config-form")
+      assert has_element?(view, "#select-approval-mode")
+      assert has_element?(view, "#select-secretary-approval-mode")
+
+      assert has_element?(
+               view,
+               "#approval-mode-notice",
+               "El cambio de modalidad aplica únicamente a reservas nuevas y no resuelve automáticamente las solicitudes pendientes existentes."
+             )
+
+      html =
+        view
+        |> form("#approval-config-form", %{
+          "approval_mode" => "manual",
+          "secretary_approval_mode" => "requested"
+        })
+        |> render_change()
+
+      assert html =~
+               "Configuración de aprobación actualizada. Las solicitudes pendientes existentes conservan su estado."
+
+      assert {:ok, %{approval_mode: :manual, secretary_approval_mode: :requested}} =
+               Origen.Booking.get_approval_configuration(ctx.professional_id)
+
+      # La solicitud pendiente previa sigue en estado Solicitado sin resolverse automáticamente
+      assert has_element?(view, ".border-indigo-200", "Solicitado")
+      assert has_element?(view, "button[phx-click='accept_request']", "Aceptar")
+    end
+
+    test "C16: un valor inválido en la configuración de aprobación muestra un error claro sin romper la vista",
+         ctx do
+      conn = put_internal_session(ctx.conn, ctx.prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      html =
+        render_change(view, "update_approval_config", %{
+          "approval_mode" => "invalid_mode",
+          "secretary_approval_mode" => "confirmed"
+        })
+
+      assert html =~ "La modalidad de aprobación seleccionada no es válida."
+      refute html =~ "inspect"
+      refute html =~ ":invalid_approval_mode"
+    end
   end
 
   # Helpers para fixtures
