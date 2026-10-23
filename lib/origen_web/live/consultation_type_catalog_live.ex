@@ -5,7 +5,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   alias Origen.ConsultationTypes
   alias OrigenWeb.TimeGrid
-  alias OrigenWeb.ProfessionalProfilePreview
+  alias OrigenWeb.ProfessionalProfileForm
 
   @interval_options Enum.map(5..240//5, &{"#{&1} minutos", &1})
   @availability_days [
@@ -27,14 +27,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   @ars_price_pattern ~r/^(?<sign>-?)(?<whole>(?:0|[1-9]\d*|[1-9]\d{0,2}(?:\.\d{3})+))(?:,(?<fraction>\d+))?$/
 
   @impl true
-  def mount(params, _session, socket) do
-    profile_preview_enabled = profile_preview_enabled?()
-
+  def mount(_params, _session, socket) do
     socket =
       assign(socket,
         page_title: "Configuración",
-        profile_preview_enabled: profile_preview_enabled,
-        profile_preview: profile_preview(params, profile_preview_enabled),
+        profile_summary: profile_summary(socket.assigns.current_internal_session),
         current_interval: nil,
         selected_interval: nil,
         interval_options: @interval_options,
@@ -69,33 +66,19 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     end
   end
 
-  defp profile_preview_enabled? do
-    Application.get_env(:origen, :env) in [:dev, :test]
-  end
+  defp profile_summary(principal) do
+    case ProfessionalProfileForm.context().get_own_profile(principal) do
+      {:ok, profile} ->
+        fields = ProfessionalProfileForm.from_profile(profile)
 
-  defp profile_preview(params, enabled?) do
-    scenario = Map.get(params, "scenario", "incomplete")
+        %{
+          patient: ProfessionalProfileForm.patient_projection(fields),
+          missing: ProfessionalProfileForm.missing_fields(fields),
+          registration: %{type: fields["license_type"], number: fields["license_number"]}
+        }
 
-    scenario =
-      if scenario in ~w(empty incomplete complete load-error save-error),
-        do: scenario,
-        else: "incomplete"
-
-    if enabled? do
-      case ProfessionalProfilePreview.load(scenario) do
-        {:ok, profile} ->
-          %{
-            patient: ProfessionalProfilePreview.patient_projection(profile),
-            missing: ProfessionalProfilePreview.missing_fields(profile),
-            has_data: ProfessionalProfilePreview.has_data?(profile),
-            editor_path:
-              "/configuracion/profesional/perfil" <>
-                if(scenario == "incomplete", do: "", else: "?scenario=" <> scenario)
-          }
-
-        {:error, _} ->
-          nil
-      end
+      {:error, _reason} ->
+        nil
     end
   end
 
@@ -479,7 +462,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
           </header>
 
           <section
-            :if={@profile_preview_enabled}
             id="professional-profile-entry"
             aria-labelledby="professional-profile-entry-heading"
           >
@@ -487,41 +469,64 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
               <.card_header>
                 <.h2 id="professional-profile-entry-heading" no_margin>Perfil profesional</.h2>
                 <.text_muted>
-                  Vista previa · Datos simulados, sin guardado permanente.
+                  Datos guardados de tu perfil profesional.
                 </.text_muted>
               </.card_header>
               <.card_content class="flex flex-col gap-4">
-                <%= if @profile_preview do %>
+                <%= if @profile_summary do %>
                   <div
                     id="profile-patient-preview"
                     class="space-y-2"
-                    aria-label="Vista previa para pacientes"
+                    aria-label="Nombre para el listado de pacientes"
                   >
-                    <.text_muted>Así se verían tus datos en el listado de pacientes.</.text_muted>
+                    <.text_muted>Tu nombre para el listado de pacientes.</.text_muted>
                     <.h3 id="profile-patient-name" no_margin>
-                      {if @profile_preview.patient.name == "",
+                      {if @profile_summary.patient.name == "",
                         do: "Nombre y apellido pendientes",
-                        else: @profile_preview.patient.name}
+                        else: @profile_summary.patient.name}
                     </.h3>
-                    <p id="profile-patient-specialty">
-                      {if @profile_preview.patient.specialty == "",
-                        do: "Especialidad pendiente",
-                        else: @profile_preview.patient.specialty}
-                    </p>
+                  </div>
+                  <div id="profile-summary-details" class="flex flex-wrap items-start gap-x-8 gap-y-4">
+                    <div>
+                      <.text_small>Especialidad</.text_small>
+                      <p id="profile-patient-specialty">
+                        {if @profile_summary.patient.specialty == "",
+                          do: "Especialidad pendiente",
+                          else: @profile_summary.patient.specialty}
+                      </p>
+                    </div>
+                    <dl id="profile-license-summary" class="flex flex-wrap gap-x-8 gap-y-4">
+                      <div>
+                        <dt class="text-sm">Tipo de matrícula</dt>
+                        <dd id="profile-summary-license-type" class="break-words">
+                          {if @profile_summary.registration.type == "",
+                            do: "Pendiente",
+                            else: @profile_summary.registration.type}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="text-sm">Número de matrícula</dt>
+                        <dd id="profile-summary-license-number" class="break-words">
+                          {if @profile_summary.registration.number == "",
+                            do: "Pendiente",
+                            else: @profile_summary.registration.number}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
                   <.alert
                     id="profile-entry-status"
-                    color={if @profile_preview.missing == [], do: "success", else: "warning"}
+                    color={if @profile_summary.missing == [], do: "success", else: "warning"}
                     variant="callout"
                     with_icon
                   >
-                    <%= if @profile_preview.missing == [] do %>
-                      <strong>Perfil completo.</strong> En el recorrido real, una cuenta activa podría
-                      aparecer para pacientes; esto no garantiza horarios disponibles.
+                    <%= if @profile_summary.missing == [] do %>
+                      <strong>Perfil completo.</strong> Tu cuenta activa aparece para pacientes;
+                      esto no garantiza horarios disponibles.
                     <% else %>
                       <strong>Perfil incompleto.</strong>
-                      En el recorrido real no aparece para pacientes.
-                      Falta completar: {Enum.map_join(@profile_preview.missing, ", ", fn {_, label} ->
+                      Todavía no aparece para pacientes.
+                      Falta completar: {Enum.map_join(@profile_summary.missing, ", ", fn {_, label} ->
                         label
                       end)}.
                       Podés seguir preparando tus ajustes.
@@ -531,36 +536,17 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                     <.button
                       id="profile-entry-action"
                       link_type="a"
-                      to={@profile_preview.editor_path}
+                      to="/configuracion/profesional/perfil"
                       icon="hero-user-circle"
                     >
-                      {if @profile_preview.has_data, do: "Editar perfil", else: "Completar perfil"}
+                      Ver perfil
                     </.button>
                   </div>
                 <% else %>
                   <.alert id="profile-entry-error" color="danger" variant="callout" with_icon>
-                    No se pudo cargar el perfil de muestra. No se muestran datos parciales.
+                    No se pudo cargar el perfil. No se muestran datos parciales.
                   </.alert>
                 <% end %>
-                <nav aria-label="Muestras del resumen de perfil" class="flex flex-wrap gap-2">
-                  <.button
-                    :for={
-                      {label, scenario} <- [
-                        {"Sin datos", "empty"},
-                        {"Incompleto", "incomplete"},
-                        {"Completo", "complete"},
-                        {"Error de carga", "load-error"}
-                      ]
-                    }
-                    link_type="a"
-                    to={"/configuracion/profesional?scenario=" <> scenario}
-                    color="gray"
-                    variant="outline"
-                    size="sm"
-                  >
-                    {label}
-                  </.button>
-                </nav>
               </.card_content>
             </.card>
           </section>

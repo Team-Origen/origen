@@ -3,33 +3,37 @@ defmodule OrigenWeb.ProfessionalProfileLive do
 
   on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
 
-  alias OrigenWeb.ProfessionalProfilePreview
+  alias OrigenWeb.ProfessionalProfileForm
 
-  @fields ProfessionalProfilePreview.fields()
+  @fields ProfessionalProfileForm.fields()
 
   @impl true
-  def mount(params, _session, socket) do
-    scenario = Map.get(params, "scenario", "incomplete")
+  def mount(_params, _session, socket) do
+    principal = socket.assigns.current_internal_session
 
     {:ok,
      socket
      |> assign(
-       page_title: "Perfil profesional · vista previa",
+       page_title: "Perfil profesional",
        fields: @fields,
-       scenario: scenario,
        loading: true,
        load_error: false,
        save_error: false,
        saved: false,
+       editing: false,
        profile: %{},
        draft: %{},
        missing: []
      )
-     |> start_async(:load_profile, fn -> ProfessionalProfilePreview.load(scenario) end)}
+     |> start_async(:load_profile, fn ->
+       ProfessionalProfileForm.context().get_own_profile(principal)
+     end)}
   end
 
   @impl true
   def handle_async(:load_profile, {:ok, {:ok, profile}}, socket) do
+    profile = ProfessionalProfileForm.from_profile(profile)
+
     {:noreply,
      assign(socket,
        loading: false,
@@ -44,29 +48,58 @@ defmodule OrigenWeb.ProfessionalProfileLive do
   end
 
   @impl true
-  def handle_event("change_profile", %{"profile" => params}, socket) do
+  def handle_event(_event, _params, %{assigns: %{loading: true}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event(_event, _params, %{assigns: %{load_error: true}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("edit_profile", _params, socket) do
+    {:noreply,
+     assign(socket, editing: true, draft: socket.assigns.profile, saved: false, save_error: false)}
+  end
+
+  def handle_event(event, _params, %{assigns: %{editing: false}} = socket)
+      when event in ["change_profile", "save_profile", "cancel_profile"],
+      do: {:noreply, socket}
+
+  def handle_event("change_profile", %{"profile" => params}, socket) when is_map(params) do
     {:noreply, assign(socket, draft: permitted_fields(params), saved: false, save_error: false)}
   end
 
-  def handle_event("save_profile", %{"profile" => params}, socket) do
-    profile = permitted_fields(params)
+  def handle_event("save_profile", %{"profile" => params}, socket) when is_map(params) do
+    draft = permitted_fields(params)
 
-    if socket.assigns.scenario == "save-error" do
-      {:noreply, assign(socket, draft: profile, save_error: true, saved: false)}
-    else
-      {:noreply,
-       assign(socket,
-         profile: profile,
-         draft: profile,
-         missing: missing_fields(profile),
-         save_error: false,
-         saved: true
-       )}
+    case ProfessionalProfileForm.context().save_own_profile(
+           socket.assigns.current_internal_session,
+           Map.take(params, Enum.map(@fields, &elem(&1, 0)))
+         ) do
+      {:ok, profile} ->
+        profile = ProfessionalProfileForm.from_profile(profile)
+
+        {:noreply,
+         assign(socket,
+           profile: profile,
+           draft: profile,
+           missing: missing_fields(profile),
+           save_error: false,
+           saved: true,
+           editing: false
+         )}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, draft: draft, save_error: true, saved: false)}
     end
   end
 
   def handle_event("cancel_profile", _params, socket) do
-    {:noreply, assign(socket, draft: socket.assigns.profile, saved: false, save_error: false)}
+    {:noreply,
+     assign(socket,
+       draft: socket.assigns.profile,
+       saved: false,
+       save_error: false,
+       editing: false
+     )}
   end
 
   @impl true
@@ -91,43 +124,16 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             </.button>
           </header>
 
-          <.alert id="profile-preview-notice" color="info" variant="callout" with_icon>
-            <strong>Vista previa · Datos simulados.</strong>
-            Los cambios no se guardan de forma permanente. Al salir se pierde lo guardado en esta
-            pantalla. No cambia tu perfil real, el listado de pacientes ni las reservas.
-          </.alert>
-
-          <nav aria-label="Escenarios de muestra" class="flex flex-wrap gap-2">
-            <.button
-              :for={
-                {label, scenario} <- [
-                  {"Sin datos", "empty"},
-                  {"Incompleto", "incomplete"},
-                  {"Completo", "complete"},
-                  {"Error de carga", "load-error"},
-                  {"Error al guardar", "save-error"}
-                ]
-              }
-              size="sm"
-              color="gray"
-              variant="outline"
-              link_type="a"
-              to={"/configuracion/profesional/perfil?scenario=" <> scenario}
-            >
-              {label}
-            </.button>
-          </nav>
-
           <div :if={@loading} id="profile-loading" role="status" aria-live="polite">
             Cargando perfil…
           </div>
 
           <.alert :if={@load_error} id="profile-load-error" color="danger" variant="callout" with_icon>
-            <strong>No se pudo cargar el perfil de muestra.</strong>
+            <strong>No se pudo cargar el perfil.</strong>
             No se muestra información parcial.
             <:actions>
               <.button id="profile-retry" link_type="a" to="/configuracion/profesional/perfil">
-                Cargar muestra inicial
+                Reintentar carga
               </.button>
             </:actions>
           </.alert>
@@ -141,8 +147,8 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             >
               <strong>{if @missing == [], do: "Perfil completo", else: "Perfil incompleto"}</strong>
               <p :if={@missing == []}>
-                Los datos guardados en esta muestra cumplen los cinco requisitos del perfil.
-                En el recorrido real, una cuenta activa podría aparecer en el listado de pacientes.
+                Los datos guardados cumplen los cinco requisitos del perfil.
+                Tu cuenta activa aparece en el listado de pacientes.
                 Esto no garantiza horarios disponibles.
               </p>
               <div :if={@missing != []}>
@@ -155,7 +161,7 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             </.alert>
 
             <.alert :if={@saved} id="profile-save-success" color="success" variant="callout" with_icon>
-              Cambios simulados guardados sólo en esta pantalla. No se guardaron de forma permanente.
+              Cambios guardados.
             </.alert>
 
             <.alert
@@ -165,7 +171,7 @@ defmodule OrigenWeb.ProfessionalProfileLive do
               variant="callout"
               with_icon
             >
-              No se pudo guardar en esta simulación. Conservamos lo que escribiste; el estado del
+              No se pudo guardar el perfil. Conservamos lo que escribiste; el estado del
               perfil sigue reflejando el último guardado exitoso.
             </.alert>
 
@@ -177,7 +183,27 @@ defmodule OrigenWeb.ProfessionalProfileLive do
                 </.text_muted>
               </.card_header>
               <.card_content>
-                <form id="profile-form" phx-change="change_profile" phx-submit="save_profile">
+                <div :if={!@editing} id="profile-details" class="space-y-6">
+                  <dl class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    <div :for={{field, label} <- @fields}>
+                      <dt class="text-sm font-medium text-text">{label}</dt>
+                      <dd id={"profile-read-" <> field} class="mt-1 break-words">
+                        {if @profile[field] in [nil, ""], do: "Pendiente", else: @profile[field]}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div class="flex justify-end">
+                    <.button id="profile-edit" type="button" phx-click="edit_profile">
+                      {if @missing == [], do: "Editar perfil", else: "Completar perfil"}
+                    </.button>
+                  </div>
+                </div>
+                <form
+                  :if={@editing}
+                  id="profile-form"
+                  phx-change="change_profile"
+                  phx-submit="save_profile"
+                >
                   <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div
                       :for={{field, label} <- @fields}
@@ -197,17 +223,6 @@ defmodule OrigenWeb.ProfessionalProfileLive do
                       </.text_small>
                     </div>
                   </div>
-                  <section
-                    id="profile-photo"
-                    class="my-6 space-y-2"
-                    aria-labelledby="profile-photo-heading"
-                  >
-                    <.h3 id="profile-photo-heading" no_margin>Foto · opcional</.h3>
-                    <.text_muted>
-                      No es necesaria para completar el perfil ni para reservar. La carga de fotos
-                      todavía no está disponible: su almacenamiento y exposición están pendientes.
-                    </.text_muted>
-                  </section>
                   <div class="flex flex-wrap justify-end gap-3">
                     <.button
                       id="profile-cancel"
@@ -218,11 +233,22 @@ defmodule OrigenWeb.ProfessionalProfileLive do
                     >
                       Cancelar
                     </.button>
-                    <.button type="submit" phx-disable-with="Guardando muestra…">
+                    <.button type="submit" phx-disable-with="Guardando…">
                       Guardar cambios
                     </.button>
                   </div>
                 </form>
+                <section
+                  id="profile-photo"
+                  class="my-6 space-y-2"
+                  aria-labelledby="profile-photo-heading"
+                >
+                  <.h3 id="profile-photo-heading" no_margin>Foto · opcional</.h3>
+                  <.text_muted>
+                    No es necesaria para completar el perfil ni para reservar. La carga de fotos
+                    todavía no está disponible: su almacenamiento y exposición están pendientes.
+                  </.text_muted>
+                </section>
               </.card_content>
             </.card>
           </div>
@@ -240,14 +266,14 @@ defmodule OrigenWeb.ProfessionalProfileLive do
   end
 
   defp missing_fields(profile),
-    do: ProfessionalProfilePreview.missing_fields(profile)
+    do: ProfessionalProfileForm.missing_fields(profile)
 
   defp field_help(field, value) do
     cond do
       String.trim(value || "") == "" ->
         "Falta este dato para completar el perfil. Podés guardarlo vacío."
 
-      field in ["licence_type", "licence_number"] ->
+      field in ["license_type", "license_number"] ->
         "Texto libre. No se verifica la credencial ni se usa un catálogo."
 
       true ->
