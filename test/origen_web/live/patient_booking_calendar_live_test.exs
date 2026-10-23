@@ -142,7 +142,9 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       refute render(view) =~ "No pudimos cargar la disponibilidad"
       html = render_change(view, "change_prof", %{"prof_id" => "PRO-DEMO-002"})
       assert has_element?(view, "option[value='PRO-DEMO-002'][selected]")
-      assert html =~ "09:00"
+      # The second mock Professional has no catalog: never invent an offer.
+      assert html =~ "No se pudieron cargar los tipos de consulta"
+      refute has_element?(view, "button[phx-click='select_slot']")
     end
 
     test "renders view, slots, unverified warning and navigates dates", %{conn: conn} do

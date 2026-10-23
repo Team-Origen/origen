@@ -2,8 +2,8 @@ import Config
 
 config :origen,
   consultation_catalog_demo_enabled: false,
-  consultation_type_catalog_adapter: nil,
-  appointments_calendar_adapter: nil
+  consultation_type_catalog_adapter: Origen.ConsultationTypes.DatabaseCatalog,
+  appointments_calendar_adapter: Origen.Appointments.DatabaseCalendar
 
 # Note we also include the path to a cache manifest
 # containing the digested version of static files. This
