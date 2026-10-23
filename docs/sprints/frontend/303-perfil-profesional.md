@@ -1,5 +1,7 @@
 # #303: vista previa del perfil profesional
 
+> Registro histórico de la preparación simulada de #303. La [integración #304](../integration/304-perfil-profesional.md) reemplaza la muestra por carga y guardado reales, habilita la ruta en todos los entornos y conserva el orden de Ajustes. Las instrucciones y limitaciones de simulación siguientes describen el corte original, no el comportamiento integrado vigente.
+
 La pantalla prepara el frontend de [#303](https://github.com/Team-Origen/origen/issues/303) desde el [contrato aprobado de #301](../contracts/301-perfil-profesional.md). Usa datos ficticios y guardado sólo en memoria de la LiveView: **no guarda perfiles reales ni modifica reservas**. No completa #278 ni acredita la integración de #304.
 
 ## Recorrido local

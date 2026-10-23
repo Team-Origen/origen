@@ -1,5 +1,7 @@
 # #302: perfil profesional persistido
 
+> Registro del backend entregado en #302. La conexión real del editor y la verificación del recorrido se documentan en [integración #304](../integration/304-perfil-profesional.md); las referencias al formulario simulado siguientes describen el alcance original de #302.
+
 Backend del [contrato #301](../contracts/301-perfil-profesional.md): persistencia y permisos del perfil propio, listado elegible y protección exclusiva de la reserva autónoma del Paciente. La carga, almacenamiento y exposición de fotos se posponen; su ausencia no impide completar el perfil.
 
 ## Operaciones privadas
