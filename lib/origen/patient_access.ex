@@ -80,6 +80,22 @@ defmodule Origen.PatientAccess do
   def request_magic_link(_invalid, _opts), do: {:ok, :delivered}
 
   @doc """
+  Invalidates all pending unconsumed magic links for the given email.
+  """
+  @spec invalidate_pending_links(String.t(), keyword()) :: {integer(), nil}
+  def invalidate_pending_links(email, opts \\ [])
+
+  def invalidate_pending_links(email, opts) when is_binary(email) do
+    clean_email = email |> String.trim() |> String.downcase()
+    now = Keyword.get(opts, :now, DateTime.utc_now())
+
+    from(m in MagicLink, where: m.email == ^clean_email and is_nil(m.consumed_at))
+    |> Repo.update_all(set: [consumed_at: now])
+  end
+
+  def invalidate_pending_links(_invalid, _opts), do: {0, nil}
+
+  @doc """
   Consumes a magic link token.
   Validates that:
   def consume_magic_link(raw_token, opts \\ [])
