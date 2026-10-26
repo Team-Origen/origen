@@ -130,6 +130,8 @@ Esta tabla sirve como índice. El estado y el alcance actualizado de cada ticket
 | [#284](https://github.com/Team-Origen/origen/issues/284) | Resolver solicitudes con aprobación manual |
 | [#290](https://github.com/Team-Origen/origen/issues/290) | Definir artefacto de aceptación de entrega beta |
 
+Contrato aprobado de #317: [alta y reserva desde Profesional (#283)](sprint-3/contrato-283-alta-y-reserva-profesional.md). Said (`Saidqr`) aprobó el contrato documental en `a64b930` y autorizó `status:approved`, ya presente en la issue; véase el [registro de acuerdo](https://github.com/Team-Origen/origen/issues/317#issuecomment-6425202986). No implica aprobación de #318/#319/#320 ni verificación funcional o cierre de #283. La coordinación técnica con #282 sigue siendo una decisión de implementación futura, según la sección 6 del contrato.
+
 Definir el artefacto de aceptación en #290 no equivale a producir todo el manual ni a ejecutar la aceptación final.
 
 #### Tablero operativo de la beta
