@@ -1,6 +1,6 @@
 # Contrato: alta y reserva desde Profesional
 
-**Borrador para acuerdo explícito — #317, hija de #283.** El Profesional busca por
+**Contrato aprobado por Saidqr — #317, hija de #283.** El Profesional busca por
 DNI exacto dentro de «Crear turno» y, si no existe, completa el alta junto con la
 reserva en su propia agenda. Sólo el éxito conjunto persiste identidad, turno
 confirmado y relación Profesional–Paciente. Este documento no implementa el flujo.
@@ -24,8 +24,12 @@ confirmado y relación Profesional–Paciente. Este documento no implementa el f
 | [Límites](../../../openspec/changes/health-center-beta-core/specs/beta-boundaries/spec.md) | `Complete beta scope is not priority-gated`; `Excluded capability set` |
 | [Guía beta](../GUIA_TRABAJO_BETA.md) | `Fuente de verdad y alcance`, `Responsabilidad por ticket`, `Regla de Integración y verificación` |
 
-La beta aprobada manda sobre comentarios o pruebas históricas. El acuerdo de este
-contrato sigue pendiente: redactarlo no demuestra aprobación ni cierre de #317.
+La beta aprobada manda sobre comentarios o pruebas históricas. Said (`Saidqr`)
+aprobó explícitamente el contrato de #317 en `a64b930`, según el
+[registro de acuerdo](https://github.com/Team-Origen/origen/issues/317#issuecomment-6425202986),
+y autorizó la etiqueta `status:approved`, ya presente en la issue. La aprobación
+abarca este contrato documental, no la aprobación de #318/#319/#320 ni la
+verificación funcional o el cierre de #283.
 No se incorporan acceso por magic link, edición de identidad, historia clínica,
 verificación telefónica obligatoria ni permisos de Secretaría para Profesionales.
 
@@ -138,10 +142,11 @@ El cierre informado de #276 no sustituye la revisión del código vigente ni pru
 | Paciente también atendido por otro Profesional | Tras reservar, sólo actividad propia visible; ningún detalle ajeno en resultados o errores. |
 | Doble envío/reintento tras respuesta incierta | No duplicar identidad, relación ni turno; definir recuperación e idempotencia antes de integrar. |
 
-## 6. Responsabilidad, acuerdos pendientes y entrega
+## 6. Responsabilidad, coordinación técnica y entrega
 
 La guía asigna #283 y sus hijas a Said (`Saidqr`), y #282 a Santiago (`SantiCasali`).
-Esto no designa aprobadores nuevos ni presume que el contrato compartido esté acordado.
+La aprobación de #317 por Saidqr queda registrada arriba; no presume acuerdo de
+Santiago sobre las decisiones técnicas compartidas ni designa aprobadores nuevos.
 
 | Unidad | Responsabilidad y condición de salida |
 | --- | --- |
@@ -149,17 +154,16 @@ Esto no designa aprobadores nuevos ni presume que el contrato compartido esté a
 | [#319 Interfaz](https://github.com/Team-Origen/origen/issues/319) | Alta dentro de «Crear turno», estados de búsqueda/formulario/envío/éxito/error y abandono sin guardar; pruebas contra contrato acordado. Fixtures no equivalen a integración. |
 | [#320 Integración](https://github.com/Team-Origen/origen/issues/320) | Esperar #317/#318/#319 terminadas y aprobadas y todos los blockers de #283, incluida #282; ejecutar flujo real y matriz de escenarios, registrar evidencia y aprobación. |
 
-**Pendientes de acuerdo explícito entre responsables de #283 y #282:**
+**Decisiones futuras de implementación a coordinar entre responsables de #283 y #282:**
 
 - Operaciones públicas y forma de respuestas/errores; datos mínimos visibles del
   paciente encontrado y manejo de identidades históricas sin perfil enlazado.
 - Validaciones/normalización comunes, composición transaccional, eventos de
   auditoría con actor Profesional y recuperación de doble envío/respuesta incierta.
-- Enlace al registro de acuerdo y aprobación de #317: **pendiente**. No hay fecha,
-  aceptación humana ni pruebas ejecutadas que puedan darse por supuestas.
 
-Estos pendientes no vuelven opcionales la atomicidad, unicidad, confirmación directa
-ni privacidad definidas arriba. Si una dependencia contradice esas reglas, consultar
+Esta coordinación técnica no deja pendiente la aprobación documental de #317 ni
+vuelve opcionales la atomicidad, unicidad, confirmación directa y privacidad
+definidas arriba. Si una dependencia contradice esas reglas, consultar
 antes de implementar; no resolver la discrepancia concediendo permisos más amplios.
 
 Entrega propuesta: primera PR independiente de #317 a `develop`; siguientes PRs
