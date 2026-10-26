@@ -31,6 +31,15 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
     prof_id = insert_internal_account("dr.regresion@clinicaorigen.test", "professional")
     {:ok, %{token: prof_token, session: prof_principal}} = Sessions.create_session(prof_id)
 
+    assert {:ok, _} =
+             Origen.ProfessionalProfiles.save_own_profile(prof_principal, %{
+               first_name: "Ana",
+               last_name: "Pérez",
+               specialty: "Medicina General",
+               license_type: "Libre",
+               license_number: "PRO/001"
+             })
+
     insert_agenda_settings(prof_id, 30)
     insert_consultation_type(prof_id, @consultation_type_uuid, "Consulta Integral", "20000.00")
 
@@ -307,6 +316,16 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       # Crear Profesional B con su propio tipo de consulta
       prof_b_id = insert_internal_account("dr.segundo@clinicaorigen.test", "professional")
       {:ok, %{session: prof_b_principal}} = Sessions.create_session(prof_b_id)
+
+      assert {:ok, _} =
+               Origen.ProfessionalProfiles.save_own_profile(prof_b_principal, %{
+                 first_name: "Bruno",
+                 last_name: "Pérez",
+                 specialty: "Medicina General",
+                 license_type: "Libre",
+                 license_number: "PRO/002"
+               })
+
       insert_agenda_settings(prof_b_id, 30)
 
       type_b_uuid = Ecto.UUID.generate()

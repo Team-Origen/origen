@@ -19,6 +19,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.Authorization
   alias Origen.Booking.Overlap
   alias Origen.Booking.ProfessionalPatientRelationship
+  alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
   alias Origen.Repo
@@ -92,6 +93,26 @@ defmodule Origen.Booking do
           {:ok, %{date: Date.t(), professional_account_id: integer(), appointments: [map()]}}
           | {:error, :unauthorized | :invalid_date}
   defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
+
+  @doc """
+  Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
+  """
+  defdelegate accept_request(actor_account_id, appointment_id), to: RequestResolution
+
+  @doc """
+  Rechaza una solicitud de turno pendiente (Issue #284 / #322), liberando el horario. Exclusivo del profesional dueño.
+  """
+  defdelegate reject_request(actor_account_id, appointment_id), to: RequestResolution
+
+  @doc """
+  Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).
+  """
+  defdelegate get_approval_configuration(professional_id), to: RequestResolution
+
+  @doc """
+  Actualiza la modalidad de aprobación y subconfiguración de secretaría del profesional (Issue #284 / #322).
+  """
+  defdelegate update_approval_configuration(professional_id, attrs), to: RequestResolution
 
   @doc """
   Persiste un turno en la base de datos copiando nombre, duración y precio del tipo
@@ -406,12 +427,17 @@ defmodule Origen.Booking do
   end
 
   defp establish_relationship(%Appointment{} = appointment, status, opts) do
+    establish_for_status? =
+      status in @relationship_establishing_statuses or
+        (status == :requested and
+           (opts[:create_relationship?] == true or opts[:actor_role] == :secretary))
+
     cond do
       opts[:fail_at] == :relationship ->
         {:error, :relationship_insertion_failed}
 
-      status not in @relationship_establishing_statuses ->
-        # Un turno nacido en :requested nunca crea relación (§2.4 / V02).
+      not establish_for_status? ->
+        # Un turno nacido en :requested nunca crea relación en flujos autónomos históricos (§2.4 / V02).
         {:ok, %{relationship: nil, created?: false}}
 
       relationship_exists?(appointment.professional_account_id, appointment.patient_profile_id) ->

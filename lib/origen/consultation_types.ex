@@ -2,8 +2,9 @@ defmodule Origen.ConsultationTypes do
   @moduledoc """
   Account-scoped consultation configuration for authenticated Professionals.
 
-  Account ownership is temporary until Professional profiles are persisted. Callers provide the
-  server-created internal session principal; ownership is always resolved again from persistence.
+  Configuration remains owned by the internal account even when a Professional profile exists.
+  Callers provide the server-created internal session principal; ownership is always resolved
+  again from persistence. Profile completeness never blocks preparation of these settings.
   """
 
   alias Origen.Audit.{Events, Writer}

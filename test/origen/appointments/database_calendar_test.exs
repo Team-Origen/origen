@@ -2,7 +2,7 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
   use Origen.DataCase
 
   alias Origen.Appointments.DatabaseCalendar
-  alias Origen.Repo
+  alias Origen.{ProfessionalProfiles, Repo, Sessions}
 
   @fixed_now ~U[2026-09-25 08:00:00Z]
 
@@ -43,14 +43,69 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
   end
 
   describe "list_professionals/0" do
-    test "returns list of active professionals from internal_accounts" do
-      assert {:ok, professionals} = DatabaseCalendar.list_professionals()
-      assert is_list(professionals)
-      assert length(professionals) == 1
+    test "lists only active complete profiles, projecting declared identity without private fields",
+         %{account_id: id} do
+      {:ok, %{session: owner}} = Sessions.create_session(id)
+      assert {:ok, []} = DatabaseCalendar.list_professionals()
 
-      prof = hd(professionals)
-      assert prof.name =~ "prof_db@example.test"
-      assert prof.specialty == "Medicina General"
+      attrs = %{
+        first_name: "Ana",
+        last_name: "Pérez",
+        specialty: "Cardiología",
+        license_type: "Libre",
+        license_number: "AB/001"
+      }
+
+      for field <- Map.keys(attrs) do
+        assert {:ok, _} =
+                 ProfessionalProfiles.save_own_profile(owner, Map.put(attrs, field, " \t "))
+
+        assert {:ok, []} = DatabaseCalendar.list_professionals()
+      end
+
+      assert {:ok, saved} = ProfessionalProfiles.save_own_profile(owner, attrs)
+
+      assert {:ok, [%{id: public_id, name: "Ana Pérez", specialty: "Cardiología"} = public]} =
+               DatabaseCalendar.list_professionals()
+
+      assert public_id == to_string(id)
+      assert Map.keys(public) |> Enum.sort() == [:id, :name, :specialty]
+      assert {:ok, ^saved} = ProfessionalProfiles.get_own_profile(owner)
+
+      Repo.query!(
+        "UPDATE internal_accounts SET state = 'pending_activation', password_hash = NULL, totp_secret = NULL, activated_at = NULL WHERE id = $1",
+        [id]
+      )
+
+      assert {:ok, []} = DatabaseCalendar.list_professionals()
+    end
+
+    test "list eligibility does not require catalog or available slots and does not erase settings",
+         %{account_id: id} do
+      {:ok, %{session: owner}} = Sessions.create_session(id)
+
+      assert {:ok, before} =
+               DatabaseCalendar.get_daily_schedule(id, ~D[2026-09-25], now: @fixed_now)
+
+      assert {:ok, _} =
+               ProfessionalProfiles.save_own_profile(owner, %{
+                 first_name: "Ana",
+                 last_name: "Pérez",
+                 specialty: "Cardiología",
+                 license_type: "Libre",
+                 license_number: "AB/001"
+               })
+
+      assert {:ok, [_]} = DatabaseCalendar.list_professionals()
+
+      assert {:ok, %{slots: []}} =
+               DatabaseCalendar.get_daily_schedule(id, ~D[2026-09-29], now: @fixed_now)
+
+      assert {:ok, _} = ProfessionalProfiles.save_own_profile(owner, %{first_name: nil})
+      assert {:ok, []} = DatabaseCalendar.list_professionals()
+
+      assert {:ok, ^before} =
+               DatabaseCalendar.get_daily_schedule(id, ~D[2026-09-25], now: @fixed_now)
     end
   end
 

@@ -3,6 +3,7 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Origen.Booking.Appointment
   alias Origen.Patients
   alias Origen.Patients.{PatientProfile, Persona}
   alias Origen.Repo
@@ -435,7 +436,42 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
   end
 
   describe "assisted booking entry point" do
-    test "the booking notice is shown until the assisted flow lands in #68" do
+    test "clearing or submitting a search resets the previous patient's booking flow" do
+      {:ok, _} =
+        Patients.complete_profile("reset@example.test", %{
+          first_name: "Ana",
+          last_name: "Torres",
+          document_type: "dni",
+          document_number: "37000111",
+          birthdate: ~D[1990-03-05],
+          phone: "+5491155554444"
+        })
+
+      search = %{"search" => %{"document_type" => "dni", "document_number" => "37000111"}}
+
+      for event <- ["new_search", "validate_search", "search"] do
+        {:ok, view, _html} = live(secretary_conn(), @path)
+        render_submit(view, "search", search)
+        view |> element("#start-assisted-booking") |> render_click()
+        assert has_element?(view, "#assisted-booking-section")
+
+        render_click(view, "confirm_assisted_booking", %{})
+        assert has_element?(view, "#booking-error-message")
+
+        case event do
+          "new_search" -> render_click(view, event, %{})
+          "validate_search" -> render_change(view, event, search)
+          "search" -> render_submit(view, event, search)
+        end
+
+        refute has_element?(view, "#booking-error-message")
+        render_submit(view, "search", search)
+        assert has_element?(view, "#patient-summary-section")
+        refute has_element?(view, "#assisted-booking-section")
+      end
+    end
+
+    test "iniciar reserva asistida abre la sección real sin aviso de próximamente" do
       {:ok, view, _html} = live(secretary_conn(), @path)
 
       view
@@ -462,11 +498,175 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       |> element("#start-assisted-booking", "Iniciar Reserva Asistida")
       |> render_click()
 
-      assert has_element?(
-               view,
-               "#assisted-booking-notice",
-               "La reserva asistida estará disponible próximamente."
-             )
+      assert has_element?(view, "#assisted-booking-section")
+      refute has_element?(view, "#assisted-booking-notice")
+      refute render(view) =~ "próximamente"
+    end
+
+    test "C11: al iniciar reserva asistida muestra la sección con selector de profesionales y fecha" do
+      {:ok, _} =
+        Patients.complete_profile("carlos@example.test", %{
+          first_name: "Carlos",
+          last_name: "López",
+          document_type: "dni",
+          document_number: "35.987.654",
+          birthdate: ~D[1988-07-20],
+          phone: "+5491144332211"
+        })
+
+      {:ok, view, _html} = live(secretary_conn(), @path)
+
+      view
+      |> form("#persona-search-form",
+        search: %{"document_type" => "dni", "document_number" => "35.987.654"}
+      )
+      |> render_submit()
+
+      view
+      |> element("#start-assisted-booking", "Iniciar Reserva Asistida")
+      |> render_click()
+
+      assert has_element?(view, "#assisted-booking-section")
+      assert has_element?(view, "#assisted-booking-heading", "Reserva asistida de turno")
+      assert has_element?(view, "#booking-professional-select")
+      assert has_element?(view, "#booking-consultation-type-select")
+      assert has_element?(view, "#booking-date-input")
+      assert has_element?(view, "#prof-approval-mode-badge")
+      assert has_element?(view, "#confirm-assisted-booking")
+      assert has_element?(view, "#cancel-assisted-booking")
+    end
+
+    test "C12: permite seleccionar horario disponible y confirmar la reserva asistida" do
+      previous_adapter = Application.get_env(:origen, :appointments_calendar_adapter)
+
+      on_exit(fn ->
+        Application.put_env(:origen, :appointments_calendar_adapter, previous_adapter)
+      end)
+
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        Origen.Appointments.DatabaseCalendar
+      )
+
+      {:ok, %{profile: profile}} =
+        Patients.complete_profile("carlos2@example.test", %{
+          first_name: "Carlos",
+          last_name: "López",
+          document_type: "dni",
+          document_number: "35.987.654",
+          birthdate: ~D[1988-07-20],
+          phone: "+5491144332211"
+        })
+
+      prof_id = insert_active_internal_account!(:professional).id
+      insert_complete_professional_profile!(prof_id)
+      insert_weekly_agenda_settings!(prof_id, 30)
+
+      type_uuid = "018f4a5b-0d62-7a44-8e32-2f608bfcb312"
+
+      Repo.query!(
+        """
+        INSERT INTO consultation_types (id, owner_account_id, name, exact_price_ars, color, interval_count, status)
+        VALUES ($1, $2, 'Consulta de prueba', 18000.00, '#0A3847', 1, 'active')
+        """,
+        [Ecto.UUID.dump!(type_uuid), prof_id]
+      )
+
+      {:ok, view, _html} = live(secretary_conn(), @path)
+
+      view
+      |> form("#persona-search-form",
+        search: %{"document_type" => "dni", "document_number" => "35.987.654"}
+      )
+      |> render_submit()
+
+      view
+      |> element("#start-assisted-booking", "Iniciar Reserva Asistida")
+      |> render_click()
+
+      assert has_element?(view, "#assisted-booking-section")
+
+      # Fecha futura garantiza disponibilidad a cualquier hora de ejecución.
+      future_date = Date.add(next_weekday(Date.utc_today()), 7)
+
+      render_change(view, "update_booking_selection", %{"date" => Date.to_iso8601(future_date)})
+
+      assert has_element?(view, "#booking-slots-grid button")
+
+      view
+      |> element("#booking-slots-grid button:first-child")
+      |> render_click()
+
+      view
+      |> element("#confirm-assisted-booking")
+      |> render_click()
+
+      assert has_element?(view, "#booking-success-message")
+
+      appointment =
+        Repo.get_by!(Appointment,
+          patient_profile_id: profile.id,
+          professional_account_id: prof_id
+        )
+
+      assert appointment.status == "confirmed"
+    end
+
+    test "un profesional sin tipos de consulta no muestra tipos inventados y mantiene el botón deshabilitado" do
+      previous_adapter = Application.get_env(:origen, :appointments_calendar_adapter)
+
+      on_exit(fn ->
+        Application.put_env(:origen, :appointments_calendar_adapter, previous_adapter)
+      end)
+
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        Origen.Appointments.DatabaseCalendar
+      )
+
+      {:ok, _} =
+        Patients.complete_profile("carlos3@example.test", %{
+          first_name: "Carlos",
+          last_name: "López",
+          document_type: "dni",
+          document_number: "35.987.654",
+          birthdate: ~D[1988-07-20],
+          phone: "+5491144332211"
+        })
+
+      prof_id = insert_active_internal_account!(:professional).id
+      insert_complete_professional_profile!(prof_id)
+      insert_weekly_agenda_settings!(prof_id, 30)
+
+      {:ok, view, _html} = live(secretary_conn(), @path)
+
+      view
+      |> form("#persona-search-form",
+        search: %{"document_type" => "dni", "document_number" => "35.987.654"}
+      )
+      |> render_submit()
+
+      view
+      |> element("#start-assisted-booking", "Iniciar Reserva Asistida")
+      |> render_click()
+
+      assert has_element?(view, "#assisted-booking-section")
+      refute has_element?(view, "#booking-consultation-type-select option")
+      refute render(view) =~ "Consulta General"
+      assert has_element?(view, "#confirm-assisted-booking[disabled]")
+    end
+  end
+
+  describe "defensive guards" do
+    test "confirmar reserva sin búsqueda previa no rompe la vista y muestra el error" do
+      {:ok, view, _html} = live(secretary_conn(), @path)
+
+      html = render_click(view, "confirm_assisted_booking", %{})
+
+      assert has_element?(view, "#booking-error-message")
+      assert html =~ "Por favor seleccioná todos los campos y un horario disponible."
     end
   end
 
@@ -489,5 +689,44 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       )
 
     %{id: account_id, role: role, state: :active}
+  end
+
+  defp insert_complete_professional_profile!(prof_id) do
+    Repo.query!(
+      """
+      INSERT INTO professional_profiles
+        (owner_account_id, first_name, last_name, specialty, license_type, license_number)
+      VALUES ($1, 'Sofía', 'Martínez', 'Medicina General', 'Nacional', 'MN-12345')
+      """,
+      [prof_id]
+    )
+
+    :ok
+  end
+
+  defp insert_weekly_agenda_settings!(prof_id, interval_minutes) do
+    week =
+      Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), fn day ->
+        {day, [%{"start" => "08:00", "end" => "18:00"}]}
+      end)
+
+    Repo.query!(
+      """
+      INSERT INTO agenda_settings
+        (owner_account_id, interval_minutes, weekly_availability, booking_horizon_days, minimum_lead_minutes)
+      VALUES ($1, $2, $3, 30, 0)
+      """,
+      [prof_id, interval_minutes, week]
+    )
+
+    :ok
+  end
+
+  defp next_weekday(date) do
+    case Date.day_of_week(date) do
+      6 -> Date.add(date, 2)
+      7 -> Date.add(date, 1)
+      _ -> date
+    end
   end
 end

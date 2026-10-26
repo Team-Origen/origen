@@ -10,6 +10,8 @@ defmodule Origen.Booking.AuthorizationTest do
 
   use ExUnit.Case, async: false
 
+  alias Ecto.Adapters.SQL
+  alias Ecto.Adapters.SQL.Sandbox
   alias Origen.Booking
   alias Origen.Booking.Authorization
   alias Origen.Booking.ReservationRequest
@@ -18,7 +20,7 @@ defmodule Origen.Booking.AuthorizationTest do
   @consultation_type_id "e5b8c9d0-1234-4567-89ab-cdef01234567"
 
   setup do
-    :ok = Ecto.Adapters.SQL.Sandbox.checkout(Repo)
+    :ok = Sandbox.checkout(Repo)
 
     professional_id = insert_internal_account("dr.smith@example.com", "professional", "active")
     secretary_id = insert_internal_account("secretary@example.com", "secretary", "active")
@@ -134,7 +136,8 @@ defmodule Origen.Booking.AuthorizationTest do
       assert {:ok, _authorization} = Authorization.authorize_reservation(params)
     end
 
-    test "rechaza sin declaración de horario acordado con el paciente", ctx do
+    test "autoriza con patient_agreed_schedule false (requisito histórico retirado conforme a #309)",
+         ctx do
       params = %{
         actor: %{role: :secretary, id: ctx.secretary_id},
         patient_id: ctx.patient_profile_id,
@@ -142,17 +145,20 @@ defmodule Origen.Booking.AuthorizationTest do
         patient_agreed_schedule: false
       }
 
-      assert {:error, :acuerdo_horario_requerido} = Authorization.authorize_reservation(params)
+      assert {:ok, authorization} = Authorization.authorize_reservation(params)
+      assert authorization.actor.role == :secretary
     end
 
-    test "rechaza con patient_agreed_schedule ausente", ctx do
+    test "autoriza con patient_agreed_schedule ausente (requisito histórico retirado conforme a #309)",
+         ctx do
       params = %{
         actor: %{role: :secretary, id: ctx.secretary_id},
         patient_id: ctx.patient_profile_id,
         professional_id: ctx.professional_id
       }
 
-      assert {:error, :acuerdo_horario_requerido} = Authorization.authorize_reservation(params)
+      assert {:ok, authorization} = Authorization.authorize_reservation(params)
+      assert authorization.actor.role == :secretary
     end
 
     test "rechaza si la cuenta de secretaría no existe", ctx do
@@ -371,13 +377,13 @@ defmodule Origen.Booking.AuthorizationTest do
     RETURNING id
     """
 
-    {:ok, %{rows: [[account_id]]}} = Ecto.Adapters.SQL.query(Repo, query, [email, role, state])
+    {:ok, %{rows: [[account_id]]}} = SQL.query(Repo, query, [email, role, state])
     account_id
   end
 
   defp insert_agenda_settings(owner_account_id) do
     {:ok, _} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.agenda_settings (owner_account_id, interval_minutes, created_at, updated_at)
@@ -391,7 +397,7 @@ defmodule Origen.Booking.AuthorizationTest do
 
   defp insert_consultation_type(owner_account_id) do
     {:ok, _} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.consultation_types (
@@ -410,7 +416,7 @@ defmodule Origen.Booking.AuthorizationTest do
     unique = System.unique_integer([:positive])
 
     {:ok, %{rows: [[persona_id]]}} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.personas (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
@@ -421,7 +427,7 @@ defmodule Origen.Booking.AuthorizationTest do
       )
 
     {:ok, %{rows: [[profile_id]]}} =
-      Ecto.Adapters.SQL.query(
+      SQL.query(
         Repo,
         """
         INSERT INTO public.patient_profiles (persona_id, email, state, phone, phone_verified, created_at, updated_at)

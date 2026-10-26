@@ -46,6 +46,17 @@ defmodule Origen.Integration.PrototypeJourneyTest do
     prof_b_id = insert_internal_account("dr.benitez.test@clinicaorigen.test", "professional")
     {:ok, %{token: prof_b_token, session: prof_b_principal}} = Sessions.create_session(prof_b_id)
 
+    for principal <- [prof_a_principal, prof_b_principal] do
+      assert {:ok, _} =
+               Origen.ProfessionalProfiles.save_own_profile(principal, %{
+                 first_name: "Ana",
+                 last_name: "Pérez",
+                 specialty: "Medicina General",
+                 license_type: "Libre",
+                 license_number: "PRO/001"
+               })
+    end
+
     %{
       prof_a_id: prof_a_id,
       prof_a_token: prof_a_token,
