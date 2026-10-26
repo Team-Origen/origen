@@ -1,0 +1,25 @@
+# Issue #315 — stacked frontend demo delivery
+Branch root: `cd26f1c`; strategy: `stacked-to-main`, verified default `develop`.
+Checks: focused ExUnit per slice, full suite at closure, formatting and diff checks; no automatic merge.
+
+## Specs
+
+- S1: «has la opcion 2, remplaza el el ejemplo del mock del dni y has lo PRs»
+- S2: «si» — explicit answer authorizing `status:approved` on #315.
+
+## Tasks
+
+- T1 [S1,S2] inline — done — synthetic demo port, 3 direct contract tests passed; commit: this work unit, hash recorded by T2.
+- T2 [S1] inline — in_progress — patient-only route and selection UI, LiveView tests and documentation; commit: pending.
+- T3 [S1] inline — pending — reusable visual progress/consultation/schedule/summary components with render tests; commit: pending.
+- T4 [S1] inline — pending — wire the four-step demo, regression tests and final delivery evidence; commit: pending.
+
+## Log
+
+- L1: «has la opcion 2, remplaza el el ejemplo del mock del dni y has lo PRs»
+- L2: «si» — authorization to add `status:approved` to #315; applied after confirming admin/maintain permissions.
+- L3: Target github.com/Team-Origen/origen; default branch verified as develop. Nonclosing `Refs #315`; parent #282 and backend #314 remain outside delivery closure.
+- L4: User-supplied identity replaced by Lucía Ejemplo / synthetic DNI 99000123 before any commit. Focused suite: 29 passed, exit 0, seed 470464. Prior full suite: 788 passed, 29 skipped, 8 excluded. User approved visual behavior in Tidewave; agent-driven browser proof was unavailable.
+- L5: One bounded slicing pass: four cohesive units, forecast about 1,650 authored lines including dedicated slice tests and this evidence. The 400-line review budget is advisory; no repository size gate was found in CI. Preserve full source and tests rather than shrinking formatting. No size-exception label requested or applied.
+- L7: T1 checked with 3 passing contract tests (exit 0, seed 708644), formatting and diff checks passed. RDD off. These are additional regression checks during delivery slicing, not invented new RED/GREEN.
+- L6: Preserve final approved uncommitted sources in `.git/local-backups/issue-315-stacked-delivery/` before reconstructing each incremental commit in the existing worktree. Existing stashes remain untouched. RDD was off at prior checks; check again before delivery.
