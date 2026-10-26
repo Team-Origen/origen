@@ -130,6 +130,8 @@ Esta tabla sirve como índice. El estado y el alcance actualizado de cada ticket
 | [#284](https://github.com/Team-Origen/origen/issues/284) | Resolver solicitudes con aprobación manual |
 | [#290](https://github.com/Team-Origen/origen/issues/290) | Definir artefacto de aceptación de entrega beta |
 
+Contrato para revisión de #317: [alta y reserva desde Profesional (#283)](sprint-3/contrato-283-alta-y-reserva-profesional.md). El acuerdo y la aprobación siguen pendientes.
+
 Definir el artefacto de aceptación en #290 no equivale a producir todo el manual ni a ejecutar la aceptación final.
 
 #### Tablero operativo de la beta
