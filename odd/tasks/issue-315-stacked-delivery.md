@@ -10,7 +10,7 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 ## Tasks
 
 - T1 [S1,S2] inline — done — synthetic demo port, 3 direct contract tests passed; commit: `0f6c9b9`.
-- T2 [S1] inline — done — patient-only route/UI, 27 focused checks passed with demo-port tests; commit: `afcb904`.
+- T2 [S1] inline — done — patient-only route/UI, 27 focused checks passed with demo-port tests; commit: `3ab8c1c`.
 - T3 [S1] inline — in_progress — reusable visual progress/consultation/schedule/summary components with render tests; commit: pending.
 - T4 [S1] inline — pending — wire the four-step demo, regression tests and final delivery evidence; commit: pending.
 
