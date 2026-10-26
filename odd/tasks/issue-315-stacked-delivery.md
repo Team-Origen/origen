@@ -9,9 +9,9 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 
 ## Tasks
 
-- T1 [S1,S2] inline — done — synthetic demo port, 3 direct contract tests passed; commit: this work unit, hash recorded by T2.
-- T2 [S1] inline — in_progress — patient-only route and selection UI, LiveView tests and documentation; commit: pending.
-- T3 [S1] inline — pending — reusable visual progress/consultation/schedule/summary components with render tests; commit: pending.
+- T1 [S1,S2] inline — done — synthetic demo port, 3 direct contract tests passed; commit: `0f6c9b9`.
+- T2 [S1] inline — done — patient-only route/UI, 27 focused checks passed with demo-port tests; commit: `afcb904`.
+- T3 [S1] inline — in_progress — reusable visual progress/consultation/schedule/summary components with render tests; commit: pending.
 - T4 [S1] inline — pending — wire the four-step demo, regression tests and final delivery evidence; commit: pending.
 
 ## Log
@@ -23,3 +23,6 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 - L5: One bounded slicing pass: four cohesive units, forecast about 1,650 authored lines including dedicated slice tests and this evidence. The 400-line review budget is advisory; no repository size gate was found in CI. Preserve full source and tests rather than shrinking formatting. No size-exception label requested or applied.
 - L7: T1 checked with 3 passing contract tests (exit 0, seed 708644), formatting and diff checks passed. RDD off. These are additional regression checks during delivery slicing, not invented new RED/GREEN.
 - L6: Preserve final approved uncommitted sources in `.git/local-backups/issue-315-stacked-delivery/` before reconstructing each incremental commit in the existing worktree. Existing stashes remain untouched. RDD was off at prior checks; check again before delivery.
+- L8: T2 reconstruction initially failed on a Python delimiter before writing the LiveView (two attempts); an intervening 20-test baseline run is not T2 evidence. Diagnosed the formatted multiline marker, reconstructed successfully, then observed 27 passing focused tests, exit 0, seed 627383.
+- L9: User invoked the handoff skill before the T2 commit. Corrected a prematurely advanced task status: T2 is tested but uncommitted, T3 has not started. Pause delivery and resume T2 from the current diff; preserve all backup files. No branches have been pushed and no #315 PRs have been created.
+- L10: Resumed T2. Its focused suite passed again: 27 passed, exit 0, seed 561749; `mix format --check-formatted` and `git diff --check` passed.

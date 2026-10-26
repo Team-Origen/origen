@@ -37,6 +37,184 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     }
   end
 
+  defmodule PatientSelectorDouble do
+    def execute({:related, _session}) do
+      {:ok, [patient("related", "Mario", "35111222")]}
+    end
+
+    def execute({:search, _session, "35333444"}),
+      do: {:ok, patient("exact", "Luigi", "35333444")}
+
+    def execute({:search, _session, "123"}), do: {:error, :invalid_document}
+    def execute({:search, _session, _dni}), do: {:ok, nil}
+
+    defp patient(id, name, dni) do
+      %{
+        id: id,
+        first_name: name,
+        last_name: "Bros",
+        document_number: dni,
+        phone: "private-phone",
+        email: "private-email",
+        other_professional: "private-activity"
+      }
+    end
+  end
+
+  describe "patient selection preparation (#315)" do
+    setup do
+      previous = Application.get_env(:origen, :professional_patient_selector)
+      Application.put_env(:origen, :professional_patient_selector, PatientSelectorDouble)
+
+      on_exit(fn ->
+        if previous do
+          Application.put_env(:origen, :professional_patient_selector, previous)
+        else
+          Application.delete_env(:origen, :professional_patient_selector)
+        end
+      end)
+
+      :ok
+    end
+
+    test "agenda links to a separate patient-only view and cancel returns", %{
+      conn: conn,
+      prof_token: token
+    } do
+      conn = put_internal_session(conn, token)
+      {:ok, agenda, _} = live(conn, ~p"/profesional/agenda")
+
+      assert has_element?(
+               agenda,
+               "#create-professional-appointment[href='/profesional/agenda/crear']"
+             )
+
+      {:ok, view, html} = live(conn, ~p"/profesional/agenda/crear")
+      assert html =~ "Seleccioná al paciente"
+      assert has_element?(view, "#cancel-patient-selection[href='/profesional/agenda']")
+      refute has_element?(view, "#approval-config-panel")
+      refute has_element?(view, "[phx-click='confirm_booking']")
+      assert has_element?(view, "#patient-selection-next[disabled]")
+    end
+
+    test "related selection only renders minimum identity and can be abandoned", %{
+      conn: conn,
+      prof_token: token
+    } do
+      {:ok, view, html} = live(put_internal_session(conn, token), ~p"/profesional/agenda/crear")
+      assert html =~ "Mario"
+      assert html =~ "35111222"
+
+      for private <- ["private-phone", "private-email", "private-activity"],
+          do: refute(html =~ private)
+
+      view |> element("#patient-related") |> render_click()
+      assert has_element?(view, "#selected-patient", "Mario")
+      view |> element("#clear-patient-selection") |> render_click()
+      refute has_element?(view, "#selected-patient")
+      assert has_element?(view, "#patient-selection-next[disabled]")
+    end
+
+    test "exact DNI supports invalid, missing, found and tab reset states", %{
+      conn: conn,
+      prof_token: token
+    } do
+      {:ok, view, _} = live(put_internal_session(conn, token), ~p"/profesional/agenda/crear")
+      view |> element("#tab-dni") |> render_click()
+      assert has_element?(view, "#tab-dni[aria-selected='true']")
+      html = view |> form("#patient-dni-form", %{dni: "123"}) |> render_submit()
+      assert html =~ "Revisá el DNI ingresado"
+      html = view |> form("#patient-dni-form", %{dni: "99999999"}) |> render_submit()
+      assert html =~ "No se encontró un paciente registrado"
+      html = view |> form("#patient-dni-form", %{dni: "35.333.444"}) |> render_submit()
+      assert html =~ "Luigi"
+      refute html =~ "private-email"
+      view |> element("#patient-exact") |> render_click()
+      assert has_element?(view, "#selected-patient", "Luigi")
+      view |> element("#tab-related") |> render_click()
+      refute has_element?(view, "#selected-patient")
+      refute has_element?(view, "#patient-exact")
+      html = render_click(view, "select_patient", %{"id" => "forged"})
+      assert html =~ "La selección no es válida"
+      refute has_element?(view, "#selected-patient")
+    end
+
+    test "unavailable backend is explicit and never fabricates patients", %{
+      conn: conn,
+      prof_token: token
+    } do
+      Application.delete_env(:origen, :professional_patient_selector)
+      {:ok, view, html} = live(put_internal_session(conn, token), ~p"/profesional/agenda/crear")
+      assert html =~ "La selección de pacientes todavía no está disponible"
+      refute has_element?(view, "[phx-click='select_patient']")
+      assert has_element?(view, "#patient-selection-next[disabled]")
+    end
+
+    test "patient view retains professional-only access", %{conn: conn, sec_token: token} do
+      assert get(conn, ~p"/profesional/agenda/crear").status == 401
+      assert get(put_internal_session(conn, token), ~p"/profesional/agenda/crear").status == 403
+    end
+  end
+
+  describe "development visual mock (#315)" do
+    setup do
+      old_adapter = Application.get_env(:origen, :professional_patient_selector)
+      old_dev = Application.get_env(:origen, :dev_routes)
+
+      Application.put_env(
+        :origen,
+        :professional_patient_selector,
+        OrigenWeb.ProfessionalPatientSelectorDemo
+      )
+
+      Application.put_env(:origen, :dev_routes, true)
+
+      on_exit(fn ->
+        for {key, value} <- [professional_patient_selector: old_adapter, dev_routes: old_dev] do
+          if is_nil(value),
+            do: Application.delete_env(:origen, key),
+            else: Application.put_env(:origen, key, value)
+        end
+      end)
+
+      :ok
+    end
+
+    test "shows two fictional related patients and exact search", %{
+      conn: conn,
+      prof_token: token
+    } do
+      {:ok, view, html} = live(put_internal_session(conn, token), ~p"/profesional/agenda/crear")
+      assert has_element?(view, "#patient-demo-notice", "Datos ficticios")
+      assert html =~ "Ana"
+      assert html =~ "Martín"
+      assert has_element?(view, "#patient-demo-ana")
+      assert has_element?(view, "#patient-demo-martin")
+      view |> element("#patient-demo-ana") |> render_click()
+      assert has_element?(view, "#selected-patient", "Ana")
+      assert has_element?(view, "#patient-selection-next[disabled]")
+      view |> element("#tab-dni") |> render_click()
+      html = view |> form("#patient-dni-form", %{dni: "30.111.222"}) |> render_submit()
+      assert html =~ "Ana"
+      refute html =~ "Martín"
+      html = view |> form("#patient-dni-form", %{dni: "30111"}) |> render_submit()
+      assert html =~ "Revisá el DNI"
+      html = view |> form("#patient-dni-form", %{dni: "99999999"}) |> render_submit()
+      assert html =~ "No se encontró un paciente registrado"
+    end
+
+    test "demo is unavailable without development routes enabled", %{
+      conn: conn,
+      prof_token: token
+    } do
+      Application.put_env(:origen, :dev_routes, false)
+      {:ok, view, html} = live(put_internal_session(conn, token), ~p"/profesional/agenda/crear")
+      assert html =~ "La selección de pacientes todavía no está disponible"
+      refute has_element?(view, "#patient-demo-ana")
+      refute has_element?(view, "#patient-demo-notice")
+    end
+  end
+
   describe "autenticación y autorización (Issue #80)" do
     test "usuario no autenticado es rechazado con 401", %{conn: conn} do
       conn = get(conn, ~p"/profesional/agenda")
