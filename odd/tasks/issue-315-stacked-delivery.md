@@ -11,8 +11,8 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 
 - T1 [S1,S2] inline — done — synthetic demo port, 3 direct contract tests passed; commit: `0f6c9b9`.
 - T2 [S1] inline — done — patient-only route/UI, 27 focused checks passed with demo-port tests; commit: `3ab8c1c`.
-- T3 [S1] inline — in_progress — reusable visual progress/consultation/schedule/summary components with render tests; commit: pending.
-- T4 [S1] inline — pending — wire the four-step demo, regression tests and final delivery evidence; commit: pending.
+- T3 [S1] inline — done — reusable visual progress/consultation/schedule/summary components with render tests; commit: pending.
+- T4 [S1] inline — in_progress — wire the four-step demo, regression tests and final delivery evidence; commit: pending.
 
 ## Log
 
@@ -26,3 +26,4 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 - L8: T2 reconstruction initially failed on a Python delimiter before writing the LiveView (two attempts); an intervening 20-test baseline run is not T2 evidence. Diagnosed the formatted multiline marker, reconstructed successfully, then observed 27 passing focused tests, exit 0, seed 627383.
 - L9: User invoked the handoff skill before the T2 commit. Corrected a prematurely advanced task status: T2 is tested but uncommitted, T3 has not started. Pause delivery and resume T2 from the current diff; preserve all backup files. No branches have been pushed and no #315 PRs have been created.
 - L10: Resumed T2. Its focused suite passed again: 27 passed, exit 0, seed 561749; `mix format --check-formatted` and `git diff --check` passed.
+- L11: T3 component tests passed: 3 passed, exit 0, seed 308438; `mix format --check-formatted` and `git diff --check` passed.
