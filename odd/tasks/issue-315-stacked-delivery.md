@@ -12,7 +12,7 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 - T1 [S1,S2] inline — done — synthetic demo port, 3 direct contract tests passed; commit: `0f6c9b9`.
 - T2 [S1] inline — done — patient-only route/UI, 27 focused checks passed with demo-port tests; commit: `3ab8c1c`.
 - T3 [S1] inline — done — reusable visual progress/consultation/schedule/summary components with render tests; commit: `94658b8`.
-- T4 [S1] inline — in_progress — wire the four-step demo, regression tests and final delivery evidence; commit: pending.
+- T4 [S1] inline — done — wired four-step demo, regression tests and final delivery evidence; commit: pending.
 
 ## Log
 
@@ -27,3 +27,4 @@ Checks: focused ExUnit per slice, full suite at closure, formatting and diff che
 - L9: User invoked the handoff skill before the T2 commit. Corrected a prematurely advanced task status: T2 is tested but uncommitted, T3 has not started. Pause delivery and resume T2 from the current diff; preserve all backup files. No branches have been pushed and no #315 PRs have been created.
 - L10: Resumed T2. Its focused suite passed again: 27 passed, exit 0, seed 561749; `mix format --check-formatted` and `git diff --check` passed.
 - L11: T3 component tests passed: 3 passed, exit 0, seed 308438; `mix format --check-formatted` and `git diff --check` passed.
+- L12: T4 focused cross-slice suite passed: 35 passed, exit 0, seed 541622; `mix format --check-formatted` and `git diff --check` passed.

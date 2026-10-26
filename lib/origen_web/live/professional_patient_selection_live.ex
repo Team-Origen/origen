@@ -1,6 +1,7 @@
 defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   @moduledoc """
-  Patient selection preparation for #315. No booking or relationship writes.
+  Visual booking preparation for #315. No booking or relationship writes.
+  Further steps and confirmation are development-only simulations.
 
   `:professional_patient_selector` is a server-configured contract boundary for
   #314. It accepts `{:related, session}` and `{:search, session, exact_document}`,
@@ -12,6 +13,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   use OrigenWeb, :live_view
 
   alias Origen.Patients.Persona
+  alias OrigenWeb.ProfessionalBookingDemoSteps
 
   @impl true
   def mount(_params, _session, socket) do
@@ -19,6 +21,14 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
       assign(socket,
         page_title: "Crear turno · Paciente",
         demo: demo?(),
+        step: 1,
+        consultations: [],
+        consultation: nil,
+        booking_date: Date.to_iso8601(Date.utc_today()),
+        slots: [],
+        slot: nil,
+        result: nil,
+        journey_error: nil,
         tab: "related",
         patients: [],
         selected: nil,
@@ -31,21 +41,23 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   end
 
   @impl true
-  def handle_event("change_patient_tab", %{"tab" => tab}, socket)
+  def handle_event("change_patient_tab", %{"tab" => tab}, %{assigns: %{step: 1}} = socket)
       when tab in ["related", "dni"] do
     socket =
       socket
+      |> reset_booking()
       |> assign(tab: tab, selected: nil, patients: [], searched: false, dni: "", error: nil)
 
     {:noreply, if(tab == "related", do: load_related(socket), else: socket)}
   end
 
-  def handle_event("search_patient", %{"dni" => dni}, %{assigns: %{tab: "dni"}} = socket)
+  def handle_event("search_patient", %{"dni" => dni}, %{assigns: %{tab: "dni", step: 1}} = socket)
       when is_binary(dni) do
     document = Persona.normalize_number(dni)
 
     socket =
       socket
+      |> reset_booking()
       |> assign(selected: nil, patients: [], searched: true, dni: dni, error: nil)
 
     result =
@@ -65,18 +77,163 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
     end
   end
 
-  def handle_event("select_patient", %{"id" => id}, socket)
+  def handle_event("select_patient", %{"id" => id}, %{assigns: %{step: 1}} = socket)
       when is_binary(id) do
+    socket = reset_booking(socket)
+
     case Enum.find(socket.assigns.patients, &(to_string(&1.id) == id)) do
       nil -> {:noreply, assign(socket, selected: nil, error: "La selección no es válida.")}
       patient -> {:noreply, assign(socket, selected: patient, error: nil)}
     end
   end
 
-  def handle_event("clear_patient_selection", _params, socket),
-    do: {:noreply, assign(socket, selected: nil, error: nil)}
+  def handle_event("clear_patient_selection", _params, %{assigns: %{step: 1}} = socket),
+    do: {:noreply, socket |> reset_booking() |> assign(selected: nil, error: nil)}
+
+  def handle_event(
+        "next_booking_step",
+        _params,
+        %{assigns: %{demo: true, step: 1, selected: patient}} = socket
+      )
+      when not is_nil(patient) do
+    case demo_execute(socket, {:consultations, socket.assigns.current_internal_session}) do
+      {:ok, consultations} ->
+        {:noreply, assign(socket, step: 2, consultations: consultations, journey_error: nil)}
+
+      _ ->
+        {:noreply, assign(socket, journey_error: "La demostración no está disponible.")}
+    end
+  end
+
+  def handle_event(
+        "next_booking_step",
+        _params,
+        %{assigns: %{demo: true, step: 2, consultation: consultation}} = socket
+      )
+      when not is_nil(consultation) do
+    if demo?(),
+      do: {:noreply, socket |> assign(step: 3) |> load_slots()},
+      else: {:noreply, socket}
+  end
+
+  def handle_event(
+        "next_booking_step",
+        _params,
+        %{assigns: %{demo: true, step: 3, slot: slot}} = socket
+      )
+      when not is_nil(slot) do
+    if demo?(),
+      do: {:noreply, assign(socket, step: 4, journey_error: nil)},
+      else: {:noreply, socket}
+  end
+
+  def handle_event("go_booking_step", %{"step" => target}, %{assigns: %{result: nil}} = socket)
+      when target in ["1", "2", "3"] do
+    step = String.to_integer(target)
+
+    if step < socket.assigns.step do
+      {:noreply, assign(socket, step: step, journey_error: nil)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("select_consultation", %{"id" => id}, %{assigns: %{step: 2}} = socket) do
+    case Enum.find(socket.assigns.consultations, &(&1.id == id)) do
+      nil ->
+        {:noreply, assign(socket, journey_error: "La consulta seleccionada no es válida.")}
+
+      consultation ->
+        {:noreply,
+         assign(socket, consultation: consultation, slots: [], slot: nil, journey_error: nil)}
+    end
+  end
+
+  def handle_event("change_booking_date", %{"date" => date}, %{assigns: %{step: 3}} = socket) do
+    {:noreply, socket |> assign(booking_date: date, slot: nil, slots: []) |> load_slots()}
+  end
+
+  def handle_event("select_booking_slot", %{"id" => id}, %{assigns: %{step: 3}} = socket) do
+    case Enum.find(socket.assigns.slots, &(&1.id == id)) do
+      nil -> {:noreply, assign(socket, journey_error: "El horario seleccionado no es válido.")}
+      slot -> {:noreply, assign(socket, slot: slot, journey_error: nil)}
+    end
+  end
+
+  def handle_event(
+        "simulate_booking",
+        _params,
+        %{assigns: %{demo: true, step: 4, result: nil}} = socket
+      ) do
+    with %{id: patient_id} <- socket.assigns.selected,
+         %{id: consultation_id} <- socket.assigns.consultation,
+         %{id: slot_id} <- socket.assigns.slot,
+         {:ok, date} <- Date.from_iso8601(socket.assigns.booking_date),
+         {:ok, %{simulated: true} = result} <-
+           demo_execute(
+             socket,
+             {:simulate_confirmation, socket.assigns.current_internal_session,
+              %{
+                patient_id: patient_id,
+                consultation_id: consultation_id,
+                slot_id: slot_id,
+                date: date
+              }}
+           ) do
+      {:noreply, assign(socket, result: result, journey_error: nil)}
+    else
+      _ ->
+        {:noreply,
+         assign(socket, journey_error: "No se pudo completar la simulación. Revisá la selección.")}
+    end
+  end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp reset_booking(socket) do
+    assign(socket,
+      consultations: [],
+      consultation: nil,
+      slots: [],
+      slot: nil,
+      result: nil,
+      journey_error: nil
+    )
+  end
+
+  defp load_slots(socket) do
+    with {:ok, date} <- Date.from_iso8601(socket.assigns.booking_date),
+         true <- Date.compare(date, Date.utc_today()) != :lt,
+         {:ok, slots} <-
+           demo_execute(
+             socket,
+             {:slots, socket.assigns.current_internal_session, socket.assigns.consultation.id,
+              date}
+           ) do
+      assign(socket, slots: slots, journey_error: nil)
+    else
+      {:error, :invalid_format} ->
+        assign(socket, slots: [], slot: nil, journey_error: "Revisá la fecha ingresada.")
+
+      false ->
+        assign(socket,
+          slots: [],
+          slot: nil,
+          journey_error: "Revisá la fecha: elegí hoy o un día posterior."
+        )
+
+      _ ->
+        assign(socket,
+          slots: [],
+          slot: nil,
+          journey_error: "No se pudieron consultar los horarios de demostración."
+        )
+    end
+  end
+
+  defp demo_execute(socket, request) do
+    if socket.assigns.demo and demo?(), do: execute(socket, request), else: {:error, :unavailable}
+  end
 
   defp load_related(socket) do
     case execute(socket, {:related, socket.assigns.current_internal_session}) do
@@ -145,7 +302,18 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
           </.link>
         </header>
 
+        <ProfessionalBookingDemoSteps.progress step={@step} result={@result} />
+
+        <p
+          :if={@journey_error}
+          role="alert"
+          class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          {@journey_error}
+        </p>
+
         <section
+          :if={@step == 1}
           aria-labelledby="patient-step-title"
           class="rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8"
         >
@@ -276,17 +444,40 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
 
           <footer class="mt-6 flex flex-col items-end border-t border-stone-200 pt-4">
             <p id="patient-only-notice" class="w-full text-sm text-stone-500">
-              Por ahora sólo está preparado el paso de selección de paciente. No se creará ningún turno.
+              <span :if={@demo}>Podés recorrer los siguientes pasos con datos ficticios. No se creará ningún turno.</span>
+              <span :if={not @demo}>El resto del recorrido todavía requiere conectar el servicio real. No se creará ningún turno.</span>
             </p>
             <button
               id="patient-selection-next"
               type="button"
-              disabled
+              phx-click="next_booking_step"
+              disabled={is_nil(@selected) or not @demo}
               aria-describedby="patient-only-notice"
               class="mt-3 rounded-lg bg-[#0A3847] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
             >Continuar</button>
           </footer>
         </section>
+        <ProfessionalBookingDemoSteps.consultation
+          :if={@step == 2}
+          patient={@selected}
+          consultations={@consultations}
+          selected={@consultation}
+        />
+        <ProfessionalBookingDemoSteps.schedule
+          :if={@step == 3}
+          consultation={@consultation}
+          date={@booking_date}
+          slots={@slots}
+          selected={@slot}
+        />
+        <ProfessionalBookingDemoSteps.confirmation
+          :if={@step == 4}
+          patient={@selected}
+          consultation={@consultation}
+          date={@booking_date}
+          slot={@slot}
+          result={@result}
+        />
       </div>
     </main>
     """
