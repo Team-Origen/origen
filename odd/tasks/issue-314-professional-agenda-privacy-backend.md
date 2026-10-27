@@ -20,9 +20,9 @@ Scope: backend slice of parent #282 under the approved contract #313; UI #315 an
 - [x] **T1** — S1, S2, S4, S6, S7: add session-bound related-patient listing and exact-DNI registered-patient lookup with minimal projection; test RED/GREEN. Route: parent inline. Commit: `4ce150c` (`feat(booking): add private professional patient selector`).
 - [x] **T2** — S1, S2, S3, S5, S7, S8: add professional-own-agenda booking orchestration over the shared engine, always `confirmed`, with atomic relationship behavior and occupied-slot/privacy tests. Route: parent inline. Commit: `147f15a` (`feat(booking): add professional own-agenda booking`).
 - [x] **T3** — S2, S4, S9: align the shared `requested` relationship rule with beta without duplicating #284, and update touched-channel regressions. Route: parent inline; high-risk shared contract requires independent verification. Commit: `c794dcf`; RED 11/12, GREEN 67/67.
-- [ ] **T4** — S1, S3, S5, S7, S8: implement session-bound own catalog, real availability and confirmation-time slot validation. Route: parent inline. Commit: pending.
-- [ ] **T5** — S2, S3, S7, S8, S9: complete contract regressions and independently verify authorization/privacy. Route: parent plus `gentle-ai-verify`. Commit: pending.
-- [ ] **T6** — S10: record final evidence and limitations without claiming UI/integration completion. Route: parent inline. Commit: pending.
+- [x] **T4** — S1, S3, S5, S7, S8: implement session-bound own catalog, real availability and confirmation-time slot validation. Route: parent inline. Commit: `a8a9171`; transactional confirmation and independent-connection competition verified.
+- [x] **T5** — S2, S3, S7, S8, S9: complete contract regressions and independently verify authorization/privacy. Route: parent plus `gentle-ai-verify`. Commit: `a8a9171`; final full suite 813 passed, 30 skipped, 8 excluded; dedicated race suite 13 passed; independent follow-up 43 and 75 passed.
+- [x] **T6** — S10: record final evidence and limitations without claiming UI/integration completion. Route: parent inline. Commit: final evidence documentation commit (this revision); behavior/evidence in `a8a9171`. No push, PR, issue closure or integrated UI verification.
 
 ## Log
 
