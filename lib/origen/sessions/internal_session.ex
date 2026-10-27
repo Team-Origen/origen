@@ -20,6 +20,8 @@ defmodule Origen.Sessions.InternalSession do
     timestamps(inserted_at: :created_at, type: :utc_datetime_usec)
   end
 
+  @type t :: %__MODULE__{}
+
   @doc false
   def changeset(session, attrs) do
     session
