@@ -39,6 +39,67 @@ defmodule Origen.Booking.ProfessionalBookingTest do
     }
   end
 
+  test "own catalog and availability exclude persisted occupied slots", ctx do
+    assert {:ok, [type]} = Booking.list_professional_consultation_types(ctx.professional)
+    assert type.id == ctx.consultation_type_id
+
+    insert_appointment!(
+      ctx.professional.account_id,
+      ctx.other_patient,
+      ctx.consultation_type_id,
+      ~U[2026-10-15 10:00:00Z]
+    )
+
+    assert {:ok, schedule} =
+             Booking.get_professional_booking_schedule(
+               ctx.professional,
+               ctx.consultation_type_id,
+               ~D[2026-10-15],
+               now: @fixed_now
+             )
+
+    refute Enum.any?(schedule.slots, &(&1.start_time == ~T[10:00:00]))
+    assert Enum.any?(schedule.slots, &(&1.start_time == ~T[11:00:00]))
+  end
+
+  test "rejects a start outside configured availability without changes", ctx do
+    before_counts = state_counts()
+
+    params =
+      booking_params(ctx.related_patient, ctx.consultation_type_id, ~U[2026-10-15 08:00:00Z])
+
+    assert {:error, :slot_unavailable} =
+             Booking.reserve_professional_appointment(
+               ctx.professional,
+               params,
+               now: @fixed_now
+             )
+
+    assert state_counts() == before_counts
+  end
+
+  test "schedule blocks no_show consistently with shared overlap validation", ctx do
+    id =
+      insert_appointment!(
+        ctx.professional.account_id,
+        ctx.other_patient,
+        ctx.consultation_type_id,
+        ~U[2026-10-15 10:00:00Z]
+      )
+
+    Repo.query!("UPDATE appointments SET status = 'no_show' WHERE id = $1", [id])
+
+    assert {:ok, schedule} =
+             Booking.get_professional_booking_schedule(
+               ctx.professional,
+               ctx.consultation_type_id,
+               ~D[2026-10-15],
+               now: @fixed_now
+             )
+
+    refute Enum.any?(schedule.slots, &(&1.start_time == ~T[10:00:00]))
+  end
+
   describe "reserve_professional_appointment/3" do
     test "books a related patient in confirmed state and reuses the existing relationship", ctx do
       params =
@@ -231,6 +292,113 @@ defmodule Origen.Booking.ProfessionalBookingTest do
     end
   end
 
+  # Run with PROFESSIONAL_BOOKING_RACE=1 in a dedicated MIX_TEST_PARTITION.
+  # Committed append-only audit fixtures must not contaminate other suites.
+  @tag skip: System.get_env("PROFESSIONAL_BOOKING_RACE") != "1"
+  test "concurrent professional confirmations have one winner and no partial loser", _ctx do
+    alias Ecto.Adapters.SQL.Sandbox
+    parent = self()
+
+    fixture =
+      Sandbox.unboxed_run(Repo, fn ->
+        principal = professional_principal!()
+        type = insert_consultation_type!(principal.account_id)
+        insert_agenda_settings!(principal.account_id, "manual")
+        suffix = System.unique_integer([:positive]) |> Integer.to_string()
+
+        patients =
+          for n <- 1..2 do
+            insert_patient!("Race", "Patient", "RACE" <> suffix <> Integer.to_string(n))
+          end
+
+        {principal, type, patients}
+      end)
+
+    {principal, type, patients} = fixture
+
+    try do
+      tasks =
+        for patient <- patients do
+          Task.async(fn ->
+            Sandbox.unboxed_run(Repo, fn ->
+              send(parent, {:ready, self()})
+
+              receive do
+                :go -> :ok
+              after
+                5000 -> raise "race barrier timeout"
+              end
+
+              # Existing relationship is established in the isolated fixture below.
+              Booking.reserve_professional_appointment(
+                principal,
+                booking_params(patient, type, ~U[2026-10-15 11:00:00Z]),
+                now: @fixed_now
+              )
+            end)
+          end)
+        end
+
+      Sandbox.unboxed_run(Repo, fn ->
+        Enum.with_index(patients)
+        |> Enum.each(fn {patient, index} ->
+          appointment =
+            insert_appointment!(
+              principal.account_id,
+              patient,
+              type,
+              DateTime.add(~U[2026-10-14 09:00:00Z], index, :hour)
+            )
+
+          insert_relationship!(principal.account_id, patient, appointment)
+        end)
+      end)
+
+      for _ <- patients do
+        assert_receive {:ready, pid}, 5000
+        send(pid, :go)
+      end
+
+      results = Enum.map(tasks, &Task.await(&1, 10000))
+      assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+      assert Enum.count(results, &(&1 == {:error, :slot_already_booked})) == 1
+
+      Sandbox.unboxed_run(Repo, fn ->
+        assert scalar!(
+                 "SELECT count(*) FROM appointments WHERE professional_account_id = #{principal.account_id}"
+               ) == 3
+
+        assert scalar!(
+                 "SELECT count(*) FROM professional_patient_relationships WHERE professional_account_id = #{principal.account_id}"
+               ) == 2
+
+        assert scalar!(
+                 "SELECT count(*) FROM audit_events WHERE actor_kind = 'professional' AND actor_ref = 'internal_account:#{principal.account_id}'"
+               ) == 1
+      end)
+    after
+      Sandbox.unboxed_run(Repo, fn ->
+        Repo.query!(
+          "DELETE FROM professional_patient_relationships WHERE professional_account_id = $1",
+          [principal.account_id]
+        )
+
+        Repo.query!("DELETE FROM appointments WHERE professional_account_id = $1", [
+          principal.account_id
+        ])
+
+        Repo.query!("DELETE FROM consultation_types WHERE owner_account_id = $1", [
+          principal.account_id
+        ])
+
+        # Audit is append-only; retain its synthetic actor account for referential traceability.
+        for patient <- patients do
+          Repo.query!("DELETE FROM patient_profiles WHERE id = $1", [patient])
+        end
+      end)
+    end
+  end
+
   defp booking_params(patient_id, consultation_type_id, start_time) do
     %{
       patient_id: patient_id,
@@ -305,8 +473,8 @@ defmodule Origen.Booking.ProfessionalBookingTest do
     Repo.query!(
       """
       INSERT INTO agenda_settings
-        (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode)
-      VALUES ($1, 30, $2, 'requested')
+        (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode, weekly_availability)
+      VALUES ($1, 30, $2, 'requested', '{"thursday":[{"start":"09:00","end":"19:00"}]}')
       """,
       [professional_id, approval_mode]
     )

@@ -134,6 +134,16 @@ defmodule Origen.Booking do
     to: ProfessionalBooking,
     as: :reserve
 
+  @doc "Lista el catálogo activo del Profesional de la sesión vigente."
+  defdelegate list_professional_consultation_types(principal),
+    to: ProfessionalBooking,
+    as: :list_consultation_types
+
+  @doc "Consulta disponibilidad real de la agenda propia para un tipo de consulta."
+  defdelegate get_professional_booking_schedule(principal, type_id, date, opts \\ []),
+    to: ProfessionalBooking,
+    as: :get_schedule
+
   @doc """
   Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
   """
