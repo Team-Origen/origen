@@ -28,7 +28,7 @@ defmodule Origen.Booking do
 
   @initial_statuses [:requested, :reserved, :confirmed]
 
-  @relationship_establishing_statuses [:reserved, :confirmed]
+  @relationship_establishing_statuses [:requested, :reserved, :confirmed]
 
   @audit_event_insert """
   INSERT INTO public.audit_events
@@ -467,17 +467,13 @@ defmodule Origen.Booking do
   end
 
   defp establish_relationship(%Appointment{} = appointment, status, opts) do
-    establish_for_status? =
-      status in @relationship_establishing_statuses or
-        (status == :requested and
-           (opts[:create_relationship?] == true or opts[:actor_role] == :secretary))
+    establish_for_status? = status in @relationship_establishing_statuses
 
     cond do
       opts[:fail_at] == :relationship ->
         {:error, :relationship_insertion_failed}
 
       not establish_for_status? ->
-        # Un turno nacido en :requested nunca crea relación en flujos autónomos históricos (§2.4 / V02).
         {:ok, %{relationship: nil, created?: false}}
 
       relationship_exists?(appointment.professional_account_id, appointment.patient_profile_id) ->

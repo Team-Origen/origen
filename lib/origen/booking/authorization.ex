@@ -12,13 +12,15 @@ defmodule Origen.Booking.Authorization do
     perfiles incompletos o completos (RF-02); el requisito histórico de declaración de
     horario acordado con el paciente (`patient_agreed_schedule`) fue retirado (#309 / #310).
   - **Profesional**: identidad propia (`actor.id == professional_id`), cuenta interna
-    activa con rol `professional` y paciente dentro de su lista permitida (RF-05).
+    activa con rol `professional` y paciente relacionado o identificado mediante
+    su DNI exacto normalizado (contrato #313).
 
   La lista permitida del profesional (RF-05) se resuelve primero contra la tabla
   durable `professional_patient_relationships` (Issue #66) y, como fallback de
   compatibilidad, contra turnos previos válidos en estados que establecen
   relación (`reserved`, `confirmed`, `attended`, `no_show`). Se excluyen
-  `requested` (nunca crea relación, §2.4) y `cancelled` (reserva deshecha).
+  `requested` del fallback histórico sin relación durable y `cancelled`.
+  Las nuevas solicitudes `requested` sí crean la relación durable conforme beta.
   """
 
   import Ecto.Query, only: [from: 2]
