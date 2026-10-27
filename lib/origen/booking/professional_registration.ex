@@ -14,7 +14,7 @@ defmodule Origen.Booking.ProfessionalRegistration do
 
   @doc false
   def transaction(principal, attrs) do
-    Multi.new()
+    %Multi{names: MapSet.new([], & &1)}
     |> Multi.run(:owner, fn _repo, _changes -> owner(principal) end)
     |> Multi.run(:input, fn _repo, _changes -> input(attrs) end)
     |> Multi.run(:snapshot, fn repo, %{owner: owner, input: input} ->
