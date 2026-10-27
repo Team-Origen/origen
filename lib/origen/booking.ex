@@ -19,6 +19,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.Authorization
   alias Origen.Booking.Overlap
   alias Origen.Booking.ProfessionalPatientRelationship
+  alias Origen.Booking.ProfessionalPatientSelection
   alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
@@ -93,6 +94,31 @@ defmodule Origen.Booking do
           {:ok, %{date: Date.t(), professional_account_id: integer(), appointments: [map()]}}
           | {:error, :unauthorized | :invalid_date}
   defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
+
+  @doc """
+  Lista los pacientes relacionados con el Profesional autenticado usando la
+  proyección mínima permitida para crear turnos (Issue #314).
+  """
+  @spec list_professional_patients(map() | Origen.Sessions.InternalSession.t()) ::
+          {:ok, [ProfessionalPatientSelection.patient_projection()]}
+          | {:error, :unauthorized}
+  defdelegate list_professional_patients(principal),
+    to: ProfessionalPatientSelection,
+    as: :list_related
+
+  @doc """
+  Busca un paciente registrado por DNI exacto dentro del recorrido privado de
+  creación de turnos del Profesional (Issue #314). No crea relaciones ni turnos.
+  """
+  @spec find_professional_patient_by_dni(
+          map() | Origen.Sessions.InternalSession.t(),
+          term()
+        ) ::
+          {:ok, ProfessionalPatientSelection.patient_projection() | nil}
+          | {:error, :unauthorized | :invalid_dni}
+  defdelegate find_professional_patient_by_dni(principal, document_number),
+    to: ProfessionalPatientSelection,
+    as: :find_by_exact_dni
 
   @doc """
   Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
