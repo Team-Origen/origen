@@ -18,6 +18,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.Appointment
   alias Origen.Booking.Authorization
   alias Origen.Booking.Overlap
+  alias Origen.Booking.ProfessionalBooking
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Booking.ProfessionalPatientSelection
   alias Origen.Booking.RequestResolution
@@ -119,6 +120,19 @@ defmodule Origen.Booking do
   defdelegate find_professional_patient_by_dni(principal, document_number),
     to: ProfessionalPatientSelection,
     as: :find_by_exact_dni
+
+  @doc """
+  Reserva un turno confirmado en la agenda del Profesional autenticado usando
+  el motor transaccional compartido (Issue #314).
+  """
+  @spec reserve_professional_appointment(
+          map() | Origen.Sessions.InternalSession.t(),
+          map(),
+          keyword()
+        ) :: {:ok, ReservationResponse.t()} | {:error, term()}
+  defdelegate reserve_professional_appointment(principal, params, opts \\ []),
+    to: ProfessionalBooking,
+    as: :reserve
 
   @doc """
   Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
