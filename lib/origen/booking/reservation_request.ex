@@ -23,6 +23,7 @@ defmodule Origen.Booking.ReservationRequest do
           professional_id: pos_integer(),
           consultation_type_id: Ecto.UUID.t(),
           start_time: DateTime.t(),
+          patient_document_number: String.t() | nil,
           patient_agreed_schedule: boolean()
         }
 
@@ -32,6 +33,7 @@ defmodule Origen.Booking.ReservationRequest do
     field :professional_id, :integer
     field :consultation_type_id, Ecto.UUID
     field :start_time, :utc_datetime
+    field :patient_document_number, :string
     field :patient_agreed_schedule, :boolean, default: false
 
     embeds_one :actor, Actor, primary_key: false do
@@ -72,6 +74,7 @@ defmodule Origen.Booking.ReservationRequest do
       :professional_id,
       :consultation_type_id,
       :start_time,
+      :patient_document_number,
       :patient_agreed_schedule
     ])
     |> validate_required([

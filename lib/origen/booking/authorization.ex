@@ -26,7 +26,7 @@ defmodule Origen.Booking.Authorization do
   alias Origen.Booking.Appointment
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Booking.ReservationRequest
-  alias Origen.Patients.PatientProfile
+  alias Origen.Patients.{PatientProfile, Persona}
   alias Origen.Repo
 
   @actor_roles [:patient, :secretary, :professional]
@@ -66,7 +66,8 @@ defmodule Origen.Booking.Authorization do
       %{role: actor.role, id: actor.id},
       request.patient_id,
       request.professional_id,
-      request.patient_agreed_schedule == true
+      request.patient_agreed_schedule == true,
+      request.patient_document_number
     )
   end
 
@@ -75,13 +76,23 @@ defmodule Origen.Booking.Authorization do
          {:ok, patient_id} <- fetch_positive_integer(params, :patient_id),
          {:ok, professional_id} <- fetch_positive_integer(params, :professional_id) do
       agreed? = params[:patient_agreed_schedule] || params["patient_agreed_schedule"]
-      authorize(actor, patient_id, professional_id, agreed? == true)
+
+      document_number =
+        params[:patient_document_number] || params["patient_document_number"]
+
+      authorize(actor, patient_id, professional_id, agreed? == true, document_number)
     end
   end
 
   def authorize_reservation(_invalid_payload), do: {:error, :unauthorized}
 
-  defp authorize(%{role: :patient, id: actor_id} = actor, patient_id, professional_id, _agreed?) do
+  defp authorize(
+         %{role: :patient, id: actor_id} = actor,
+         patient_id,
+         professional_id,
+         _agreed?,
+         _document_number
+       ) do
     with :ok <- ensure_patient_identity(actor_id, patient_id),
          {:ok, profile} <- fetch_patient_profile(patient_id),
          :ok <- ensure_completed_profile(profile),
@@ -91,7 +102,13 @@ defmodule Origen.Booking.Authorization do
     end
   end
 
-  defp authorize(%{role: :secretary, id: actor_id} = actor, patient_id, professional_id, agreed?) do
+  defp authorize(
+         %{role: :secretary, id: actor_id} = actor,
+         patient_id,
+         professional_id,
+         agreed?,
+         _document_number
+       ) do
     with {:ok, _secretary} <-
            fetch_internal_account(actor_id, "secretary", :invalid_secretary_account),
          {:ok, profile} <- fetch_patient_profile(patient_id),
@@ -105,17 +122,19 @@ defmodule Origen.Booking.Authorization do
          %{role: :professional, id: actor_id} = actor,
          patient_id,
          professional_id,
-         _agreed?
+         _agreed?,
+         document_number
        ) do
     with :ok <- ensure_professional_identity(actor_id, professional_id),
          {:ok, professional} <- fetch_professional_account(professional_id),
          {:ok, profile} <- fetch_patient_profile(patient_id),
-         :ok <- ensure_patient_permitted(patient_id, professional_id) do
+         :ok <- ensure_completed_profile(profile),
+         :ok <- ensure_patient_permitted(patient_id, professional_id, document_number) do
       {:ok, %{actor: actor, patient_profile: profile, professional_account: professional}}
     end
   end
 
-  defp authorize(_unknown_actor, _patient_id, _professional_id, _agreed?),
+  defp authorize(_unknown_actor, _patient_id, _professional_id, _agreed?, _document_number),
     do: {:error, :unauthorized}
 
   # Identidad y reglas por actor
@@ -143,12 +162,39 @@ defmodule Origen.Booking.Authorization do
   # Beta requirement (#309 / #310): retiro de exigencia histórica de acuerdo de horario para secretaría asistida.
   defp ensure_schedule_agreement(_agreement), do: :ok
 
-  defp ensure_patient_permitted(patient_id, professional_id) do
+  defp ensure_patient_permitted(patient_id, professional_id, document_number) do
     if permitted_by_relationship_table?(patient_id, professional_id) or
-         permitted_by_prior_appointments?(patient_id, professional_id) do
+         permitted_by_prior_appointments?(patient_id, professional_id) or
+         permitted_by_exact_dni?(patient_id, document_number) do
       :ok
     else
       {:error, :paciente_no_permitido}
+    end
+  end
+
+  defp permitted_by_exact_dni?(_patient_id, document_number)
+       when not is_binary(document_number),
+       do: false
+
+  defp permitted_by_exact_dni?(patient_id, document_number) do
+    normalized = Persona.normalize_number(document_number)
+
+    if Regex.match?(~r/^\d{7,8}$/, normalized) do
+      query =
+        from(profile in PatientProfile,
+          join: persona in Persona,
+          on: persona.id == profile.persona_id,
+          where: profile.id == ^patient_id,
+          where: profile.state == "completed",
+          where: persona.document_type == "dni",
+          where: persona.document_number == ^normalized,
+          select: 1,
+          limit: 1
+        )
+
+      Repo.one(query) == 1
+    else
+      false
     end
   end
 

@@ -17,8 +17,8 @@ Scope: backend slice of parent #282 under the approved contract #313; UI #315 an
 
 ## Tasks
 
-- [ ] **T1** — S1, S2, S4, S6, S7: add session-bound related-patient listing and exact-DNI registered-patient lookup with minimal projection; test RED/GREEN. Route: parent inline. Commit: pending explicit authorization.
-- [ ] **T2** — S1, S2, S3, S5, S7, S8: add professional-own-agenda booking orchestration over the shared engine, always `confirmed`, with atomic relationship behavior and occupied-slot/privacy tests. Route: parent inline. Commit: pending explicit authorization.
+- [x] **T1** — S1, S2, S4, S6, S7: add session-bound related-patient listing and exact-DNI registered-patient lookup with minimal projection; test RED/GREEN. Route: parent inline. Commit: `4ce150c` (`feat(booking): add private professional patient selector`).
+- [ ] **T2** — S1, S2, S3, S5, S7, S8: add professional-own-agenda booking orchestration over the shared engine, always `confirmed`, with atomic relationship behavior and occupied-slot/privacy tests. Route: parent inline. Commit: pending.
 - [ ] **T3** — S2, S4, S9: align the shared `requested` relationship rule with beta without duplicating #284, and update touched-channel regressions. Route: parent inline; high-risk shared contract requires independent verification. Commit: pending explicit authorization.
 - [ ] **T4** — S3, S8, S10: run focused and full regression checks, independently verify high-risk authorization/privacy behavior, and record sanitized evidence without claiming UI/integration completion. Route: parent plus `gentle-ai-verify`. Commit: pending explicit authorization.
 
