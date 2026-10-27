@@ -7,6 +7,51 @@
 
 ---
 
+## Actualización beta (#314)
+
+La especificación aprobada `health-center-beta-core` y el contrato
+`docs/sprints/contracts/313-agenda-profesional-privacidad.md` prevalecen sobre
+las reglas históricas de esta matriz. En particular:
+
+- Completar una solicitud `requested`, además de un turno `reserved` o
+  `confirmed`, crea o reutiliza la relación dentro de la misma transacción.
+  Buscar, seleccionar o abandonar no la crea.
+- El canal Profesional permite seleccionar relacionados o un paciente registrado
+  por DNI exacto, sin navegación global ni actividad de otros Profesionales.
+- `Booking.reserve_professional_appointment/3` deriva el dueño desde la sesión
+  revalidada y siempre crea `confirmed`, independientemente de D-1 o aprobación.
+  Recibe `patient_id`, `consultation_type_id`, `start_time` y, para seleccionar
+  por DNI sin relación previa, `patient_document_number`.
+- `Booking.list_professional_patients/1` y
+  `Booking.find_professional_patient_by_dni/2` devuelven sólo identificador,
+  nombre, apellido y DNI; no crean turnos ni relaciones.
+
+### Confirmación profesional atómica (#314)
+
+`Booking.get_professional_booking_schedule/4` consulta la agenda propia con
+ocupación persistida; `Booking.list_professional_consultation_types/1` limita
+el catálogo al dueño de la sesión. La confirmación revalida sesión, catálogo y
+horario dentro de una transacción que mantiene bloqueada la configuración de
+agenda hasta guardar turno, relación y auditoría. Los cambios de configuración
+no pueden intercalarse entre esa validación y el guardado. La exclusión de
+PostgreSQL sigue siendo la garantía final ante reservas de otros canales.
+No se agrega un segundo paso de confirmación al recorrido del usuario.
+
+La prueba de competencia usa conexiones independientes y auditoría sintética
+persistente; ejecutarla separada de las suites que cuentan auditoría global:
+
+```sh
+PROFESSIONAL_BOOKING_RACE=1 MIX_TEST_PARTITION=31496 mix test test/origen/booking/professional_booking_test.exs
+```
+
+Usar una partición dedicada y nueva para cada ejecución de competencia.
+La suite habitual omite únicamente ese caso; no se presenta como ejecutado
+si no se lanzó el comando específico. Las pruebas usan datos ficticios.
+
+Las tablas siguientes conservan el contexto histórico de PLN-08; sus estados
+por D-1, restricciones de selección previa y expectativas de relación para
+`requested` no constituyen requisitos beta vigentes.
+
 ## 1. Propósito y Alcance
 
 Este documento constituye el **artefacto durable de especificación** para el motor unificado y transaccional de reservas compartidas entre los tres actores del sistema: **Paciente autónomo**, **Secretaría asistida** y **Profesional**.
