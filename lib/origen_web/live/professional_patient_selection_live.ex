@@ -1,14 +1,11 @@
 defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   @moduledoc """
-  Visual booking preparation for #315. No booking or relationship writes.
-  Further steps and confirmation are development-only simulations.
+  Professional booking journey with real session-bound Booking operations (#316).
 
-  `:professional_patient_selector` is a server-configured contract boundary for
-  #314. It accepts `{:related, session}` and `{:search, session, exact_document}`,
-  returning `{:ok, patients}`, `{:ok, patient | nil}` or `{:error, reason}`.
-  Development config enables a clearly labeled visual demo; no real backend
-  adapter is enabled by default. Authorization and exact-match validation remain
-  the responsibility of the eventual backend adapter.
+  Selection is kept server-side and confirmation ignores all client parameters.
+  The default adapter delegates to Booking for authorization and atomic writes.
+  The explicitly configured development demo remains a simulation, never a
+  fallback for a failed real operation.
   """
   use OrigenWeb, :live_view
 
@@ -21,6 +18,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
       assign(socket,
         page_title: "Crear turno · Paciente",
         demo: demo?(),
+        real_booking: real_booking?(),
         step: 1,
         consultations: [],
         consultation: nil,
@@ -93,25 +91,26 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   def handle_event(
         "next_booking_step",
         _params,
-        %{assigns: %{demo: true, step: 1, selected: patient}} = socket
+        %{assigns: %{step: 1, selected: patient}} = socket
       )
       when not is_nil(patient) do
-    case demo_execute(socket, {:consultations, socket.assigns.current_internal_session}) do
+    case journey_execute(socket, {:consultations, socket.assigns.current_internal_session}) do
       {:ok, consultations} ->
         {:noreply, assign(socket, step: 2, consultations: consultations, journey_error: nil)}
 
       _ ->
-        {:noreply, assign(socket, journey_error: "La demostración no está disponible.")}
+        {:noreply,
+         assign(socket, journey_error: "No se pudieron consultar los tipos de consulta.")}
     end
   end
 
   def handle_event(
         "next_booking_step",
         _params,
-        %{assigns: %{demo: true, step: 2, consultation: consultation}} = socket
+        %{assigns: %{step: 2, consultation: consultation}} = socket
       )
       when not is_nil(consultation) do
-    if demo?(),
+    if journey_enabled?(socket),
       do: {:noreply, socket |> assign(step: 3) |> load_slots()},
       else: {:noreply, socket}
   end
@@ -119,10 +118,10 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   def handle_event(
         "next_booking_step",
         _params,
-        %{assigns: %{demo: true, step: 3, slot: slot}} = socket
+        %{assigns: %{step: 3, slot: slot}} = socket
       )
       when not is_nil(slot) do
-    if demo?(),
+    if journey_enabled?(socket),
       do: {:noreply, assign(socket, step: 4, journey_error: nil)},
       else: {:noreply, socket}
   end
@@ -132,7 +131,8 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
     step = String.to_integer(target)
 
     if step < socket.assigns.step do
-      {:noreply, assign(socket, step: step, journey_error: nil)}
+      socket = assign(socket, step: step, journey_error: nil)
+      {:noreply, if(step == 3, do: load_slots(socket), else: socket)}
     else
       {:noreply, socket}
     end
@@ -188,6 +188,33 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
     end
   end
 
+  def handle_event(
+        "confirm_booking",
+        _params,
+        %{assigns: %{real_booking: true, step: 4, result: nil}} = socket
+      ) do
+    with true <- real_booking?(),
+         %{id: patient_id, document_number: document} <- socket.assigns.selected,
+         %{id: consultation_id} <- socket.assigns.consultation,
+         %{start_time: start_time} <- socket.assigns.slot,
+         {:ok, result} <-
+           journey_execute(
+             socket,
+             {:confirm, socket.assigns.current_internal_session,
+              %{
+                patient_id: patient_id,
+                patient_document_number: document,
+                consultation_type_id: consultation_id,
+                start_time: start_time
+              }}
+           ) do
+      {:noreply, assign(socket, result: result, journey_error: nil)}
+    else
+      {:error, reason} -> {:noreply, assign(socket, journey_error: booking_message(reason))}
+      _ -> {:noreply, assign(socket, journey_error: booking_message(:unavailable))}
+    end
+  end
+
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
   defp reset_booking(socket) do
@@ -205,12 +232,14 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
     with {:ok, date} <- Date.from_iso8601(socket.assigns.booking_date),
          true <- Date.compare(date, Date.utc_today()) != :lt,
          {:ok, slots} <-
-           demo_execute(
+           journey_execute(
              socket,
              {:slots, socket.assigns.current_internal_session, socket.assigns.consultation.id,
               date}
            ) do
-      assign(socket, slots: slots, journey_error: nil)
+      selected = socket.assigns.slot
+      slot = if selected, do: Enum.find(slots, &(&1.id == selected.id))
+      assign(socket, slots: slots, slot: slot, journey_error: nil)
     else
       {:error, :invalid_format} ->
         assign(socket, slots: [], slot: nil, journey_error: "Revisá la fecha ingresada.")
@@ -226,14 +255,31 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
         assign(socket,
           slots: [],
           slot: nil,
-          journey_error: "No se pudieron consultar los horarios de demostración."
+          journey_error: "No se pudieron consultar los horarios disponibles."
         )
     end
   end
 
   defp demo_execute(socket, request) do
-    if socket.assigns.demo and demo?(), do: execute(socket, request), else: {:error, :unavailable}
+    if demo?(), do: execute(socket, request), else: {:error, :unavailable}
   end
+
+  defp journey_enabled?(socket),
+    do: (socket.assigns.demo and demo?()) or (socket.assigns.real_booking and real_booking?())
+
+  defp journey_execute(socket, request) do
+    if journey_enabled?(socket), do: execute(socket, request), else: {:error, :unavailable}
+  end
+
+  defp adapter,
+    do:
+      Application.get_env(
+        :origen,
+        :professional_patient_selector,
+        OrigenWeb.ProfessionalPatientSelector
+      )
+
+  defp real_booking?, do: adapter() == OrigenWeb.ProfessionalPatientSelector
 
   defp load_related(socket) do
     case execute(socket, {:related, socket.assigns.current_internal_session}) do
@@ -246,7 +292,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   end
 
   defp execute(_socket, request) do
-    case Application.get_env(:origen, :professional_patient_selector) do
+    case adapter() do
       nil -> {:error, :unavailable}
       adapter -> adapter.execute(request)
     end
@@ -261,13 +307,30 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   defp project(patient),
     do: Map.take(patient, [:id, :first_name, :last_name, :document_number])
 
-  defp message(:invalid_document), do: "Revisá el DNI ingresado. Ingresá el documento completo."
+  defp message(reason) when reason in [:invalid_document, :invalid_dni],
+    do: "Revisá el DNI ingresado. Ingresá el documento completo."
 
   defp message(:unavailable),
     do:
       "La selección de pacientes todavía no está disponible. Falta conectar el servicio de pacientes."
 
   defp message(_), do: "No se pudieron consultar los pacientes. Intentá nuevamente."
+
+  defp booking_message(reason)
+       when reason in [
+              :slot_already_booked,
+              :slot_unavailable,
+              :professional_schedule_conflict,
+              :patient_schedule_conflict
+            ],
+       do:
+         "No se creó el turno. El horario ya no está disponible. Volvé a fecha y horario para actualizar las opciones."
+
+  defp booking_message(:unauthorized),
+    do: "No se creó el turno. Tu sesión no permite esta operación. Volvé a iniciar sesión."
+
+  defp booking_message(_),
+    do: "No se creó el turno. Revisá la selección o intentá nuevamente."
 
   @impl true
   def render(assigns) do
@@ -302,7 +365,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
           </.link>
         </header>
 
-        <ProfessionalBookingDemoSteps.progress step={@step} result={@result} />
+        <ProfessionalBookingDemoSteps.progress step={@step} result={@result} demo={@demo} />
 
         <p
           :if={@journey_error}
@@ -445,13 +508,14 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
           <footer class="mt-6 flex flex-col items-end border-t border-stone-200 pt-4">
             <p id="patient-only-notice" class="w-full text-sm text-stone-500">
               <span :if={@demo}>Podés recorrer los siguientes pasos con datos ficticios. No se creará ningún turno.</span>
-              <span :if={not @demo}>El resto del recorrido todavía requiere conectar el servicio real. No se creará ningún turno.</span>
+              <span :if={@real_booking}>El turno y la relación se crean únicamente al confirmar al final del recorrido.</span>
+              <span :if={not @demo and not @real_booking}>El servicio de reserva no está disponible.</span>
             </p>
             <button
               id="patient-selection-next"
               type="button"
               phx-click="next_booking_step"
-              disabled={is_nil(@selected) or not @demo}
+              disabled={is_nil(@selected) or not (@demo or @real_booking)}
               aria-describedby="patient-only-notice"
               class="mt-3 rounded-lg bg-[#0A3847] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500"
             >Continuar</button>
@@ -462,6 +526,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
           patient={@selected}
           consultations={@consultations}
           selected={@consultation}
+          demo={@demo}
         />
         <ProfessionalBookingDemoSteps.schedule
           :if={@step == 3}
@@ -469,6 +534,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
           date={@booking_date}
           slots={@slots}
           selected={@slot}
+          demo={@demo}
         />
         <ProfessionalBookingDemoSteps.confirmation
           :if={@step == 4}
@@ -477,6 +543,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
           date={@booking_date}
           slot={@slot}
           result={@result}
+          demo={@demo}
         />
       </div>
     </main>
