@@ -54,6 +54,9 @@ config :origen, OrigenWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :origen, dev_routes: true
 
+# Visual patient-selection demo only; no patient records or relationships are written.
+config :origen, :professional_patient_selector, OrigenWeb.ProfessionalPatientSelectorDemo
+
 config :origen,
   consultation_catalog_demo_enabled: false,
   consultation_type_catalog_adapter: Origen.ConsultationTypes.DatabaseCatalog,
