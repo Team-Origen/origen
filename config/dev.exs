@@ -54,8 +54,8 @@ config :origen, OrigenWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :origen, dev_routes: true
 
-# Visual patient-selection demo only; no patient records or relationships are written.
-config :origen, :professional_patient_selector, OrigenWeb.ProfessionalPatientSelectorDemo
+# Professional booking uses the real Booking adapter by default (#316).
+# The synthetic selector demo is opt-in; see docs/sprints/integration/316-professional-booking.md.
 
 config :origen,
   consultation_catalog_demo_enabled: false,

@@ -1,9 +1,10 @@
 defmodule OrigenWeb.ProfessionalBookingDemoSteps do
-  @moduledoc "Visual steps for the development booking demo; no data access or persistence."
+  @moduledoc "Presentational booking steps for real and explicitly labeled demo journeys; no data access."
   use OrigenWeb, :html
 
   attr :step, :integer, required: true
   attr :result, :any, default: nil
+  attr :demo, :boolean, default: true
 
   def progress(assigns) do
     ~H"""
@@ -14,7 +15,7 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
     >
       <p role="status" class="mb-5 text-xs font-medium tracking-wide text-black">
         <%= if @result do %>
-          Demostración completada
+          {if @demo, do: "Demostración completada", else: "Turno confirmado"}
         <% else %>
           Paso {@step} de 4 · {step_name(@step)}
         <% end %>
@@ -69,6 +70,7 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
   attr :patient, :map, required: true
   attr :consultations, :list, required: true
   attr :selected, :any, default: nil
+  attr :demo, :boolean, default: true
 
   def consultation(assigns) do
     ~H"""
@@ -83,9 +85,15 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
         Paciente: {@patient.first_name} {@patient.last_name} · DNI {@patient.document_number}
       </p>
       <p class="mt-2 text-sm text-stone-500">
-        Consultas de ejemplo. La duración determina los horarios que podés elegir.
+        {if @demo, do: "Consultas de ejemplo.", else: "Tus tipos de consulta disponibles."} La duración determina los horarios que podés elegir.
       </p>
-      <div class="mt-6 space-y-3" role="group" aria-label="Tipos de consulta de demostración">
+      <div
+        class="mt-6 space-y-3"
+        role="group"
+        aria-label={
+          if @demo, do: "Tipos de consulta de demostración", else: "Tipos de consulta disponibles"
+        }
+      >
         <button
           :for={consultation <- @consultations}
           id={"consultation-#{consultation.id}"}
@@ -130,6 +138,7 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
   attr :date, :string, required: true
   attr :slots, :list, required: true
   attr :selected, :any, default: nil
+  attr :demo, :boolean, default: true
 
   def schedule(assigns) do
     ~H"""
@@ -142,7 +151,10 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
         {@consultation.name} · {@consultation.duration_minutes} minutos
       </p>
       <p class="mt-2 text-sm text-stone-500">
-        Disponibilidad ficticia: elegir un horario no lo reserva.
+        {if @demo,
+          do: "Disponibilidad ficticia: elegir un horario no lo reserva.",
+          else:
+            "Elegir un horario no lo reserva. La disponibilidad se valida nuevamente al confirmar."}
       </p>
       <form
         id="booking-date-form"
@@ -161,8 +173,14 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
           class="w-full rounded-lg border-stone-300 text-black sm:w-auto"
         />
       </form>
-      <h3 class="mt-6 text-sm font-semibold text-black">Horarios de demostración</h3>
-      <div role="group" aria-label="Horarios de demostración" class="mt-3 flex flex-wrap gap-3">
+      <h3 class="mt-6 text-sm font-semibold text-black">
+        {if @demo, do: "Horarios de demostración", else: "Horarios disponibles"}
+      </h3>
+      <div
+        role="group"
+        aria-label={if @demo, do: "Horarios de demostración", else: "Horarios disponibles"}
+        class="mt-3 flex flex-wrap gap-3"
+      >
         <button
           :for={slot <- @slots}
           id={"slot-#{slot.id}"}
@@ -192,6 +210,7 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
   attr :date, :string, required: true
   attr :slot, :map, required: true
   attr :result, :any, default: nil
+  attr :demo, :boolean, default: true
 
   def confirmation(assigns) do
     ~H"""
@@ -200,16 +219,30 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
       class="rounded-xl border border-stone-200 bg-white p-5 shadow-sm sm:p-8"
     >
       <h2 id="confirmation-step-title" class="text-xl font-bold text-black">
-        {if @result, do: "Demostración completada", else: "Revisá el turno de ejemplo"}
+        {cond do
+          @result && @demo -> "Demostración completada"
+          @result -> "Turno confirmado"
+          @demo -> "Revisá el turno de ejemplo"
+          true -> "Revisá el turno"
+        end}
       </h2>
       <div
-        :if={@result}
+        :if={not is_nil(@result) and @demo}
         id="booking-demo-result"
         role="status"
         class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900"
       >
         <p class="font-bold">Simulación de turno confirmado</p>
         <p class="mt-1">No se creó ningún turno ni relación en la base de datos.</p>
+      </div>
+      <div
+        :if={not is_nil(@result) and not @demo}
+        id="booking-result"
+        role="status"
+        class="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900"
+      >
+        <p class="font-bold">Turno confirmado</p>
+        <p>El turno se creó en tu agenda.</p>
       </div>
       <dl id="booking-summary" class="mt-6 divide-y divide-stone-100">
         <div class="py-3">
@@ -242,7 +275,11 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
         </div>
       </dl>
       <p :if={is_nil(@result)} class="mt-4 text-sm text-stone-500">
-        En el recorrido real, una reserva del Profesional queda confirmada. Esta acción sólo simula ese resultado.
+        {if @demo,
+          do:
+            "En el recorrido real, una reserva del Profesional queda confirmada. Esta acción sólo simula ese resultado.",
+          else:
+            "Al confirmar se creará el turno confirmado y se establecerá la relación con el paciente."}
       </p>
       <footer class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pt-4">
         <button
@@ -253,16 +290,27 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
           class="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-700"
         >Volver</button>
         <button
-          :if={is_nil(@result)}
+          :if={is_nil(@result) and @demo}
           id="simulate-booking"
           type="button"
           phx-click="simulate_booking"
           phx-disable-with="Simulando…"
           class="rounded-lg bg-[#0A3847] px-4 py-2 text-sm font-semibold text-white"
         >Simular confirmación</button>
+        <button
+          :if={is_nil(@result) and not @demo}
+          id="confirm-booking"
+          type="button"
+          phx-click="confirm_booking"
+          phx-disable-with="Confirmando…"
+          class="rounded-lg bg-[#0A3847] px-4 py-2 text-sm font-semibold text-white"
+        >Confirmar turno</button>
         <.link
           :if={@result}
-          navigate={~p"/profesional/agenda"}
+          id="booking-return-agenda"
+          navigate={
+            if @demo, do: ~p"/profesional/agenda", else: ~p"/profesional/agenda?date=#{@date}"
+          }
           class="rounded-lg bg-[#0A3847] px-4 py-2 text-sm font-semibold text-white"
         >Volver a mi agenda</.link>
       </footer>
