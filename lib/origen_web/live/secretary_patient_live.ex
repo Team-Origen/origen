@@ -24,6 +24,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
     {"Otro", "other"}
   ]
 
+  @link_access_types %{email: :string}
+  @replace_access_types %{new_email: :string, reason: :string}
+
   @gender_options [
     {"Femenino", "femenino"},
     {"Masculino", "masculino"},
@@ -72,7 +75,11 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:selected_prof_approval_mode, :automatic)
        |> assign(:selected_slot_time, nil)
        |> assign(:booking_success, nil)
-       |> assign(:booking_error, nil)}
+       |> assign(:booking_error, nil)
+       |> assign(:access_action, nil)
+       |> assign(:access_form, nil)
+       |> assign(:access_error, nil)
+       |> assign(:access_feedback, nil)}
     else
       {:ok, redirect(socket, to: "/")}
     end
@@ -133,7 +140,11 @@ defmodule OrigenWeb.SecretaryPatientLive do
            |> assign(:registration_form, nil)
            |> assign(:registration_document, nil)
            |> assign(:registration_outcome, nil)
-           |> assign(:registration_error, false)}
+           |> assign(:registration_error, false)
+           |> assign(:access_action, nil)
+           |> assign(:access_form, nil)
+           |> assign(:access_error, nil)
+           |> assign(:access_feedback, nil)}
       end
     else
       {:noreply, assign(socket, :search_form, to_form(changeset, as: :search))}
@@ -191,6 +202,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
     {:noreply,
      socket
+     |> assign(:registration_outcome, nil)
      |> assign(:assisted_booking_active, true)
      |> assign(:booking_professionals, professionals)
      |> assign(:selected_prof_id, prof_id)
@@ -283,6 +295,158 @@ defmodule OrigenWeb.SecretaryPatientLive do
      |> assign(:booking_error, nil)}
   end
 
+  @impl true
+  def handle_event("open_link_access", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:registration_outcome, nil)
+     |> assign(:access_action, :link)
+     |> assign(:access_form, to_form(link_access_changeset(%{}), as: :access))
+     |> assign(:access_error, nil)
+     |> assign(:access_feedback, nil)}
+  end
+
+  @impl true
+  def handle_event("open_replace_access", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:registration_outcome, nil)
+     |> assign(:access_action, :replace)
+     |> assign(:access_form, to_form(replace_access_changeset(%{}), as: :access))
+     |> assign(:access_error, nil)
+     |> assign(:access_feedback, nil)}
+  end
+
+  @impl true
+  def handle_event("cancel_access_action", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:access_action, nil)
+     |> assign(:access_form, nil)
+     |> assign(:access_error, nil)}
+  end
+
+  @impl true
+  def handle_event("validate_link_access", %{"access" => params}, socket) do
+    changeset =
+      params
+      |> link_access_changeset()
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :access_form, to_form(changeset, as: :access))}
+  end
+
+  @impl true
+  def handle_event("validate_replace_access", %{"access" => params}, socket) do
+    changeset =
+      params
+      |> replace_access_changeset()
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :access_form, to_form(changeset, as: :access))}
+  end
+
+  @impl true
+  def handle_event("submit_link_access", %{"access" => params}, socket) do
+    profile = socket.assigns.search_result.profile
+    account_id = socket.assigns.current_internal_session.account_id
+    email = Map.get(params, "email", "")
+
+    case Patients.link_patient_access_email(profile.id, email, account_id) do
+      {:ok, %{patient_profile: updated_profile}} ->
+        search_result = %{socket.assigns.search_result | profile: updated_profile}
+
+        {:noreply,
+         socket
+         |> assign(:search_result, search_result)
+         |> assign(:access_action, nil)
+         |> assign(:access_form, nil)
+         |> assign(:access_error, nil)
+         |> assign(
+           :access_feedback,
+           "Correo de acceso vinculado exitosamente. Se ha enviado el enlace de comprobación de posesión."
+         )}
+
+      {:error, :email_already_in_use} ->
+        {:noreply,
+         assign(
+           socket,
+           :access_error,
+           "Este correo ya está registrado por otra cuenta de paciente."
+         )}
+
+      {:error, :invalid_email} ->
+        {:noreply, assign(socket, :access_error, "El formato del correo es inválido.")}
+
+      {:error, :already_has_access_email} ->
+        {:noreply,
+         assign(socket, :access_error, "El paciente ya posee un correo de acceso vinculado.")}
+
+      {:error, :unauthorized} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "No tienes autorización para vincular correos de acceso.")
+         |> redirect(to: "/")}
+
+      {:error, _other} ->
+        {:noreply,
+         assign(socket, :access_error, "No se pudo vincular el correo. Verifique los datos.")}
+    end
+  end
+
+  @impl true
+  def handle_event("submit_replace_access", %{"access" => params}, socket) do
+    profile = socket.assigns.search_result.profile
+    account_id = socket.assigns.current_internal_session.account_id
+    new_email = Map.get(params, "new_email", "")
+    reason = Map.get(params, "reason", "")
+
+    case Patients.replace_patient_access_email(profile.id, new_email, account_id, reason) do
+      {:ok, %{patient_profile: updated_profile}} ->
+        search_result = %{socket.assigns.search_result | profile: updated_profile}
+
+        {:noreply,
+         socket
+         |> assign(:search_result, search_result)
+         |> assign(:access_action, nil)
+         |> assign(:access_form, nil)
+         |> assign(:access_error, nil)
+         |> assign(
+           :access_feedback,
+           "Correo de acceso reemplazado exitosamente. Se invalidaron los accesos y enlaces anteriores y se envió el enlace de comprobación al nuevo correo."
+         )}
+
+      {:error, :reason_required} ->
+        {:noreply,
+         assign(socket, :access_error, "Debe ingresar un motivo para el reemplazo del correo.")}
+
+      {:error, :same_email} ->
+        {:noreply,
+         assign(socket, :access_error, "El nuevo correo no puede ser igual al correo actual.")}
+
+      {:error, :email_already_in_use} ->
+        {:noreply,
+         assign(
+           socket,
+           :access_error,
+           "Este correo ya está registrado por otra cuenta de paciente."
+         )}
+
+      {:error, :invalid_email} ->
+        {:noreply, assign(socket, :access_error, "El formato del correo es inválido.")}
+
+      {:error, :unauthorized} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "No tienes autorización para reemplazar correos de acceso.")
+         |> redirect(to: "/")}
+
+      {:error, _other} ->
+        {:noreply,
+         assign(socket, :access_error, "No se pudo reemplazar el correo. Verifique los datos.")}
+    end
+  end
+
   defp registration_matches_search?(socket, params) do
     socket.assigns.search_result == :not_found and
       socket.assigns.registration_identity ==
@@ -308,6 +472,10 @@ defmodule OrigenWeb.SecretaryPatientLive do
     |> assign(:selected_slot_time, nil)
     |> assign(:booking_success, nil)
     |> assign(:booking_error, nil)
+    |> assign(:access_action, nil)
+    |> assign(:access_form, nil)
+    |> assign(:access_error, nil)
+    |> assign(:access_feedback, nil)
   end
 
   defp register_patient(socket, params) do
@@ -396,6 +564,28 @@ defmodule OrigenWeb.SecretaryPatientLive do
     |> validate_birthdate()
     |> validate_optional_email()
     |> Map.put(:action, :validate)
+  end
+
+  defp link_access_changeset(params) do
+    {%{}, @link_access_types}
+    |> Changeset.cast(params, [:email])
+    |> Changeset.validate_required([:email], message: "El correo es obligatorio")
+    |> Changeset.validate_format(
+      :email,
+      ~r/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/,
+      message: "Debe ser un correo electrónico válido"
+    )
+  end
+
+  defp replace_access_changeset(params) do
+    {%{}, @replace_access_types}
+    |> Changeset.cast(params, [:new_email, :reason])
+    |> Changeset.validate_required([:new_email, :reason], message: "Este campo es obligatorio")
+    |> Changeset.validate_format(
+      :new_email,
+      ~r/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/,
+      message: "Debe ser un correo electrónico válido"
+    )
   end
 
   defp validate_optional_email(changeset) do
@@ -607,13 +797,13 @@ defmodule OrigenWeb.SecretaryPatientLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <main class="min-h-screen bg-page py-6 text-gray-900 sm:py-10">
+    <main class="min-h-screen bg-page dark:bg-gray-950 py-6 text-text dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
         <div class="flex flex-col gap-6 sm:gap-8">
           <header class="space-y-2">
-            <.h1 no_margin>Búsqueda de pacientes</.h1>
+            <.h1 color_class="text-text dark:text-gray-100" no_margin>Búsqueda de pacientes</.h1>
 
-            <.text_muted>
+            <.text_muted class="text-text-muted dark:text-gray-300">
               Buscá una persona por documento para reutilizar su identidad o registrarla para una reserva asistida.
             </.text_muted>
           </header>
@@ -621,7 +811,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
           <section aria-labelledby="persona-search-heading">
             <.card variant="basic">
               <.card_header>
-                <.h2 id="persona-search-heading" no_margin>Buscar persona</.h2>
+                <.h2 id="persona-search-heading" color_class="text-text dark:text-gray-100" no_margin>
+                  Buscar persona
+                </.h2>
 
                 <:action>
                   <.button
@@ -692,7 +884,13 @@ defmodule OrigenWeb.SecretaryPatientLive do
           >
             <.card variant="basic">
               <.card_header>
-                <.h2 id="persona-registration-heading" no_margin>Registrar persona</.h2>
+                <.h2
+                  id="persona-registration-heading"
+                  color_class="text-text dark:text-gray-100"
+                  no_margin
+                >
+                  Registrar persona
+                </.h2>
 
                 <.text_muted>
                   No encontramos una persona con el documento indicado. Completá los datos mínimos para registrarla.
@@ -729,8 +927,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     value={@registration_form[:document_number].value}
                   />
 
-                  <p class="text-sm text-gray-600">
-                    Documento a registrar: <strong>{@registration_document}</strong>
+                  <p class="text-sm text-text-muted dark:text-gray-300">
+                    Documento a registrar:
+                    <strong class="text-text dark:text-gray-100">{@registration_document}</strong>
                   </p>
 
                   <div class="grid gap-4 sm:grid-cols-2">
@@ -801,7 +1000,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
           >
             <.card variant="basic">
               <.card_header>
-                <.h2 id="patient-summary-heading" no_margin>Resumen del paciente</.h2>
+                <.h2 id="patient-summary-heading" color_class="text-text dark:text-gray-100" no_margin>
+                  Resumen del paciente
+                </.h2>
               </.card_header>
 
               <.card_content class="flex flex-col gap-4">
@@ -819,34 +1020,85 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   id="patient-summary"
                   class="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[12rem_1fr] sm:items-baseline"
                 >
-                  <dt class="font-medium">Documento</dt>
-                  <dd id="patient-summary-document" class="font-semibold">
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Documento</dt>
+                  <dd id="patient-summary-document" class="font-semibold text-text dark:text-gray-100">
                     {doc_label(@search_result.persona.document_type)} {@search_result.persona.document_number}
                   </dd>
 
-                  <dt class="font-medium">Nombre completo</dt>
-                  <dd id="patient-summary-full-name" class="font-semibold">
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Nombre completo</dt>
+                  <dd
+                    id="patient-summary-full-name"
+                    class="font-semibold text-text dark:text-gray-100"
+                  >
                     {@search_result.persona.first_name} {@search_result.persona.last_name}
                   </dd>
 
-                  <dt class="font-medium">Estado del perfil</dt>
-                  <dd id="patient-summary-profile-state">
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Estado del perfil</dt>
+                  <dd id="patient-summary-profile-state" class="text-text dark:text-gray-200">
                     {profile_state_label(@search_result.profile && @search_result.profile.state)}
                   </dd>
 
-                  <dt class="font-medium">Teléfono</dt>
-                  <dd id="patient-summary-phone">
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Teléfono</dt>
+                  <dd id="patient-summary-phone" class="text-text dark:text-gray-200">
                     {(@search_result.profile && @search_result.profile.phone) || "—"}
                   </dd>
 
-                  <dt class="font-medium">Correo de contacto</dt>
-                  <dd id="patient-summary-email">
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Correo de contacto</dt>
+                  <dd id="patient-summary-email" class="text-text dark:text-gray-200">
                     {(@search_result.profile &&
                         (@search_result.profile.contact_email || @search_result.profile.email)) ||
                       "No declarado"}
                   </dd>
 
-                  <dt class="font-medium">Verificación telefónica</dt>
+                  <dt class="font-medium text-text-muted dark:text-gray-300">
+                    Correo de acceso personal
+                  </dt>
+                  <dd id="patient-summary-access-email" class="flex flex-wrap items-center gap-2">
+                    <span
+                      :if={@search_result.profile && @search_result.profile.email}
+                      class="font-medium text-gray-900 dark:text-gray-100"
+                    >
+                      {@search_result.profile.email}
+                    </span>
+                    <span
+                      :if={is_nil(@search_result.profile) or is_nil(@search_result.profile.email)}
+                      class="text-gray-500 dark:text-gray-400 italic"
+                    >
+                      Sin acceso web vinculado
+                    </span>
+
+                    <.button
+                      :if={
+                        @search_result.profile && is_nil(@search_result.profile.email) &&
+                          is_nil(@access_action)
+                      }
+                      id="btn-open-link-access"
+                      color="secondary"
+                      variant="outline"
+                      size="xs"
+                      phx-click="open_link_access"
+                    >
+                      Vincular correo de acceso
+                    </.button>
+
+                    <.button
+                      :if={
+                        @search_result.profile && not is_nil(@search_result.profile.email) &&
+                          is_nil(@access_action)
+                      }
+                      id="btn-open-replace-access"
+                      color="secondary"
+                      variant="outline"
+                      size="xs"
+                      phx-click="open_replace_access"
+                    >
+                      Reemplazar correo de acceso
+                    </.button>
+                  </dd>
+
+                  <dt class="font-medium text-text-muted dark:text-gray-300">
+                    Verificación telefónica
+                  </dt>
                   <dd id="patient-summary-phone-verified">
                     <.badge
                       :if={@search_result.profile && @search_result.profile.phone_verified}
@@ -871,6 +1123,157 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   </dd>
                 </dl>
 
+                <.alert
+                  :if={@access_feedback}
+                  id="access-feedback"
+                  color="success"
+                  variant="callout"
+                  with_icon
+                >
+                  {@access_feedback}
+                </.alert>
+
+                <section
+                  :if={@access_action == :link}
+                  id="link-access-section"
+                  aria-labelledby="link-access-heading"
+                  class="p-4 border border-border rounded-lg bg-surface-muted dark:bg-gray-800 dark:border-gray-700 flex flex-col gap-3"
+                >
+                  <h3
+                    id="link-access-heading"
+                    class="text-sm font-semibold text-text dark:text-gray-100"
+                  >
+                    Vincular correo de acceso personal (Magic Link)
+                  </h3>
+                  <p class="text-xs text-text-muted dark:text-gray-300">
+                    Comprobá la identidad del paciente antes de vincular. Se enviará un enlace de un solo uso para verificar posesión.
+                  </p>
+
+                  <.alert
+                    :if={@access_error}
+                    id="link-access-error"
+                    color="danger"
+                    variant="callout"
+                    with_icon
+                  >
+                    {@access_error}
+                  </.alert>
+
+                  <.form
+                    for={@access_form}
+                    id="link-access-form"
+                    phx-change="validate_link_access"
+                    phx-submit="submit_link_access"
+                    class="flex flex-col gap-3"
+                  >
+                    <.field
+                      field={@access_form[:email]}
+                      type="email"
+                      label="Correo electrónico personal"
+                      placeholder="paciente@ejemplo.com"
+                      autocomplete="email"
+                      required
+                      no_margin
+                    />
+
+                    <div class="flex gap-2 justify-end">
+                      <.button
+                        type="button"
+                        id="cancel-link-access"
+                        color="gray"
+                        variant="ghost"
+                        size="sm"
+                        phx-click="cancel_access_action"
+                      >
+                        Cancelar
+                      </.button>
+                      <.button
+                        type="submit"
+                        id="submit-link-access"
+                        color="primary"
+                        size="sm"
+                      >
+                        Vincular y enviar Magic Link
+                      </.button>
+                    </div>
+                  </.form>
+                </section>
+
+                <section
+                  :if={@access_action == :replace}
+                  id="replace-access-section"
+                  aria-labelledby="replace-access-heading"
+                  class="p-4 border border-border rounded-lg bg-surface-muted dark:bg-gray-800 dark:border-gray-700 flex flex-col gap-3"
+                >
+                  <h3
+                    id="replace-access-heading"
+                    class="text-sm font-semibold text-text dark:text-gray-100"
+                  >
+                    Reemplazar correo de acceso personal
+                  </h3>
+                  <p class="text-xs text-text-muted dark:text-gray-300">
+                    El reemplazo invalidará inmediatamente los enlaces y sesiones web anteriores del paciente. Se requiere motivo justificado.
+                  </p>
+
+                  <.alert
+                    :if={@access_error}
+                    id="replace-access-error"
+                    color="danger"
+                    variant="callout"
+                    with_icon
+                  >
+                    {@access_error}
+                  </.alert>
+
+                  <.form
+                    for={@access_form}
+                    id="replace-access-form"
+                    phx-change="validate_replace_access"
+                    phx-submit="submit_replace_access"
+                    class="flex flex-col gap-3"
+                  >
+                    <.field
+                      field={@access_form[:new_email]}
+                      type="email"
+                      label="Nuevo correo electrónico personal"
+                      placeholder="nuevo.paciente@ejemplo.com"
+                      autocomplete="email"
+                      required
+                      no_margin
+                    />
+
+                    <.field
+                      field={@access_form[:reason]}
+                      type="text"
+                      label="Motivo del reemplazo (obligatorio)"
+                      placeholder="Ej: Solicitud presencial por cambio de casilla"
+                      required
+                      no_margin
+                    />
+
+                    <div class="flex gap-2 justify-end">
+                      <.button
+                        type="button"
+                        id="cancel-replace-access"
+                        color="gray"
+                        variant="ghost"
+                        size="sm"
+                        phx-click="cancel_access_action"
+                      >
+                        Cancelar
+                      </.button>
+                      <.button
+                        type="submit"
+                        id="submit-replace-access"
+                        color="primary"
+                        size="sm"
+                      >
+                        Confirmar reemplazo y enviar Magic Link
+                      </.button>
+                    </div>
+                  </.form>
+                </section>
+
                 <div class="flex flex-wrap gap-2">
                   <.button
                     id="start-assisted-booking"
@@ -885,9 +1288,15 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   :if={@assisted_booking_active}
                   id="assisted-booking-section"
                   aria-labelledby="assisted-booking-heading"
-                  class="mt-6 border-t border-gray-200 pt-6 flex flex-col gap-4"
+                  class="mt-6 border-t border-border dark:border-gray-700 pt-6 flex flex-col gap-4"
                 >
-                  <.h3 id="assisted-booking-heading" no_margin>Reserva asistida de turno</.h3>
+                  <.h3
+                    id="assisted-booking-heading"
+                    color_class="text-text dark:text-gray-100"
+                    no_margin
+                  >
+                    Reserva asistida de turno
+                  </.h3>
                   <.text_muted>
                     Seleccioná profesional, tipo de consulta y horario disponible para agendar el turno.
                   </.text_muted>
@@ -915,7 +1324,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   >
                     <div>
                       <label
-                        class="block text-sm font-medium text-gray-700 mb-1"
+                        class="block text-sm font-medium text-text dark:text-gray-200 mb-1"
                         for="booking-professional-select"
                       >
                         Profesional
@@ -923,7 +1332,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       <select
                         id="booking-professional-select"
                         name="professional_id"
-                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm"
+                        class="block w-full rounded-md border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-100 shadow-sm text-sm"
                       >
                         <option
                           :for={prof <- @booking_professionals}
@@ -936,14 +1345,14 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       <span
                         :if={@selected_prof_approval_mode == :manual}
                         id="prof-approval-mode-badge"
-                        class="inline-block text-xs font-medium text-amber-700 mt-1"
+                        class="inline-block text-xs font-medium text-amber-700 dark:text-amber-400 mt-1"
                       >
                         Aprobación manual requerida (nacerá como Solicitud)
                       </span>
                       <span
                         :if={@selected_prof_approval_mode == :automatic}
                         id="prof-approval-mode-badge"
-                        class="inline-block text-xs font-medium text-green-700 mt-1"
+                        class="inline-block text-xs font-medium text-green-700 dark:text-green-400 mt-1"
                       >
                         Aprobación automática (confirmación directa)
                       </span>
@@ -951,7 +1360,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
                     <div>
                       <label
-                        class="block text-sm font-medium text-gray-700 mb-1"
+                        class="block text-sm font-medium text-text dark:text-gray-200 mb-1"
                         for="booking-consultation-type-select"
                       >
                         Tipo de consulta
@@ -959,7 +1368,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       <select
                         id="booking-consultation-type-select"
                         name="consultation_type_id"
-                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm"
+                        class="block w-full rounded-md border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-100 shadow-sm text-sm"
                       >
                         <option
                           :for={type <- @booking_consultation_types}
@@ -973,7 +1382,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
                     <div>
                       <label
-                        class="block text-sm font-medium text-gray-700 mb-1"
+                        class="block text-sm font-medium text-text dark:text-gray-200 mb-1"
                         for="booking-date-input"
                       >
                         Fecha de turno
@@ -983,18 +1392,20 @@ defmodule OrigenWeb.SecretaryPatientLive do
                         type="date"
                         name="date"
                         value={Date.to_iso8601(@booking_date)}
-                        class="block w-full rounded-md border-gray-300 shadow-sm text-sm"
+                        class="block w-full rounded-md border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-100 shadow-sm text-sm"
                       />
                     </div>
                   </form>
 
                   <div class="mt-2">
-                    <h4 class="text-sm font-semibold text-gray-800 mb-2">Horarios disponibles</h4>
+                    <h4 class="text-sm font-semibold text-text dark:text-gray-100 mb-2">
+                      Horarios disponibles
+                    </h4>
 
                     <div
                       :if={@booking_slots == []}
                       id="no-slots-available"
-                      class="text-sm text-gray-500 italic"
+                      class="text-sm text-text-muted dark:text-gray-400 italic"
                     >
                       No hay horarios disponibles para la fecha y profesional seleccionados.
                     </div>
@@ -1013,9 +1424,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
                         class={
                           if slot.start_formatted == @selected_slot_time,
                             do:
-                              "px-3 py-1.5 rounded bg-blue-600 text-white font-semibold text-sm shadow",
+                              "px-3 py-1.5 rounded bg-primary-700 text-white font-semibold text-sm shadow",
                             else:
-                              "px-3 py-1.5 rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 text-sm"
+                              "px-3 py-1.5 rounded border border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-200 hover:bg-surface-muted dark:hover:bg-gray-700 text-sm"
                         }
                       >
                         {slot.start_formatted}
