@@ -93,6 +93,12 @@ defmodule Origen.Audit.Events do
   def patient_profile_completed(actor, ref) when is_binary(ref),
     do: build(actor, "patient_profile_completed", {:patient, ref}, "succeeded")
 
+  def patient_access_email_linked(actor, ref) when is_binary(ref),
+    do: build(actor, "patient_access_email_linked", {:patient, ref}, "succeeded")
+
+  def patient_access_email_replaced(actor, ref) when is_binary(ref),
+    do: build(actor, "patient_access_email_replaced", {:patient, ref}, "succeeded")
+
   def document_collision_derived(actor, ref) when is_binary(ref),
     do: build(actor, "document_collision_derived", {:patient, ref}, "succeeded")
 
