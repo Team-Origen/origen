@@ -3,6 +3,7 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
 
   alias Origen.Booking.ProfessionalRegistration
   alias Origen.Patients.{PatientProfile, Persona}
+  alias Origen.Sessions.InternalSession
   alias Origen.{ConsultationTypes, Repo, Sessions}
 
   setup do
@@ -92,6 +93,19 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
     refute Repo.get_by(Persona, document_number: "37111222")
   end
 
+  test "persisted session struct reaches the same rollback guard as the principal map", context do
+    session = Repo.get!(InternalSession, context.principal.session_id)
+
+    for principal <- [context.principal, session] do
+      assert {:error, :blocks, :block_validation_unavailable, changes} =
+               reject_without_writes(%{context | principal: principal}, context.attrs)
+
+      assert changes.appointment.status == "confirmed"
+      assert changes.appointment.professional_account_id == context.account_id
+      assert changes.audit.num_rows == 1
+    end
+  end
+
   test "weekly windows use organization wall time rather than UTC", context do
     date = DateTime.to_date(context.attrs.start_time)
     set_window(context.account_id, date, "09:00", "10:00")
@@ -115,10 +129,27 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
              attempt(context, DateTime.new!(next_date, ~T[02:30:00], "Etc/UTC"))
   end
 
+  test "invalid session identifiers and mismatched accounts reject maps and structs", context do
+    session = Repo.get!(InternalSession, context.principal.session_id)
+
+    for principal <- [
+          %{context.principal | session_id: nil},
+          %{session | id: nil},
+          %{context.principal | session_id: -1},
+          %{session | id: -1},
+          %{context.principal | account_id: -1},
+          %{session | account_id: -1}
+        ] do
+      assert {:error, :owner, :unauthorized, %{}} =
+               reject_without_writes(%{context | principal: principal}, context.attrs)
+    end
+  end
+
   for denial <- [:revoked, :inactive, :wrong_role] do
     @denial denial
     test "#{denial} persisted principal cannot register or write", context do
       seed_existing_booking(context)
+      session = Repo.get!(InternalSession, context.principal.session_id)
 
       case @denial do
         :revoked ->
@@ -141,7 +172,10 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
           ])
       end
 
-      assert {:error, :owner, :unauthorized, %{}} = reject_without_writes(context, context.attrs)
+      for principal <- [context.principal, session] do
+        assert {:error, :owner, :unauthorized, %{}} =
+                 reject_without_writes(%{context | principal: principal}, context.attrs)
+      end
     end
   end
 

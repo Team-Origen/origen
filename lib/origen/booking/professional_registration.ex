@@ -8,6 +8,7 @@ defmodule Origen.Booking.ProfessionalRegistration do
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Patients.{PatientProfile, Persona}
   alias Origen.Sessions
+  alias Origen.Sessions.InternalSession
 
   @fields ~w(first_name last_name document_number birthdate phone email consultation_type_id start_time)a
   @days ~w(monday tuesday wednesday thursday friday saturday sunday)
@@ -60,6 +61,10 @@ defmodule Origen.Booking.ProfessionalRegistration do
       )
     end)
     |> Multi.run(:blocks, fn _repo, _changes -> {:error, :block_validation_unavailable} end)
+  end
+
+  defp owner(%InternalSession{id: session_id, account_id: account_id}) do
+    owner(%{session_id: session_id, account_id: account_id})
   end
 
   defp owner(%{session_id: session_id, account_id: account_id}) do
