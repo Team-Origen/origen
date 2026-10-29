@@ -143,7 +143,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       conn: conn,
       prof_token: token
     } do
-      Application.delete_env(:origen, :professional_patient_selector)
+      Application.put_env(:origen, :professional_patient_selector, nil)
       {:ok, view, html} = live(put_internal_session(conn, token), ~p"/profesional/agenda/crear")
       assert html =~ "La selección de pacientes todavía no está disponible"
       refute has_element?(view, "[phx-click='select_patient']")
