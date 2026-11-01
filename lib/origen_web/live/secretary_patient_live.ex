@@ -689,12 +689,10 @@ defmodule OrigenWeb.SecretaryPatientLive do
   defp access_status_label(:unlinked), do: "Sin acceso"
   defp access_status_label(:pending_verification), do: "Pendiente de verificación"
   defp access_status_label(:verified), do: "Acceso verificado"
-  defp access_status_label(_), do: "Estado de acceso desconocido"
 
   defp access_status_badge_color(:unlinked), do: "gray"
   defp access_status_badge_color(:pending_verification), do: "warning"
   defp access_status_badge_color(:verified), do: "success"
-  defp access_status_badge_color(_), do: "gray"
 
   defp outcome_feedback(:created), do: "Persona registrada correctamente."
   defp outcome_feedback(:reused), do: "La persona ya estaba registrada y fue reutilizada."

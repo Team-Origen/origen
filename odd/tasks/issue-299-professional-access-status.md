@@ -19,3 +19,4 @@
 - L3 — Added ProfessionalAgendaLive controls for professional link/replace operations, explicit status badges, feedback, and reuse of Patients domain authorization; SecretaryPatientLive now shows the same possession state.
 - L4 — Added regression coverage for all three access states and professional link/replace UI. Focused tests: 59 passed. Full suite: 845 passed, 30 skipped, 8 excluded. Formatting and `git diff --check` passed.
 - L5 — Delivery strategy: keep this follow-up as one reviewable PR #364 slice; commit boundary is `51f176f` and no additional commit is planned for this scope.
+- L6 — CI Dialyzer exposed unreachable fallback clauses in SecretaryPatientLive. Removed them in follow-up commit `ae5f9bf`; `mix dialyzer --format short` passes, as do 59 focused tests and the full suite (845 passed, 30 skipped, 8 excluded).
