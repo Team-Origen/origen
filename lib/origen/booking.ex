@@ -97,6 +97,18 @@ defmodule Origen.Booking do
   defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
 
   @doc """
+  Registra un paciente inexistente y reserva un turno confirmado para el
+  Profesional autenticado en una única transacción atómica (Issue #318).
+  """
+  @spec register_and_reserve_professional_appointment(
+          map() | Origen.Sessions.InternalSession.t(),
+          map()
+        ) :: {:ok, map()} | {:error, {atom(), term()}}
+  defdelegate register_and_reserve_professional_appointment(principal, attrs),
+    to: Origen.Booking.ProfessionalRegistration,
+    as: :register_and_book
+
+  @doc """
   Lista los pacientes relacionados con el Profesional autenticado usando la
   proyección mínima permitida para crear turnos (Issue #314).
   """

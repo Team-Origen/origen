@@ -1,7 +1,8 @@
 defmodule Origen.Booking.ProfessionalRegistrationTest do
   use Origen.DataCase, async: false
 
-  alias Origen.Booking.ProfessionalRegistration
+  alias Origen.Booking
+  alias Origen.Booking.{Appointment, ProfessionalPatientRelationship, ProfessionalRegistration}
   alias Origen.Patients.{PatientProfile, Persona}
   alias Origen.Sessions.InternalSession
   alias Origen.{ConsultationTypes, Repo, Sessions}
@@ -40,69 +41,54 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
     %{account_id: account_id, principal: principal, attrs: attrs}
   end
 
-  test "atomic foundation builds confirmed booking but cannot commit before block integration", %{
-    account_id: account_id,
-    principal: principal,
-    attrs: attrs
-  } do
-    assert {:error, :blocks, :block_validation_unavailable, changes} =
-             ProfessionalRegistration.transaction(principal, attrs) |> Repo.transaction()
+  test "registers absent patient and commits confirmed booking atomically", context do
+    attrs = Map.put(context.attrs, :email, "ana@example.com")
+    assert {:ok, result} = ProfessionalRegistration.register_and_book(context.principal, attrs)
 
-    assert changes.persona.document_number == "37111222"
-    assert changes.profile.email == nil
-    assert changes.profile.contact_email == nil
-    refute changes.profile.phone_verified
-    assert changes.appointment.status == "confirmed"
-    assert changes.appointment.professional_account_id == account_id
-    assert changes.appointment.snapshot_duration_minutes == 60
-    assert changes.relationship.first_appointment_id == changes.appointment.id
-    assert changes.audit.num_rows == 1
+    assert_durable_registration(result, context.account_id)
+    assert result.persona.document_number == "37111222"
+    assert result.profile.contact_email == "ana@example.com"
+    assert result.profile.email == nil
+    refute result.profile.phone_verified
+    assert result.appointment.snapshot_duration_minutes == 60
+    assert result.response == Booking.to_response(result.appointment, true)
+  end
 
-    refute Repo.get(Persona, changes.persona.id)
-    refute Repo.get(PatientProfile, changes.profile.id)
-    refute Repo.get(Origen.Booking.Appointment, changes.appointment.id)
-    refute Repo.get(Origen.Booking.ProfessionalPatientRelationship, changes.relationship.id)
+  test "contact email is optional", context do
+    assert {:ok, result} =
+             ProfessionalRegistration.register_and_book(
+               context.principal,
+               Map.put(context.attrs, :email, nil)
+             )
 
-    assert [[0]] =
-             Repo.query!(
-               "SELECT count(*) FROM audit_events WHERE entity_ref = $1",
-               ["appointment:#{changes.appointment.id}"]
-             ).rows
+    assert result.persona.email == nil
+    assert result.profile.contact_email == nil
+    assert_durable_registration(result, context.account_id)
+  end
 
+  for principal_kind <- [:map, :session] do
+    @principal_kind principal_kind
+    test "#{principal_kind} principal commits durably through the Booking context", context do
+      principal =
+        case @principal_kind do
+          :map -> context.principal
+          :session -> Repo.get!(InternalSession, context.principal.session_id)
+        end
+
+      assert {:ok, result} =
+               Booking.register_and_reserve_professional_appointment(principal, context.attrs)
+
+      assert_durable_registration(result, context.account_id)
+    end
+  end
+
+  test "missing principal and forged fields reject without writes", context do
     assert {:error, :owner, :unauthorized, %{}} =
-             ProfessionalRegistration.transaction(%{}, attrs) |> Repo.transaction()
+             reject_without_writes(%{context | principal: %{}}, context.attrs)
 
     for field <- [:actor, :professional_account_id, :status, :duration_minutes, :price] do
       assert {:error, :input, :invalid_fields, _} =
-               ProfessionalRegistration.transaction(principal, Map.put(attrs, field, "forged"))
-               |> Repo.transaction()
-    end
-
-    Repo.query!(
-      "UPDATE agenda_settings SET weekly_availability = $1 WHERE owner_account_id = $2",
-      [
-        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []}),
-        account_id
-      ]
-    )
-
-    assert {:error, :snapshot, :unavailable, rejected} =
-             ProfessionalRegistration.transaction(principal, attrs) |> Repo.transaction()
-
-    refute Map.has_key?(rejected, :persona)
-    refute Repo.get_by(Persona, document_number: "37111222")
-  end
-
-  test "persisted session struct reaches the same rollback guard as the principal map", context do
-    session = Repo.get!(InternalSession, context.principal.session_id)
-
-    for principal <- [context.principal, session] do
-      assert {:error, :blocks, :block_validation_unavailable, changes} =
-               reject_without_writes(%{context | principal: principal}, context.attrs)
-
-      assert changes.appointment.status == "confirmed"
-      assert changes.appointment.professional_account_id == context.account_id
-      assert changes.audit.num_rows == 1
+               reject_without_writes(context, Map.put(context.attrs, field, "forged"))
     end
   end
 
@@ -113,8 +99,8 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
     assert {:error, :snapshot, :unavailable, _} =
              attempt(context, DateTime.new!(date, ~T[09:00:00], "Etc/UTC"))
 
-    assert {:error, :blocks, :block_validation_unavailable, _} =
-             attempt(context, DateTime.new!(date, ~T[12:00:00], "Etc/UTC"))
+    assert {:ok, result} = attempt(context, DateTime.new!(date, ~T[12:00:00], "Etc/UTC"))
+    assert_durable_registration(result, context.account_id)
   end
 
   test "local weekday permits an exclusive midnight end but rejects an overrun", context do
@@ -122,8 +108,8 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
     set_window(context.account_id, date, "23:00", "24:00")
     next_date = Date.add(date, 1)
 
-    assert {:error, :blocks, :block_validation_unavailable, _} =
-             attempt(context, DateTime.new!(next_date, ~T[02:00:00], "Etc/UTC"))
+    assert {:ok, result} = attempt(context, DateTime.new!(next_date, ~T[02:00:00], "Etc/UTC"))
+    assert_durable_registration(result, context.account_id)
 
     assert {:error, :snapshot, :unavailable, _} =
              attempt(context, DateTime.new!(next_date, ~T[02:30:00], "Etc/UTC"))
@@ -269,6 +255,201 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
              reject_without_writes(context, context.attrs)
 
     refute Map.has_key?(changes, :persona)
+  end
+
+  @tag skip: System.get_env("PROFESSIONAL_REGISTRATION_RACE") != "1"
+  test "concurrent registration for the same DNI has one winner and rolls back duplicate loser" do
+    fixture = registration_race_fixture()
+    dni = race_document_number()
+    payloads = List.duplicate(Map.put(fixture.attrs, :document_number, dni), 2)
+
+    try do
+      results = race_registrations(fixture.principal, payloads)
+      assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+      assert [{:error, {:persona, changeset}}] = Enum.filter(results, &match?({:error, _}, &1))
+      assert {_, metadata} = Keyword.fetch!(changeset.errors, :document_type)
+      assert metadata[:constraint] == :unique
+      assert metadata[:constraint_name] == "personas_document_unique"
+
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        assert_race_records(fixture, [dni])
+      end)
+    after
+      cleanup_registration_race(fixture, [dni])
+    end
+  end
+
+  @tag skip: System.get_env("PROFESSIONAL_REGISTRATION_RACE") != "1"
+  test "concurrent registration for the same slot on the same agenda has one winner and rolls back slot loser" do
+    fixture = registration_race_fixture()
+    documents = for _ <- 1..2, do: race_document_number()
+    payloads = Enum.map(documents, &Map.put(fixture.attrs, :document_number, &1))
+
+    try do
+      results = race_registrations(fixture.principal, payloads)
+      assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+      assert Enum.count(results, &(&1 == {:error, {:appointment, :slot_already_booked}})) == 1
+
+      Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+        assert_race_records(fixture, documents)
+      end)
+    after
+      cleanup_registration_race(fixture, documents)
+    end
+  end
+
+  defp race_document_number do
+    suffix = Ecto.UUID.generate() |> String.replace("-", "") |> String.slice(0, 24)
+    "RACE" <> String.upcase(suffix)
+  end
+
+  defp registration_race_fixture do
+    Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+      [[account_id]] =
+        Repo.query!("""
+        INSERT INTO internal_accounts (role, state, password_hash, totp_secret, activated_at)
+        VALUES ('professional', 'active', 'hash', decode('0102', 'hex'), NOW()) RETURNING id
+        """).rows
+
+      {:ok, %{session: principal}} = Sessions.create_session(account_id)
+
+      {:ok, type} =
+        ConsultationTypes.create_type(principal, %{
+          name: "Race consultation",
+          color: "#0A7C86",
+          interval_count: 2,
+          exact_price_ars: "12000"
+        })
+
+      start = next_weekday()
+      set_window(account_id, DateTime.to_date(start), "09:00", "17:00")
+
+      %{
+        account_id: account_id,
+        principal: principal,
+        attrs: %{
+          first_name: "Race",
+          last_name: "Patient",
+          birthdate: ~D[1990-03-05],
+          phone: "+5491155554444",
+          consultation_type_id: type.id,
+          start_time: start
+        }
+      }
+    end)
+  end
+
+  defp race_registrations(principal, payloads) do
+    parent = self()
+
+    tasks =
+      for payload <- payloads do
+        Task.async(fn ->
+          Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+            send(parent, {:ready, self()})
+
+            receive do
+              :go -> :ok
+            after
+              5000 -> raise "race barrier timeout"
+            end
+
+            Booking.register_and_reserve_professional_appointment(principal, payload)
+          end)
+        end)
+      end
+
+    try do
+      ready =
+        for _ <- tasks do
+          assert_receive {:ready, pid}, 5000
+          pid
+        end
+
+      Enum.each(ready, &send(&1, :go))
+      Enum.map(tasks, &Task.await(&1, 10000))
+    after
+      Enum.each(tasks, &Task.shutdown(&1, :brutal_kill))
+    end
+  end
+
+  defp assert_race_records(fixture, documents) do
+    account_id = fixture.account_id
+    start = fixture.attrs.start_time
+    personas = from p in Persona, where: p.document_number in ^documents
+    assert Repo.aggregate(personas, :count) == 1
+
+    assert Repo.aggregate(
+             from(p in PatientProfile, join: i in subquery(personas), on: p.persona_id == i.id),
+             :count
+           ) == 1
+
+    appointments = from a in Appointment, where: a.professional_account_id == ^account_id
+    assert Repo.aggregate(appointments, :count) == 1
+    assert Repo.aggregate(from(a in appointments, where: a.start_time == ^start), :count) == 1
+
+    assert Repo.aggregate(
+             from(r in ProfessionalPatientRelationship,
+               where: r.professional_account_id == ^account_id
+             ),
+             :count
+           ) == 1
+
+    actor_ref = "internal_account:#{account_id}"
+
+    assert Repo.aggregate(
+             from(a in "audit_events",
+               where: a.actor_kind == "professional" and a.actor_ref == ^actor_ref
+             ),
+             :count
+           ) == 1
+  end
+
+  defp cleanup_registration_race(fixture, documents) do
+    Ecto.Adapters.SQL.Sandbox.unboxed_run(Repo, fn ->
+      account_id = fixture.account_id
+
+      Repo.delete_all(
+        from r in ProfessionalPatientRelationship, where: r.professional_account_id == ^account_id
+      )
+
+      Repo.delete_all(from a in Appointment, where: a.professional_account_id == ^account_id)
+
+      persona_ids = from p in Persona, where: p.document_number in ^documents, select: p.id
+      Repo.delete_all(from p in PatientProfile, where: p.persona_id in subquery(persona_ids))
+      Repo.delete_all(from p in Persona, where: p.document_number in ^documents)
+
+      for table <- ~w(consultation_types agenda_settings) do
+        Repo.query!("DELETE FROM #{table} WHERE owner_account_id = $1", [account_id])
+      end
+
+      Repo.query!("DELETE FROM internal_account_sessions WHERE account_id = $1", [account_id])
+      # Audit is append-only; retain its synthetic actor account for referential traceability.
+    end)
+  end
+
+  defp assert_durable_registration(result, account_id) do
+    assert result.appointment.status == "confirmed"
+    assert result.appointment.professional_account_id == account_id
+    assert result.profile.state == "completed"
+    assert result.relationship.first_appointment_id == result.appointment.id
+    assert Repo.get!(Appointment, result.appointment.id) == result.appointment
+    assert Repo.get!(Persona, result.persona.id).document_number == result.persona.document_number
+    assert Repo.get!(PatientProfile, result.profile.id) == result.profile
+
+    assert Repo.get_by!(ProfessionalPatientRelationship,
+             professional_account_id: account_id,
+             patient_profile_id: result.profile.id
+           ) == result.relationship
+
+    entity_ref = "appointment:#{result.appointment.id}"
+
+    assert %{event: "appointment_confirmed", result: "succeeded"} =
+             Repo.one(
+               from a in "audit_events",
+                 where: a.entity_ref == ^entity_ref,
+                 select: %{event: a.event, result: a.result}
+             )
   end
 
   defp reject_without_writes(context, attrs) do
