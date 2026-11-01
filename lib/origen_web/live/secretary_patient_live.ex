@@ -14,6 +14,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   alias Ecto.Changeset
   alias Origen.Appointments.AssistedBooking
+  alias Origen.PatientAccess
   alias Origen.Patients
   alias Origen.Patients.Persona
 
@@ -685,6 +686,16 @@ defmodule OrigenWeb.SecretaryPatientLive do
   defp profile_state_label("pending_secretary_review"), do: "Pendiente de revisión de Secretaría"
   defp profile_state_label(state), do: state
 
+  defp access_status_label(:unlinked), do: "Sin acceso"
+  defp access_status_label(:pending_verification), do: "Pendiente de verificación"
+  defp access_status_label(:verified), do: "Acceso verificado"
+  defp access_status_label(_), do: "Estado de acceso desconocido"
+
+  defp access_status_badge_color(:unlinked), do: "gray"
+  defp access_status_badge_color(:pending_verification), do: "warning"
+  defp access_status_badge_color(:verified), do: "success"
+  defp access_status_badge_color(_), do: "gray"
+
   defp outcome_feedback(:created), do: "Persona registrada correctamente."
   defp outcome_feedback(:reused), do: "La persona ya estaba registrada y fue reutilizada."
 
@@ -1066,6 +1077,17 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     >
                       Sin acceso web vinculado
                     </span>
+
+                    <% access_state = PatientAccess.access_status(@search_result.profile) %>
+                    <.badge
+                      id="patient-summary-access-status"
+                      color={access_status_badge_color(access_state)}
+                      variant="soft"
+                      size="sm"
+                      dot
+                      label={access_status_label(access_state)}
+                      role="status"
+                    />
 
                     <.button
                       :if={

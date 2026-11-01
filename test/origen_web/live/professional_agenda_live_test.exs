@@ -6,6 +6,8 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
   use OrigenWeb.LiveViewCase
 
+  import Ecto.Query
+
   alias Ecto.Adapters.SQL
   alias Origen.Repo
   alias Origen.Sessions
@@ -462,6 +464,99 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
 
       # Elementos de lista accesibles
       assert has_element?(view, "#agenda-appointments-list")
+    end
+
+    test "profesional puede vincular y reemplazar el correo desde la agenda", %{
+      conn: conn,
+      prof_token: prof_token,
+      professional_id: prof_id,
+      patient_1: patient
+    } do
+      Repo.query!("UPDATE patient_profiles SET email = NULL WHERE id = $1", [patient.profile_id])
+
+      insert_appointment!(
+        prof_id,
+        patient.profile_id,
+        ~U[2026-10-15 09:00:00Z],
+        ~U[2026-10-15 09:30:00Z],
+        "confirmed"
+      )
+
+      conn = put_internal_session(conn, prof_token)
+      {:ok, view, _html} = live(conn, ~p"/profesional/agenda?date=2026-10-15")
+
+      assert has_element?(view, "#patient-access-status-#{patient.profile_id}", "Sin acceso")
+      view |> element("#btn-open-link-access-#{patient.profile_id}") |> render_click()
+
+      view
+      |> form("#patient-access-form-fields-#{patient.profile_id}",
+        access: %{"email" => "mario@example.test"}
+      )
+      |> render_submit()
+
+      assert has_element?(view, "#professional-access-feedback", "Correo de acceso vinculado")
+
+      assert has_element?(
+               view,
+               "#patient-access-status-#{patient.profile_id}",
+               "Pendiente de verificación"
+             )
+
+      view |> element("#btn-open-replace-access-#{patient.profile_id}") |> render_click()
+
+      view
+      |> form("#patient-access-form-fields-#{patient.profile_id}",
+        access: %{
+          "new_email" => "mario.nuevo@example.test",
+          "reason" => "El paciente perdió acceso al correo anterior"
+        }
+      )
+      |> render_submit()
+
+      assert has_element?(view, "#professional-access-feedback", "Correo de acceso reemplazado")
+
+      assert has_element?(
+               view,
+               "#patient-access-status-#{patient.profile_id}",
+               "Pendiente de verificación"
+             )
+    end
+
+    test "muestra estado de acceso verificado cuando el paciente consumió el enlace", %{
+      conn: conn,
+      prof_token: prof_token,
+      professional_id: prof_id,
+      patient_1: patient
+    } do
+      email = "mario.verificado@example.test"
+      Repo.query!("UPDATE patient_profiles SET email = NULL WHERE id = $1", [patient.profile_id])
+      profile = Origen.Repo.get!(Origen.Patients.PatientProfile, patient.profile_id)
+      {:ok, _} = Origen.Patients.link_patient_access_email(profile, email, prof_id)
+
+      link =
+        Origen.Repo.one!(from(m in Origen.PatientAccess.MagicLink, where: m.email == ^email))
+
+      Origen.Repo.update_all(
+        from(m in Origen.PatientAccess.MagicLink, where: m.id == ^link.id),
+        set: [consumed_at: DateTime.utc_now()]
+      )
+
+      insert_appointment!(
+        prof_id,
+        patient.profile_id,
+        ~U[2026-10-15 09:00:00Z],
+        ~U[2026-10-15 09:30:00Z],
+        "confirmed"
+      )
+
+      {:ok, view, _html} =
+        live(put_internal_session(conn, prof_token), ~p"/profesional/agenda?date=2026-10-15")
+
+      assert has_element?(
+               view,
+               "#patient-access-status-#{patient.profile_id}",
+               "Acceso verificado"
+             )
     end
 
     test "muestra estado de agenda vacía cuando no hay turnos", %{
