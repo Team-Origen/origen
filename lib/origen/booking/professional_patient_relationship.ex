@@ -3,8 +3,8 @@ defmodule Origen.Booking.ProfessionalPatientRelationship do
   Ecto schema de la relación Profesional-Paciente auditable (Issue #66 / PLN-08, RF-05).
 
   La relación se establece una única vez, de forma atómica con el primer turno
-  válido (`reserved` o `confirmed`) entre el profesional y el paciente; un turno
-  nacido en `requested` nunca la crea (§2.4 de `docs/booking/RESERVATION_CASES.md`).
+  válido (`requested`, `reserved` o `confirmed`) entre el profesional y el paciente,
+  conforme a la regla beta: completar una solicitud también establece la relación.
 
   `established_at` se resuelve con el reloj de la base de datos
   (`clock_timestamp()`) mediante `read_after_writes`, y `first_appointment_id`

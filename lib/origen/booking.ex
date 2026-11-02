@@ -18,7 +18,9 @@ defmodule Origen.Booking do
   alias Origen.Booking.Appointment
   alias Origen.Booking.Authorization
   alias Origen.Booking.Overlap
+  alias Origen.Booking.ProfessionalBooking
   alias Origen.Booking.ProfessionalPatientRelationship
+  alias Origen.Booking.ProfessionalPatientSelection
   alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
@@ -26,7 +28,7 @@ defmodule Origen.Booking do
 
   @initial_statuses [:requested, :reserved, :confirmed]
 
-  @relationship_establishing_statuses [:reserved, :confirmed]
+  @relationship_establishing_statuses [:requested, :reserved, :confirmed]
 
   @audit_event_insert """
   INSERT INTO public.audit_events
@@ -93,6 +95,54 @@ defmodule Origen.Booking do
           {:ok, %{date: Date.t(), professional_account_id: integer(), appointments: [map()]}}
           | {:error, :unauthorized | :invalid_date}
   defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
+
+  @doc """
+  Lista los pacientes relacionados con el Profesional autenticado usando la
+  proyección mínima permitida para crear turnos (Issue #314).
+  """
+  @spec list_professional_patients(map() | Origen.Sessions.InternalSession.t()) ::
+          {:ok, [ProfessionalPatientSelection.patient_projection()]}
+          | {:error, :unauthorized}
+  defdelegate list_professional_patients(principal),
+    to: ProfessionalPatientSelection,
+    as: :list_related
+
+  @doc """
+  Busca un paciente registrado por DNI exacto dentro del recorrido privado de
+  creación de turnos del Profesional (Issue #314). No crea relaciones ni turnos.
+  """
+  @spec find_professional_patient_by_dni(
+          map() | Origen.Sessions.InternalSession.t(),
+          term()
+        ) ::
+          {:ok, ProfessionalPatientSelection.patient_projection() | nil}
+          | {:error, :unauthorized | :invalid_dni}
+  defdelegate find_professional_patient_by_dni(principal, document_number),
+    to: ProfessionalPatientSelection,
+    as: :find_by_exact_dni
+
+  @doc """
+  Reserva un turno confirmado en la agenda del Profesional autenticado usando
+  el motor transaccional compartido (Issue #314).
+  """
+  @spec reserve_professional_appointment(
+          map() | Origen.Sessions.InternalSession.t(),
+          map(),
+          keyword()
+        ) :: {:ok, ReservationResponse.t()} | {:error, term()}
+  defdelegate reserve_professional_appointment(principal, params, opts \\ []),
+    to: ProfessionalBooking,
+    as: :reserve
+
+  @doc "Lista el catálogo activo del Profesional de la sesión vigente."
+  defdelegate list_professional_consultation_types(principal),
+    to: ProfessionalBooking,
+    as: :list_consultation_types
+
+  @doc "Consulta disponibilidad real de la agenda propia para un tipo de consulta."
+  defdelegate get_professional_booking_schedule(principal, type_id, date, opts \\ []),
+    to: ProfessionalBooking,
+    as: :get_schedule
 
   @doc """
   Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
@@ -427,17 +477,13 @@ defmodule Origen.Booking do
   end
 
   defp establish_relationship(%Appointment{} = appointment, status, opts) do
-    establish_for_status? =
-      status in @relationship_establishing_statuses or
-        (status == :requested and
-           (opts[:create_relationship?] == true or opts[:actor_role] == :secretary))
+    establish_for_status? = status in @relationship_establishing_statuses
 
     cond do
       opts[:fail_at] == :relationship ->
         {:error, :relationship_insertion_failed}
 
       not establish_for_status? ->
-        # Un turno nacido en :requested nunca crea relación en flujos autónomos históricos (§2.4 / V02).
         {:ok, %{relationship: nil, created?: false}}
 
       relationship_exists?(appointment.professional_account_id, appointment.patient_profile_id) ->
