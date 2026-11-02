@@ -8,10 +8,10 @@
 - Tracking Issue: https://github.com/Team-Origen/origen/issues/277
 - Sub-issues:
   - #297: Contrato — Acceso de paciente por magic link (`work:contract`) — MERGED / CLOSED
-  - #298: Backend — Acceso de paciente por magic link (`work:backend`) — IN PROGRESS
-  - #299: Frontend — Acceso de paciente por magic link (`work:frontend`) — PENDING
+  - #298: Backend — Acceso de paciente por magic link (`work:backend`) — MERGED / CLOSED
+  - #299: Frontend — Acceso de paciente por magic link (`work:frontend`) — IN PROGRESS
   - #300: Integración y verificación — Acceso de paciente por magic link (`work:integration`) — PENDING
-- Branch: `feat/298-patient-access-backend`
+- Branch: `feat/299-patient-access-frontend`
 
 ## Description
 
@@ -49,8 +49,9 @@ y privacidad estricta.
 ## Validation Evidence
 
 - Migración `20261022100000_add_sessions_invalidated_at_to_patient_profiles.exs` ejecutada exitosamente.
-- `test/origen/patients/patient_access_maintenance_test.exs`: 16 pruebas ejecutadas y aprobadas (0 fallas, exit 0, 0.7s).
-- Suite completa del repositorio: 792 pruebas aprobadas, 0 fallas, 29 skipped, 8 excluded (exit 0).
+- Backend: `test/origen/patients/patient_access_maintenance_test.exs`: 16 pruebas aprobadas (0 fallas, exit 0, 0.7s).
+- Frontend: `test/origen_web/live/secretary_patient_access_maintenance_test.exs`: 9 pruebas aprobadas (0 fallas, exit 0, 0.9s).
+- Suite completa del repositorio: 840 pruebas aprobadas, 0 fallas, 30 skipped, 8 excluded (exit 0).
 - `mix format --check-formatted`: verificado sin advertencias ni diferencias pendientes.
 - `git diff --check`: comprobado sin espacios en blanco ni errores de formato.
 
@@ -58,4 +59,6 @@ y privacidad estricta.
 
 - L1: Se inicia la subtarea #298 (Backend de #277) tras el cierre y mergeo del contrato #297 (PR #344).
 - L2: Implementadas operaciones de backend y suite de pruebas conforme al contrato formal #297.
+- L3: Backend #298 mergeado a develop mediante PR #362. Se inicia la subtarea #299 (Frontend).
+- L4: Implementada interfaz de vinculación/reemplazo en SecretaryPatientLive y 9 pruebas de LiveView aprobadas.
 

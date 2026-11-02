@@ -20,6 +20,7 @@ defmodule OrigenWeb.PatientAccessController do
         conn
         |> configure_session(renew: true)
         |> put_session(@session_key, email)
+        |> put_session(:patient_authenticated_at, DateTime.to_iso8601(DateTime.utc_now()))
         |> put_flash(:info, "Acceso verificado exitosamente.")
         |> redirect(to: ~p"/")
 
