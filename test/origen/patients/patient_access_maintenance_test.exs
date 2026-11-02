@@ -378,6 +378,42 @@ defmodule Origen.Patients.PatientAccessMaintenanceTest do
     end
   end
 
+  describe "access_status/1" do
+    test "classifies a profile without an access email as unlinked", %{secretary_id: secretary_id} do
+      {:ok, %{profile: profile}} =
+        Patients.register_absent_patient(@assisted_attrs, secretary_id)
+
+      assert :unlinked = Origen.PatientAccess.access_status(profile)
+    end
+
+    test "classifies an email with an unconsumed link as pending verification", %{
+      secretary_id: secretary_id
+    } do
+      {:ok, %{profile: profile}} =
+        Patients.register_absent_patient(@assisted_attrs, secretary_id)
+
+      {:ok, _} = Patients.link_patient_access_email(profile, "pending@example.test", secretary_id)
+
+      assert :pending_verification = Origen.PatientAccess.access_status(profile.id)
+    end
+
+    test "classifies an email with a consumed link as verified", %{secretary_id: secretary_id} do
+      {:ok, %{profile: profile}} =
+        Patients.register_absent_patient(@assisted_attrs, secretary_id)
+
+      email = "verified@example.test"
+      {:ok, _} = Patients.link_patient_access_email(profile, email, secretary_id)
+
+      link = Repo.one!(from m in MagicLink, where: m.email == ^email)
+
+      Repo.update_all(from(m in MagicLink, where: m.id == ^link.id),
+        set: [consumed_at: DateTime.utc_now()]
+      )
+
+      assert :verified = Origen.PatientAccess.access_status(profile.id)
+    end
+  end
+
   describe "verify_patient_session/2" do
     test "validates session when sessions_invalidated_at is nil", %{secretary_id: secretary_id} do
       {:ok, %{profile: profile}} =
