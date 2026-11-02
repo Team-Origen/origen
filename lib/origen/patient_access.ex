@@ -30,7 +30,7 @@ defmodule Origen.PatientAccess do
   def request_magic_link(email, opts) when is_binary(email) do
     clean_email = email |> String.trim() |> String.downcase()
 
-    if Regex.match?(@email_regex, clean_email) do
+    if Regex.match?(@email_regex, clean_email) and linked_patient_email?(clean_email) do
       now = Keyword.get(opts, :now, DateTime.utc_now())
       ttl = Keyword.get(opts, :ttl_seconds, @default_ttl_seconds)
       expires_at = DateTime.add(now, ttl, :second)
@@ -79,6 +79,10 @@ defmodule Origen.PatientAccess do
   end
 
   def request_magic_link(_invalid, _opts), do: {:ok, :delivered}
+
+  defp linked_patient_email?(email) do
+    Repo.exists?(from p in PatientProfile, where: p.email == ^email)
+  end
 
   @doc """
   Invalidates all pending unconsumed magic links for the given email.

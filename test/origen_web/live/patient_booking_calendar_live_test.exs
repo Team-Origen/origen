@@ -90,9 +90,30 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     {:ok, %{profile: p}} = Patients.complete_profile(@email, attrs)
 
     authed =
-      Plug.Conn.put_session(Phoenix.ConnTest.init_test_session(conn, %{}), :patient_email, @email)
+      conn
+      |> Phoenix.ConnTest.init_test_session(%{})
+      |> Plug.Conn.put_session(:patient_email, @email)
+      |> Plug.Conn.put_session(:patient_authenticated_at, DateTime.to_iso8601(DateTime.utc_now()))
 
     %{conn: authed, profile: p, prof_id: prof_id}
+  end
+
+  describe "patient session authorization" do
+    test "redirects when the patient session is absent", %{} do
+      unauthenticated_conn =
+        Phoenix.ConnTest.build_conn() |> Phoenix.ConnTest.init_test_session(%{})
+
+      assert {:error, {:redirect, %{to: "/access"}}} =
+               live(unauthenticated_conn, ~p"/patient/calendar")
+    end
+
+    test "redirects when the patient session was invalidated", %{conn: conn, profile: profile} do
+      invalidated_at = DateTime.add(DateTime.utc_now(), 1, :second)
+      Repo.update!(Ecto.Changeset.change(profile, sessions_invalidated_at: invalidated_at))
+
+      assert {:error, {:redirect, %{to: "/access"}}} =
+               live(conn, ~p"/patient/calendar")
+    end
   end
 
   describe "calendar view rendering and navigation" do

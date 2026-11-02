@@ -44,9 +44,17 @@ defmodule OrigenWeb.Router do
     live "/secretaria/pacientes", SecretaryPatientLive, :index
     live "/access", PatientAccessLive, :index
     get "/access/verify", PatientAccessController, :verify
-    live "/patient/profile/complete", PatientProfileCompletionLive, :index
-    live "/patient/phone/verify", PatientPhoneVerificationLive, :index
-    live "/patient/calendar", PatientBookingCalendarLive, :index
+
+    live_session :patient_access,
+      on_mount: [{OrigenWeb.PatientSessionAuthLive, :ensure_authenticated}] do
+      live "/patient/phone/verify", PatientPhoneVerificationLive, :index
+      live "/patient/calendar", PatientBookingCalendarLive, :index
+    end
+
+    live_session :patient_profile_edit,
+      on_mount: [{OrigenWeb.PatientSessionAuthLive, :deny_self_edit}] do
+      live "/patient/profile/complete", PatientProfileCompletionLive, :index
+    end
   end
 
   scope "/profesional", OrigenWeb do

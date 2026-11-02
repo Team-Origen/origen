@@ -5,14 +5,7 @@ defmodule OrigenWeb.PatientProfileCompletionLiveTest do
   alias Origen.Patients.{PatientProfile, Persona}
   alias Origen.Repo
 
-  @valid_form %{
-    "first_name" => "Carlos",
-    "last_name" => "López",
-    "document_type" => "dni",
-    "document_number" => "35.987.654",
-    "birthdate" => "1988-07-20",
-    "phone" => "+5491144332211"
-  }
+  @email "paciente_profile_edit@example.test"
 
   setup do
     Repo.delete_all(PatientProfile)
@@ -20,100 +13,43 @@ defmodule OrigenWeb.PatientProfileCompletionLiveTest do
     :ok
   end
 
-  describe "mount/3 and initial rendering" do
-    test "renders the profile completion form with all required fields", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/patient/profile/complete")
+  test "rejects anonymous access to the profile editing route", %{conn: conn} do
+    assert {:error, {:redirect, %{to: "/", flash: %{"error" => message}}}} =
+             live(conn, ~p"/patient/profile/complete")
 
-      assert html =~ "Completar Perfil"
-      assert html =~ "Nombres"
-      assert html =~ "Apellidos"
-      assert html =~ "Tipo de documento"
-      assert html =~ "Número de documento"
-      assert html =~ "Fecha de nacimiento"
-      assert html =~ "Guardar y Completar Perfil"
-    end
+    assert message == "La edición autónoma del perfil no está habilitada."
+    assert Repo.aggregate(PatientProfile, :count) == 0
   end
 
-  describe "real-time validation (phx-change)" do
-    test "validates required fields on blur/change", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/profile/complete")
+  test "rejects an authenticated patient attempt without changing identity data", %{conn: conn} do
+    attrs = %{
+      first_name: "Carlos",
+      last_name: "López",
+      document_type: "dni",
+      document_number: "35987654",
+      birthdate: ~D[1988-07-20],
+      phone: "+5491144332211"
+    }
 
-      html =
-        view
-        |> form("#patient-profile-form", profile: %{"first_name" => ""})
-        |> render_change()
+    {:ok, %{profile: profile}} = Patients.complete_profile(@email, attrs)
 
-      assert html =~ "no puede estar en blanco"
-    end
+    authed_conn =
+      conn
+      |> Phoenix.ConnTest.init_test_session(%{})
+      |> Plug.Conn.put_session(:patient_email, @email)
+      |> Plug.Conn.put_session(
+        :patient_authenticated_at,
+        DateTime.to_iso8601(DateTime.utc_now())
+      )
 
-    test "rejects future birthdate", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/profile/complete")
+    assert {:error, {:redirect, %{to: "/", flash: %{"error" => message}}}} =
+             live(authed_conn, ~p"/patient/profile/complete")
 
-      tomorrow = Date.add(Date.utc_today(), 1) |> Date.to_iso8601()
+    assert message == "La edición autónoma del perfil no está habilitada."
 
-      html =
-        view
-        |> form("#patient-profile-form", profile: Map.put(@valid_form, "birthdate", tomorrow))
-        |> render_change()
-
-      assert html =~ "debe ser una fecha en el pasado"
-    end
-
-    test "validates DNI requires numeric format", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/profile/complete")
-
-      html =
-        view
-        |> form("#patient-profile-form",
-          profile:
-            Map.merge(@valid_form, %{"document_type" => "dni", "document_number" => "38123abc"})
-        )
-        |> render_change()
-
-      assert html =~ "el DNI debe contener solo números"
-    end
-  end
-
-  describe "form submission (phx-submit)" do
-    test "completes profile successfully and displays completed outcome view", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/profile/complete")
-
-      html =
-        view
-        |> form("#patient-profile-form", profile: @valid_form)
-        |> render_submit()
-
-      assert html =~ "¡Perfil Completado!"
-      assert html =~ "Datos obligatorios completos"
-      assert html =~ "Pendiente de verificación"
-      assert html =~ "Ir al inicio"
-      refute html =~ "Verificación de Identidad Requerida"
-    end
-
-    test "handles document collision gracefully by showing derivation to Secretary", %{conn: conn} do
-      # 1. First persona exists in the system
-      {:ok, _} =
-        Patients.complete_profile("otro_paciente@example.test", %{
-          first_name: "Original",
-          last_name: "User",
-          document_type: "dni",
-          document_number: "35987654",
-          birthdate: ~D[1985-01-01]
-        })
-
-      # 2. Patient in LiveView submits the SAME document
-      {:ok, view, _html} = live(conn, ~p"/patient/profile/complete")
-
-      html =
-        view
-        |> form("#patient-profile-form", profile: @valid_form)
-        |> render_submit()
-
-      assert html =~ "Verificación de Identidad Requerida"
-      assert html =~ "El documento ingresado ya se encuentra registrado en nuestro sistema"
-      assert html =~ "tu solicitud fue derivada al equipo de Secretaría"
-      assert html =~ "Volver al inicio"
-      refute html =~ "¡Perfil Completado!"
-    end
+    unchanged = Repo.get!(PatientProfile, profile.id)
+    assert unchanged.persona_id == profile.persona_id
+    assert unchanged.email == @email
+    assert Repo.get!(Persona, profile.persona_id).document_number == "35987654"
   end
 end
