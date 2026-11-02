@@ -266,6 +266,14 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
               </p>
             </div>
 
+            <.link
+              id="create-professional-appointment"
+              navigate={~p"/profesional/agenda/crear"}
+              class="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0A3847] px-4 py-2 text-sm font-semibold text-white hover:bg-[#12566B] focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <.icon name="hero-plus" class="size-5" /> Crear turno
+            </.link>
+
             <!-- Controles de navegación de fecha -->
             <div class="flex items-center gap-2 flex-wrap">
               <button

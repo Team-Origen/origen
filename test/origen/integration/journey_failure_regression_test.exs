@@ -566,74 +566,144 @@ defmodule Origen.Integration.JourneyConcurrencyRegressionTest do
     end
   end
 
-  defp insert_race_fixture!(racer_count) do
-    suffix = System.unique_integer([:positive])
+  test "race fixture keeps patient documents distinct for long suffixes and removes its personas" do
+    :ok = Sandbox.checkout(Repo)
+    fixture = insert_race_fixture!(3, 1_234_567)
 
-    {:ok, %{rows: [[professional_id]]}} =
-      Ecto.Adapters.SQL.query(
-        Repo,
+    rows =
+      Repo.query!(
         """
-        INSERT INTO public.internal_accounts
-          (email, role, state, password_hash, totp_secret, activated_at, created_at, updated_at)
-        VALUES
-          ($1, 'professional', 'active', 'hash', decode('010203', 'hex'), clock_timestamp(), clock_timestamp(), clock_timestamp())
-        RETURNING id
+        SELECT p.id, p.document_number FROM public.personas p
+        JOIN public.patient_profiles pp ON pp.persona_id = p.id
+        WHERE pp.id = ANY($1)
         """,
-        ["dr.carrera_#{suffix}@example.test"]
-      )
+        [fixture.patient_ids]
+      ).rows
 
-    consultation_type_id = Ecto.UUID.generate()
+    assert length(rows) == 3
+    assert rows |> Enum.map(&List.last/1) |> Enum.uniq() |> length() == 3
+    assert Enum.all?(rows, fn [_, document] -> document =~ ~r/^\d{8}$/ end)
+    persona_ids = Enum.map(rows, &hd/1)
 
-    {:ok, _} =
-      Ecto.Adapters.SQL.query(
-        Repo,
-        """
-        INSERT INTO public.consultation_types
-          (id, owner_account_id, name, exact_price_ars, color, interval_count, status, created_at, updated_at)
-        VALUES
-          ($1, $2, 'Consulta Carrera', 15000.00, '#0A3847', 1, 'active', clock_timestamp(), clock_timestamp())
-        """,
-        [Ecto.UUID.dump!(consultation_type_id), professional_id]
-      )
+    cleanup_race_fixture!(fixture)
 
-    patient_ids =
-      Enum.map(1..racer_count, fn index ->
-        doc_num = "49#{suffix}#{index}" |> String.slice(0, 8)
+    assert Repo.query!("SELECT id FROM public.personas WHERE id = ANY($1)", [persona_ids]).rows ==
+             []
 
-        {:ok, %{rows: [[persona_id]]}} =
+    assert Repo.query!("SELECT id FROM public.patient_profiles WHERE id = ANY($1)", [
+             fixture.patient_ids
+           ]).rows == []
+
+    assert Repo.query!("SELECT id FROM public.consultation_types WHERE owner_account_id = $1", [
+             fixture.professional_id
+           ]).rows == []
+
+    assert Repo.query!("SELECT id FROM public.internal_accounts WHERE id = $1", [
+             fixture.professional_id
+           ]).rows == []
+  end
+
+  test "failed race fixture setup rolls back all partially inserted records" do
+    :ok = Sandbox.checkout(Repo)
+    suffix = 7_654_321
+
+    Repo.query!(
+      """
+      INSERT INTO public.patient_profiles
+        (email, state, phone, phone_verified, created_at, updated_at)
+      VALUES ($1, 'completed', '+5491100000000', true, clock_timestamp(), clock_timestamp())
+      """,
+      ["corredor_#{suffix}_2@example.test"]
+    )
+
+    before = race_fixture_counts()
+
+    assert_raise MatchError, fn -> insert_race_fixture!(3, suffix) end
+
+    assert race_fixture_counts() == before
+  end
+
+  defp race_fixture_counts do
+    Repo.query!("""
+    SELECT
+      (SELECT count(*) FROM public.internal_accounts),
+      (SELECT count(*) FROM public.consultation_types),
+      (SELECT count(*) FROM public.personas),
+      (SELECT count(*) FROM public.patient_profiles)
+    """).rows
+  end
+
+  defp insert_race_fixture!(racer_count, suffix \\ System.unique_integer([:positive])) do
+    {:ok, fixture} =
+      Repo.transaction(fn ->
+        {:ok, %{rows: [[professional_id]]}} =
           Ecto.Adapters.SQL.query(
             Repo,
             """
-            INSERT INTO public.personas
-              (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
+            INSERT INTO public.internal_accounts
+              (email, role, state, password_hash, totp_secret, activated_at, created_at, updated_at)
             VALUES
-              ('Corredor', $1, 'dni', $2, '1992-01-01', clock_timestamp(), clock_timestamp())
+              ($1, 'professional', 'active', 'hash', decode('010203', 'hex'), clock_timestamp(), clock_timestamp(), clock_timestamp())
             RETURNING id
             """,
-            ["#{index}", doc_num]
+            ["dr.carrera_#{suffix}@example.test"]
           )
 
-        {:ok, %{rows: [[profile_id]]}} =
+        consultation_type_id = Ecto.UUID.generate()
+
+        {:ok, _} =
           Ecto.Adapters.SQL.query(
             Repo,
             """
-            INSERT INTO public.patient_profiles
-              (persona_id, email, state, phone, phone_verified, created_at, updated_at)
+            INSERT INTO public.consultation_types
+              (id, owner_account_id, name, exact_price_ars, color, interval_count, status, created_at, updated_at)
             VALUES
-              ($1, $2, 'completed', '+5491100000000', true, clock_timestamp(), clock_timestamp())
-            RETURNING id
+              ($1, $2, 'Consulta Carrera', 15000.00, '#0A3847', 1, 'active', clock_timestamp(), clock_timestamp())
             """,
-            [persona_id, "corredor_#{suffix}_#{index}@example.test"]
+            [Ecto.UUID.dump!(consultation_type_id), professional_id]
           )
 
-        profile_id
+        patient_ids =
+          Enum.map(1..racer_count, fn index ->
+            doc_num = Integer.to_string(49_000_000 + rem(suffix, 1_000_000) * 3 + index)
+
+            {:ok, %{rows: [[persona_id]]}} =
+              Ecto.Adapters.SQL.query(
+                Repo,
+                """
+                INSERT INTO public.personas
+                  (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
+                VALUES
+                  ('Corredor', $1, 'dni', $2, '1992-01-01', clock_timestamp(), clock_timestamp())
+                RETURNING id
+                """,
+                ["#{index}", doc_num]
+              )
+
+            {:ok, %{rows: [[profile_id]]}} =
+              Ecto.Adapters.SQL.query(
+                Repo,
+                """
+                INSERT INTO public.patient_profiles
+                  (persona_id, email, state, phone, phone_verified, created_at, updated_at)
+                VALUES
+                  ($1, $2, 'completed', '+5491100000000', true, clock_timestamp(), clock_timestamp())
+                RETURNING id
+                """,
+                [persona_id, "corredor_#{suffix}_#{index}@example.test"]
+              )
+
+            profile_id
+          end)
+
+        %{
+          professional_id: professional_id,
+          consultation_type_id: consultation_type_id,
+          patient_ids: patient_ids
+        }
       end)
 
-    %{
-      professional_id: professional_id,
-      consultation_type_id: consultation_type_id,
-      patient_ids: patient_ids
-    }
+    fixture
   end
 
   defp cleanup_race_fixture!(fixture) do
@@ -647,6 +717,13 @@ defmodule Origen.Integration.JourneyConcurrencyRegressionTest do
 
     Repo.query!("DELETE FROM public.internal_accounts WHERE id = $1", [fixture.professional_id])
 
+    persona_ids =
+      Repo.query!("SELECT persona_id FROM public.patient_profiles WHERE id = ANY($1)", [
+        fixture.patient_ids
+      ]).rows
+      |> Enum.map(&hd/1)
+
     Repo.query!("DELETE FROM public.patient_profiles WHERE id = ANY($1)", [fixture.patient_ids])
+    Repo.query!("DELETE FROM public.personas WHERE id = ANY($1)", [persona_ids])
   end
 end

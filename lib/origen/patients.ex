@@ -23,6 +23,8 @@ defmodule Origen.Patients do
 
   alias Origen.Repo
 
+  @email_regex ~r/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/
+
   @doc """
   Gets or creates a patient profile for the given authenticated email.
   New profiles start in `pending_completion` state with `phone_verified: false`.
@@ -256,6 +258,179 @@ defmodule Origen.Patients do
     register_absent_patient(attrs, secretary_account_id)
   end
 
+  @doc """
+  Links a personal access email to an existing patient profile that has no access email.
+  Accessible only by active Staff (:secretary or :professional).
+  Dispatches a proof-of-possession magic link to the new email.
+  Audits the event without sensitive data.
+  """
+  @spec link_patient_access_email(
+          PatientProfile.t() | integer(),
+          String.t(),
+          integer(),
+          keyword()
+        ) ::
+          {:ok, %{patient_profile: PatientProfile.t(), outcome: :linked}}
+          | {:error, :already_has_access_email}
+          | {:error, :email_already_in_use}
+          | {:error, :invalid_email}
+          | {:error, :patient_not_found}
+          | {:error, :unauthorized}
+          | {:error, term()}
+  def link_patient_access_email(patient_or_id, email, actor_account_id, opts \\ []) do
+    with {:ok, role} <- authorize_staff(actor_account_id),
+         {:ok, clean_email} <- validate_email_format(email),
+         {:ok, profile} <- resolve_patient_profile(patient_or_id) do
+      cond do
+        profile.email != nil and String.trim(profile.email) != "" ->
+          {:error, :already_has_access_email}
+
+        email_taken_by_other_patient?(clean_email, profile.id) ->
+          {:error, :email_already_in_use}
+
+        true ->
+          Repo.transaction(fn ->
+            case profile
+                 |> PatientProfile.changeset(%{email: clean_email})
+                 |> Repo.update() do
+              {:ok, updated_profile} ->
+                Origen.PatientAccess.request_magic_link(clean_email, opts)
+
+                case audit_email_linked(role, actor_account_id, updated_profile.id) do
+                  :ok -> %{patient_profile: updated_profile, outcome: :linked}
+                  _ -> Repo.rollback(:audit_unavailable)
+                end
+
+              {:error, changeset} ->
+                Repo.rollback(changeset)
+            end
+          end)
+      end
+    end
+  end
+
+  @doc """
+  Replaces a personal access email for an existing patient profile.
+  Accessible only by active Staff (:secretary or :professional).
+  Requires a mandatory non-empty reason.
+  Atomically:
+  1. Invalidates previous pending magic links for the previous email.
+  2. Updates profile with the new email and `sessions_invalidated_at = now`.
+  3. Dispatches proof-of-possession magic link to the new email.
+  4. Preserves persona, appointments and history.
+  5. Audits the event with actor, patient ref and sanitized info.
+  """
+  @spec replace_patient_access_email(
+          PatientProfile.t() | integer(),
+          String.t(),
+          integer(),
+          String.t(),
+          keyword()
+        ) ::
+          {:ok, %{patient_profile: PatientProfile.t(), outcome: :replaced}}
+          | {:error, :same_email}
+          | {:error, :email_already_in_use}
+          | {:error, :invalid_email}
+          | {:error, :reason_required}
+          | {:error, :patient_not_found}
+          | {:error, :unauthorized}
+          | {:error, term()}
+  def replace_patient_access_email(patient_or_id, new_email, actor_account_id, reason, opts \\ []) do
+    with {:ok, role} <- authorize_staff(actor_account_id),
+         :ok <- validate_reason(reason),
+         {:ok, clean_new_email} <- validate_email_format(new_email),
+         {:ok, profile} <- resolve_patient_profile(patient_or_id) do
+      now = Keyword.get(opts, :now, DateTime.utc_now())
+
+      cond do
+        profile.email != nil and String.downcase(String.trim(profile.email)) == clean_new_email ->
+          {:error, :same_email}
+
+        email_taken_by_other_patient?(clean_new_email, profile.id) ->
+          {:error, :email_already_in_use}
+
+        true ->
+          Repo.transaction(fn ->
+            old_email = profile.email
+
+            if old_email do
+              Origen.PatientAccess.invalidate_pending_links(old_email, now: now)
+            end
+
+            case profile
+                 |> PatientProfile.changeset(%{
+                   email: clean_new_email,
+                   sessions_invalidated_at: now
+                 })
+                 |> Repo.update() do
+              {:ok, updated_profile} ->
+                Origen.PatientAccess.request_magic_link(clean_new_email, opts)
+
+                case audit_email_replaced(role, actor_account_id, updated_profile.id) do
+                  :ok -> %{patient_profile: updated_profile, outcome: :replaced}
+                  _ -> Repo.rollback(:audit_unavailable)
+                end
+
+              {:error, changeset} ->
+                Repo.rollback(changeset)
+            end
+          end)
+      end
+    end
+  end
+
+  @doc """
+  Verifies whether a patient session is valid.
+  Returns:
+  - `{:ok, profile}` if profile exists and session is valid.
+  - `{:error, :session_invalidated}` if session was invalidated.
+  - `{:error, :patient_not_found}` if profile not found.
+  - `{:error, :unauthenticated}` if email is nil or empty.
+  """
+  @spec verify_patient_session(String.t() | nil, DateTime.t() | String.t() | nil) ::
+          {:ok, PatientProfile.t()}
+          | {:error, :unauthenticated | :patient_not_found | :session_invalidated}
+  def verify_patient_session(email, authenticated_at)
+
+  def verify_patient_session(nil, _), do: {:error, :unauthenticated}
+  def verify_patient_session("", _), do: {:error, :unauthenticated}
+
+  def verify_patient_session(email, authenticated_at) when is_binary(email) do
+    clean_email = email |> String.trim() |> String.downcase()
+
+    case Repo.one(from p in PatientProfile, where: p.email == ^clean_email) do
+      nil ->
+        {:error, :patient_not_found}
+
+      %PatientProfile{sessions_invalidated_at: nil} = profile ->
+        {:ok, profile}
+
+      %PatientProfile{sessions_invalidated_at: %DateTime{} = invalidated_at} = profile ->
+        case parse_datetime(authenticated_at) do
+          %DateTime{} = auth_dt ->
+            if DateTime.compare(auth_dt, invalidated_at) == :lt do
+              {:error, :session_invalidated}
+            else
+              {:ok, profile}
+            end
+
+          nil ->
+            {:error, :session_invalidated}
+        end
+    end
+  end
+
+  defp parse_datetime(%DateTime{} = dt), do: dt
+
+  defp parse_datetime(iso) when is_binary(iso) do
+    case DateTime.from_iso8601(iso) do
+      {:ok, dt, _offset} -> dt
+      _ -> nil
+    end
+  end
+
+  defp parse_datetime(_), do: nil
+
   defp linked_profile(nil), do: nil
 
   defp linked_profile(%Persona{} = persona) do
@@ -331,6 +506,89 @@ defmodule Origen.Patients do
   end
 
   defp authorize_secretary(_), do: {:error, :unauthorized}
+
+  defp authorize_staff(account_id) when is_integer(account_id) do
+    case Repo.query("SELECT id, role, state FROM internal_accounts WHERE id = $1", [account_id]) do
+      {:ok, %{rows: [[_id, role, "active"]]}} when role in ["secretary", "professional"] ->
+        {:ok, String.to_existing_atom(role)}
+
+      _ ->
+        {:error, :unauthorized}
+    end
+  end
+
+  defp authorize_staff(_), do: {:error, :unauthorized}
+
+  defp resolve_patient_profile(%PatientProfile{id: id}) when is_integer(id) do
+    case Repo.get(PatientProfile, id) do
+      %PatientProfile{} = profile -> {:ok, profile}
+      nil -> {:error, :patient_not_found}
+    end
+  end
+
+  defp resolve_patient_profile(patient_id) when is_integer(patient_id) do
+    case Repo.get(PatientProfile, patient_id) do
+      %PatientProfile{} = profile -> {:ok, profile}
+      nil -> {:error, :patient_not_found}
+    end
+  end
+
+  defp resolve_patient_profile(_), do: {:error, :patient_not_found}
+
+  defp validate_email_format(email) when is_binary(email) do
+    trimmed = String.trim(email) |> String.downcase()
+
+    if Regex.match?(@email_regex, trimmed) do
+      {:ok, trimmed}
+    else
+      {:error, :invalid_email}
+    end
+  end
+
+  defp validate_email_format(_), do: {:error, :invalid_email}
+
+  defp validate_reason(reason) when is_binary(reason) do
+    if String.trim(reason) != "" do
+      :ok
+    else
+      {:error, :reason_required}
+    end
+  end
+
+  defp validate_reason(_), do: {:error, :reason_required}
+
+  defp email_taken_by_other_patient?(email, profile_id) do
+    Repo.exists?(
+      from p in PatientProfile,
+        where: p.email == ^email and p.id != ^profile_id
+    )
+  end
+
+  defp audit_email_linked(actor_role, actor_account_id, profile_id) do
+    with {:ok, event} <-
+           Events.patient_access_email_linked(
+             {actor_role, Integer.to_string(actor_account_id)},
+             "profile:#{profile_id}"
+           ),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> {:error, :audit_failed}
+    end
+  end
+
+  defp audit_email_replaced(actor_role, actor_account_id, profile_id) do
+    with {:ok, event} <-
+           Events.patient_access_email_replaced(
+             {actor_role, Integer.to_string(actor_account_id)},
+             "profile:#{profile_id}"
+           ),
+         {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+      :ok
+    else
+      _ -> {:error, :audit_failed}
+    end
+  end
 
   # The actor reference keeps the plain account id: `Events` sanitization rejects
   # references containing "secret" (and therefore any "secretary:<id>" prefix), and

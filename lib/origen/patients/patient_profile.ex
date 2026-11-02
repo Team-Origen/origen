@@ -17,6 +17,7 @@ defmodule Origen.Patients.PatientProfile do
     field :phone_verified, :boolean, default: false
     field :collision_detected_at, :utc_datetime_usec
     field :collision_notes, :string
+    field :sessions_invalidated_at, :utc_datetime_usec
 
     belongs_to :persona, Origen.Patients.Persona
 
@@ -36,7 +37,8 @@ defmodule Origen.Patients.PatientProfile do
       :phone,
       :phone_verified,
       :collision_detected_at,
-      :collision_notes
+      :collision_notes,
+      :sessions_invalidated_at
     ])
     |> validate_required([:state])
     |> validate_inclusion(:state, @states)
