@@ -13,6 +13,7 @@ defmodule Origen.PatientAccess do
   import Ecto.Query
   alias Origen.Audit.{Events, Writer}
   alias Origen.PatientAccess.{Email, MagicLink}
+  alias Origen.Patients.PatientProfile
   alias Origen.Repo
 
   @default_ttl_seconds 900
@@ -94,6 +95,47 @@ defmodule Origen.PatientAccess do
   end
 
   def invalidate_pending_links(_invalid, _opts), do: {0, nil}
+
+  @doc """
+  Returns the patient's personal access possession state.
+
+  The persisted access email alone is not proof of possession. A profile is
+  `:unlinked` without an access email, `:pending_verification` while it has no
+  consumed magic link, and `:verified` after at least one link for that email
+  has been consumed.
+  """
+  @spec access_status(map() | String.t() | nil) ::
+          :unlinked | :pending_verification | :verified
+  def access_status(%{email: email}), do: access_status(email)
+
+  def access_status(%{"email" => email}), do: access_status(email)
+
+  def access_status(profile_id) when is_integer(profile_id) do
+    case Repo.get(PatientProfile, profile_id) do
+      %PatientProfile{email: email} -> access_status(email)
+      nil -> :unlinked
+    end
+  end
+
+  def access_status(email) when is_binary(email) do
+    clean_email = email |> String.trim() |> String.downcase()
+
+    cond do
+      clean_email == "" ->
+        :unlinked
+
+      Repo.exists?(
+        from m in MagicLink,
+          where: m.email == ^clean_email and not is_nil(m.consumed_at)
+      ) ->
+        :verified
+
+      true ->
+        :pending_verification
+    end
+  end
+
+  def access_status(_profile_or_email), do: :unlinked
 
   @doc """
   Consumes a magic link token.
