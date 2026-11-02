@@ -100,7 +100,7 @@ defmodule Origen.Booking.AtomicReservationTest do
   end
 
   describe "turno nacido en :requested (V02, §2.4)" do
-    test "no crea relación Profesional-Paciente pero sí audita", ctx do
+    test "crea relación Profesional-Paciente y audita conforme beta", ctx do
       assert {:ok, response} =
                Booking.reserve_appointment(patient_request(ctx, ~U[2026-10-15 09:00:00Z]),
                  now: @before_d1,
@@ -108,10 +108,10 @@ defmodule Origen.Booking.AtomicReservationTest do
                )
 
       assert response.status == :requested
-      assert response.relationship_created? == false
+      assert response.relationship_created? == true
 
       assert count("appointments") == 1
-      assert count("professional_patient_relationships") == 0
+      assert count("professional_patient_relationships") == 1
 
       assert [
                [
