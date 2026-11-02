@@ -4,8 +4,8 @@
 Profesional busca por DNI exacto dentro de «Crear turno» y, si no existe,
 completa el alta junto con la reserva en su propia agenda. Sólo el éxito conjunto
 persiste identidad, turno confirmado y relación Profesional–Paciente. Este
-documento no implementa el flujo. La aprobación documental anterior no acredita
-por sí sola la aprobación de esta actualización.
+documento no implementa el flujo. La revisión de alcance fue aprobada por Saidqr
+y [registrada en #317](https://github.com/Team-Origen/origen/issues/317#issuecomment-6578609947).
 
 ## 1. Alcance y fuentes de verdad
 
@@ -31,7 +31,8 @@ aprobó el contrato original de #317 en `a64b930`, según el
 [registro de acuerdo](https://github.com/Team-Origen/origen/issues/317#issuecomment-6425202986),
 y la issue tiene la etiqueta `status:approved`. El alcance actualizado está
 registrado en las issues #317/#318/#320/#286: sólo difiere en la secuencia de
-bloqueos puntuales; requiere registrar evidencia y aprobación de esta revisión.
+bloqueos puntuales. Saidqr aprobó la revisión de este documento en la
+[constancia actualizada](https://github.com/Team-Origen/origen/issues/317#issuecomment-6578609947).
 Ni la aprobación original ni esta actualización documental acreditan el backend,
 la interfaz, la integración o el cierre de #283.
 No se incorporan acceso por magic link, edición de identidad, historia clínica,
@@ -154,8 +155,8 @@ El cierre informado de #276 no sustituye la revisión del código vigente ni pru
 ## 6. Responsabilidad, coordinación técnica y entrega
 
 La guía asigna #283 y sus hijas a Said (`Saidqr`), y #282 a Santiago (`SantiCasali`).
-La aprobación original de #317 por Saidqr queda registrada arriba; la revisión de
-alcance requiere evidencia/aprobación actualizada y no presume acuerdo de
+La aprobación original y la revisión de alcance de #317 por Saidqr quedan
+registradas arriba; ninguna presume acuerdo de
 Santiago sobre las decisiones técnicas compartidas ni designa aprobadores nuevos.
 
 | Unidad | Responsabilidad y condición de salida |
