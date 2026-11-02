@@ -209,6 +209,18 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
     refute Map.has_key?(changes, :relationship)
   end
 
+  test "pending request occupies the slot without creating another patient", context do
+    existing = seed_existing_booking(context, "requested")
+    attrs = %{context.attrs | start_time: existing.start_time}
+    before = persisted_records()
+
+    assert {:error, {:appointment, :slot_already_booked}} =
+             Booking.register_and_reserve_professional_appointment(context.principal, attrs)
+
+    assert persisted_records() == before
+    assert Repo.get!(Appointment, existing.id).status == "requested"
+  end
+
   test "foreign consultation type and client-selected agenda are denied", context do
     seed_existing_booking(context)
 
@@ -468,7 +480,7 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
     end
   end
 
-  defp seed_existing_booking(context) do
+  defp seed_existing_booking(context, status \\ "confirmed") do
     persona =
       %Persona{}
       |> Persona.assisted_changeset(%{context.attrs | document_number: "38111222"})
@@ -489,7 +501,7 @@ defmodule Origen.Booking.ProfessionalRegistrationTest do
         patient_profile_id: profile.id,
         consultation_type_id: context.attrs.consultation_type_id,
         start_time: DateTime.add(context.attrs.start_time, 60, :minute),
-        status: "confirmed"
+        status: status
       })
 
     %Origen.Booking.ProfessionalPatientRelationship{}
