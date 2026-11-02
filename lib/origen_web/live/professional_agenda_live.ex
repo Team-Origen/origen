@@ -10,6 +10,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   use OrigenWeb, :live_view
 
   alias Origen.Booking
+  alias Origen.PatientAccess
+  alias Origen.Patients
 
   @impl true
   def mount(_params, _session, socket) do
@@ -24,7 +26,12 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
        loading: false,
        error: nil,
        appointments: [],
-       approval_config: approval_config
+       approval_config: approval_config,
+       access_action: nil,
+       access_patient_id: nil,
+       access_form: nil,
+       access_error: nil,
+       access_feedback: nil
      )
      |> load_agenda(date)}
   end
@@ -75,6 +82,91 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
   def handle_event("retry", _params, socket) do
     {:noreply, load_agenda(socket, socket.assigns.date)}
+  end
+
+  @impl true
+  def handle_event("open_link_access", %{"patient-id" => patient_id}, socket) do
+    {:noreply,
+     socket
+     |> assign(:access_action, :link)
+     |> assign(:access_patient_id, patient_id)
+     |> assign(:access_form, %{email: ""})
+     |> assign(:access_error, nil)}
+  end
+
+  @impl true
+  def handle_event("open_replace_access", %{"patient-id" => patient_id}, socket) do
+    {:noreply,
+     socket
+     |> assign(:access_action, :replace)
+     |> assign(:access_patient_id, patient_id)
+     |> assign(:access_form, %{new_email: "", reason: ""})
+     |> assign(:access_error, nil)}
+  end
+
+  @impl true
+  def handle_event("cancel_access_action", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:access_action, nil)
+     |> assign(:access_patient_id, nil)
+     |> assign(:access_form, nil)
+     |> assign(:access_error, nil)}
+  end
+
+  @impl true
+  def handle_event("submit_link_access", %{"access" => params}, socket) do
+    account_id = socket.assigns.current_internal_session.account_id
+
+    case Patients.link_patient_access_email(
+           parse_patient_id(Map.get(params, "patient_id")),
+           Map.get(params, "email", ""),
+           account_id
+         ) do
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> assign(:access_action, nil)
+         |> assign(:access_patient_id, nil)
+         |> assign(:access_form, nil)
+         |> assign(:access_error, nil)
+         |> assign(
+           :access_feedback,
+           "Correo de acceso vinculado. El paciente debe completar el Magic Link para verificar la posesión."
+         )
+         |> load_agenda(socket.assigns.date)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :access_error, access_error_message(reason))}
+    end
+  end
+
+  @impl true
+  def handle_event("submit_replace_access", %{"access" => params}, socket) do
+    account_id = socket.assigns.current_internal_session.account_id
+
+    case Patients.replace_patient_access_email(
+           parse_patient_id(Map.get(params, "patient_id")),
+           Map.get(params, "new_email", ""),
+           account_id,
+           Map.get(params, "reason", "")
+         ) do
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> assign(:access_action, nil)
+         |> assign(:access_patient_id, nil)
+         |> assign(:access_form, nil)
+         |> assign(:access_error, nil)
+         |> assign(
+           :access_feedback,
+           "Correo de acceso reemplazado. El nuevo correo debe completar el Magic Link para verificar la posesión."
+         )
+         |> load_agenda(socket.assigns.date)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :access_error, access_error_message(reason))}
+    end
   end
 
   @impl true
@@ -172,6 +264,13 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   # Un ID malformado nunca debe tumbar el proceso LiveView: se parsea de forma
   # segura y ante fallo se informa con un mensaje claro y se recarga la agenda
   # para refrescar botones obsoletos.
+  defp parse_patient_id(id_str) do
+    case Integer.parse(to_string(id_str)) do
+      {id, ""} when id > 0 -> id
+      _ -> nil
+    end
+  end
+
   defp parse_appointment_id(id_str) do
     case Integer.parse(to_string(id_str)) do
       {id, ""} when id > 0 -> {:ok, id}
@@ -205,6 +304,13 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
     case Booking.get_professional_agenda(principal, %{date: date}) do
       {:ok, %{appointments: appointments}} ->
+        appointments =
+          Enum.map(appointments, fn appointment ->
+            update_in(appointment, [:patient, :access_status], fn _ ->
+              PatientAccess.access_status(appointment.patient.email)
+            end)
+          end)
+
         assign(socket,
           date: date,
           appointments: appointments,
@@ -397,6 +503,15 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
           </form>
         </div>
 
+        <div
+          :if={@access_feedback}
+          id="professional-access-feedback"
+          role="status"
+          class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-sm text-emerald-800"
+        >
+          {@access_feedback}
+        </div>
+
         <!-- Estado de error -->
         <%= if @error do %>
           <div
@@ -526,6 +641,116 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       Tel: {appt.patient.phone}
                     </div>
                   <% end %>
+
+                  <div :if={appt.patient.email} class="text-xs text-stone-500">
+                    Acceso: {appt.patient.email}
+                  </div>
+
+                  <% {access_label, access_classes} = access_badge(appt.patient.access_status) %>
+                  <div
+                    id={"patient-access-status-#{appt.patient.id}"}
+                    class={"mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold " <> access_classes}
+                    role="status"
+                  >
+                    {access_label}
+                  </div>
+
+                  <div class="mt-2 flex flex-wrap justify-start sm:justify-end gap-2">
+                    <button
+                      :if={appt.patient.access_status == :unlinked}
+                      type="button"
+                      id={"btn-open-link-access-#{appt.patient.id}"}
+                      phx-click="open_link_access"
+                      phx-value-patient-id={appt.patient.id}
+                      class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
+                    >
+                      Vincular correo
+                    </button>
+                    <button
+                      :if={appt.patient.access_status != :unlinked}
+                      type="button"
+                      id={"btn-open-replace-access-#{appt.patient.id}"}
+                      phx-click="open_replace_access"
+                      phx-value-patient-id={appt.patient.id}
+                      class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
+                    >
+                      Reemplazar correo
+                    </button>
+                  </div>
+
+                  <%= if to_string(@access_patient_id) == to_string(appt.patient.id) and @access_action do %>
+                    <section
+                      id={"patient-access-form-#{appt.patient.id}"}
+                      class="mt-3 border-t border-stone-200 pt-3 text-left sm:text-right"
+                    >
+                      <div
+                        :if={@access_error}
+                        id={"patient-access-error-#{appt.patient.id}"}
+                        role="alert"
+                        class="mb-2 text-xs font-medium text-rose-700"
+                      >
+                        {@access_error}
+                      </div>
+
+                      <.form
+                        for={%{}}
+                        as={:access}
+                        id={"patient-access-form-fields-#{appt.patient.id}"}
+                        phx-submit={
+                          if @access_action == :link,
+                            do: "submit_link_access",
+                            else: "submit_replace_access"
+                        }
+                        class="space-y-2"
+                      >
+                        <input type="hidden" name="access[patient_id]" value={appt.patient.id} />
+                        <input
+                          :if={@access_action == :link}
+                          type="email"
+                          name="access[email]"
+                          placeholder="paciente@ejemplo.com"
+                          required
+                          aria-label="Correo de acceso personal"
+                          class="w-full rounded-md border-stone-300 text-xs"
+                        />
+                        <input
+                          :if={@access_action == :replace}
+                          type="email"
+                          name="access[new_email]"
+                          placeholder="Nuevo correo personal"
+                          required
+                          aria-label="Nuevo correo de acceso personal"
+                          class="w-full rounded-md border-stone-300 text-xs"
+                        />
+                        <textarea
+                          :if={@access_action == :replace}
+                          name="access[reason]"
+                          placeholder="Motivo del reemplazo"
+                          required
+                          aria-label="Motivo del reemplazo"
+                          class="w-full rounded-md border-stone-300 text-xs"
+                          rows="2"
+                        ></textarea>
+                        <div class="flex justify-start sm:justify-end gap-2">
+                          <button
+                            type="button"
+                            phx-click="cancel_access_action"
+                            class="rounded-md px-2.5 py-1 text-xs text-stone-600 hover:bg-stone-100"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="submit"
+                            class="rounded-md bg-[#0A3847] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#12566B]"
+                          >
+                            {if @access_action == :link,
+                              do: "Vincular y enviar enlace",
+                              else: "Reemplazar y enviar enlace"}
+                          </button>
+                        </div>
+                      </.form>
+                    </section>
+                  <% end %>
                 </div>
               </div>
             <% end %>
@@ -572,6 +797,31 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
     "#{day_name}, #{d.day} de #{month_name} de #{d.year}"
   end
+
+  defp access_badge(:unlinked), do: {"Sin acceso", "bg-stone-50 text-stone-700 border-stone-200"}
+
+  defp access_badge(:pending_verification),
+    do: {"Pendiente de verificación", "bg-amber-50 text-amber-700 border-amber-200"}
+
+  defp access_badge(:verified),
+    do: {"Acceso verificado", "bg-emerald-50 text-emerald-700 border-emerald-200"}
+
+  defp access_badge(_),
+    do: {"Estado de acceso desconocido", "bg-stone-50 text-stone-700 border-stone-200"}
+
+  defp access_error_message(:email_already_in_use),
+    do: "Este correo ya está registrado por otra cuenta de paciente."
+
+  defp access_error_message(:invalid_email), do: "El formato del correo es inválido."
+
+  defp access_error_message(:already_has_access_email),
+    do: "El paciente ya posee un correo de acceso vinculado."
+
+  defp access_error_message(:same_email), do: "El nuevo correo coincide con el correo actual."
+  defp access_error_message(:reason_required), do: "Indicá el motivo del reemplazo."
+  defp access_error_message(:patient_not_found), do: "No se encontró el paciente."
+  defp access_error_message(:unauthorized), do: "No tenés permiso para gestionar este acceso."
+  defp access_error_message(_), do: "No se pudo actualizar el correo de acceso."
 
   defp status_badge(status) do
     case to_string(status) do
