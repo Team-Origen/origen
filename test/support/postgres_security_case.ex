@@ -14,13 +14,13 @@ defmodule Origen.PostgresSecurityCase do
     migrator = connect!("ORIGEN_MIGRATION_DATABASE_URL")
     verifier = connect!("ORIGEN_SECURITY_DATABASE_URL")
 
-    {:ok, runtime: runtime, migrator: migrator, verifier: verifier}
-  end
+    on_exit(fn ->
+      if Process.alive?(runtime), do: GenServer.stop(runtime)
+      if Process.alive?(migrator), do: GenServer.stop(migrator)
+      if Process.alive?(verifier), do: GenServer.stop(verifier)
+    end)
 
-  def stop_connection(connection) do
-    GenServer.stop(connection)
-  catch
-    :exit, {:noproc, _} -> :ok
+    {:ok, runtime: runtime, migrator: migrator, verifier: verifier}
   end
 
   def query!(connection, sql, params \\ []) do
@@ -58,11 +58,6 @@ defmodule Origen.PostgresSecurityCase do
     ]
 
     {:ok, connection} = Postgrex.start_link(options)
-
-    # Register each connection immediately so later setup failures still close it.
-    on_exit(fn -> stop_connection(connection) end)
-    # setup_all exits before on_exit runs; the connection must outlive that process.
-    Process.unlink(connection)
     connection
   end
 end
