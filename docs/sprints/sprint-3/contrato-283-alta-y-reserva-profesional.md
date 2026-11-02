@@ -1,9 +1,11 @@
 # Contrato: alta y reserva desde Profesional
 
-**Contrato aprobado por Saidqr — #317, hija de #283.** El Profesional busca por
-DNI exacto dentro de «Crear turno» y, si no existe, completa el alta junto con la
-reserva en su propia agenda. Sólo el éxito conjunto persiste identidad, turno
-confirmado y relación Profesional–Paciente. Este documento no implementa el flujo.
+**Contrato de #317, hija de #283; alcance Sprint 3 actualizado en GitHub.** El
+Profesional busca por DNI exacto dentro de «Crear turno» y, si no existe,
+completa el alta junto con la reserva en su propia agenda. Sólo el éxito conjunto
+persiste identidad, turno confirmado y relación Profesional–Paciente. Este
+documento no implementa el flujo. La aprobación documental anterior no acredita
+por sí sola la aprobación de esta actualización.
 
 ## 1. Alcance y fuentes de verdad
 
@@ -12,8 +14,8 @@ confirmado y relación Profesional–Paciente. Este documento no implementa el f
 - OpenSpec: `health-center-beta-core`, ruta `openspec/changes/health-center-beta-core/`.
 - Slice: contrato; backend #318, interfaz #319 e integración #320 son entregas separadas.
 - Base inspeccionada: `origin/develop`, commit `dfde7390accd15c7569c099a3542a62c2aaf77b0`.
-- Estado operativo recibido para esta revisión: #276 cerrada; #282 abierta.
-  No se consultó ni modificó GitHub para certificar esos estados.
+- Estado comprobado en GitHub para esta actualización: #282 cerrada;
+  #283/#317/#318/#319/#320 y #286 abiertas. No se modificaron issues.
 
 | Fuente normativa | Secciones aplicables |
 | --- | --- |
@@ -25,11 +27,13 @@ confirmado y relación Profesional–Paciente. Este documento no implementa el f
 | [Guía beta](../GUIA_TRABAJO_BETA.md) | `Fuente de verdad y alcance`, `Responsabilidad por ticket`, `Regla de Integración y verificación` |
 
 La beta aprobada manda sobre comentarios o pruebas históricas. Said (`Saidqr`)
-aprobó explícitamente el contrato de #317 en `a64b930`, según el
+aprobó el contrato original de #317 en `a64b930`, según el
 [registro de acuerdo](https://github.com/Team-Origen/origen/issues/317#issuecomment-6425202986),
-y autorizó la etiqueta `status:approved`, ya presente en la issue. La aprobación
-abarca este contrato documental, no la aprobación de #318/#319/#320 ni la
-verificación funcional o el cierre de #283.
+y la issue tiene la etiqueta `status:approved`. El alcance actualizado está
+registrado en las issues #317/#318/#320/#286: sólo difiere en la secuencia de
+bloqueos puntuales; requiere registrar evidencia y aprobación de esta revisión.
+Ni la aprobación original ni esta actualización documental acreditan el backend,
+la interfaz, la integración o el cierre de #283.
 No se incorporan acceso por magic link, edición de identidad, historia clínica,
 verificación telefónica obligatoria ni permisos de Secretaría para Profesionales.
 
@@ -78,8 +82,12 @@ error y forma exacta de respuesta quedan por acordar, no se inventan firmas aqu�
 - Una búsqueda previa negativa no garantiza ausencia al confirmar. Ante carrera
   de DNI, se rechaza el alta duplicada y se vuelve al recorrido de existente #282;
   no se fusionan datos ni se vincula automáticamente por el mero intento.
-- Disponibilidad se revalida al escribir: respetar agenda, duración, bloqueos y
-  solapamientos del Profesional y paciente. Un horario mostrado no está reservado.
+- Disponibilidad se revalida al escribir en Sprint 3: respetar agenda semanal,
+  duración y solapamientos con turnos y solicitudes activos del Profesional y
+  paciente. Un horario mostrado no está reservado.
+- Los bloqueos puntuales corresponden a #286 (Sprint 4), que debe integrarlos y
+  verificarlos en todos los canales de reserva, incluido éste, antes de la beta
+  final. No se simula esa validación ni se exige para cerrar #318 o #283.
 - La reserva creada por Profesional siempre nace `confirmed`, aun en aprobación
   manual o antes de D-1. No hereda el estado histórico `reserved` por calendario.
 - Sólo un Profesional activo opera su agenda. Rechazar suplantación de actor,
@@ -135,7 +143,8 @@ El cierre informado de #276 no sustituye la revisión del código vigente ni pru
 | DNI ya existente al buscar | No ofrecer duplicación; continuar por #282 con exposición mínima. |
 | Otro actor registra el DNI entre búsqueda y confirmación | Ningún duplicado, turno o relación de este intento; identidad existente intacta y retorno seguro a búsqueda. |
 | Falta cada campo obligatorio o dato inválido | Error de validación; cero nuevas identidades, turnos o relaciones. |
-| Horario ocupado/bloqueado, tipo inválido o disponibilidad cambiada | Rechazo sin alta parcial y sin revelar actividad ajena; refrescar opciones. |
+| Horario ocupado por turno o solicitud activa, tipo inválido o disponibilidad semanal cambiada | Rechazo sin alta parcial y sin revelar actividad ajena; refrescar opciones. |
+| Horario con bloqueo puntual (#286, Sprint 4) | Rechazo al confirmar una vez integrada la fuente real en todos los canales; no es criterio de cierre de #318/#283. |
 | Fallo de persistencia, relación o auditoría de éxito | Rollback de todos los efectos nuevos; no mostrar éxito parcial. |
 | Buscar, volver atrás o abandonar | No persistir identidad, turno ni relación por esos pasos. |
 | Rol indebido, cuenta inactiva o agenda manipulada | Denegación en servidor, sin cambios ni información fuera del permiso. |
@@ -145,7 +154,8 @@ El cierre informado de #276 no sustituye la revisión del código vigente ni pru
 ## 6. Responsabilidad, coordinación técnica y entrega
 
 La guía asigna #283 y sus hijas a Said (`Saidqr`), y #282 a Santiago (`SantiCasali`).
-La aprobación de #317 por Saidqr queda registrada arriba; no presume acuerdo de
+La aprobación original de #317 por Saidqr queda registrada arriba; la revisión de
+alcance requiere evidencia/aprobación actualizada y no presume acuerdo de
 Santiago sobre las decisiones técnicas compartidas ni designa aprobadores nuevos.
 
 | Unidad | Responsabilidad y condición de salida |
