@@ -81,6 +81,7 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
 
     html = view |> form("#patient-dni-form", %{dni: "30.222.333"}) |> render_submit()
     assert html =~ "Bruno Integración"
+    refute has_element?(view, "#assisted-patient-form")
 
     for secret <- ["30222333@example.test", "+5491100000000", "Consulta ajena", "10:00"],
         do: refute(html =~ secret)
@@ -92,6 +93,66 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert observable_state(ctx) == before
     {:ok, _, html} = open_booking(ctx)
     refute html =~ "30222333"
+  end
+
+  test "absent exact DNI offers an assisted form without registering on search or abandonment",
+       ctx do
+    {:ok, view, _} = open_booking(ctx)
+    view |> element("#tab-dni") |> render_click()
+    before = Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows
+
+    html = view |> form("#patient-dni-form", %{dni: "99.999.999"}) |> render_submit()
+    assert html =~ "Alta asistida"
+    assert has_element?(view, "#assisted-patient-form")
+    assert has_element?(view, "#patient-selection-next[disabled]")
+
+    assert Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows ==
+             before
+
+    html =
+      view
+      |> form("#assisted-patient-form", %{
+        "patient" => %{
+          "first_name" => "Luz",
+          "last_name" => "",
+          "birthdate" => "1990-01-01",
+          "phone" => "+5491100000000"
+        }
+      })
+      |> render_submit()
+
+    assert html =~ "Completá los datos obligatorios"
+    assert has_element?(view, "#patient-selection-next[disabled]")
+
+    view
+    |> form("#assisted-patient-form", %{
+      "patient" => %{
+        "first_name" => "Luz",
+        "last_name" => "Gómez",
+        "birthdate" => "1990-01-01",
+        "phone" => "+5491100000000",
+        "email" => ""
+      }
+    })
+    |> render_submit()
+
+    assert has_element?(view, "#selected-patient", "Luz Gómez")
+    assert has_element?(view, "#patient-selection-next:not([disabled])")
+
+    assert Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows ==
+             before
+
+    view |> element("#clear-patient-selection") |> render_click()
+    assert has_element?(view, "#assisted-patient-form")
+    view |> element("#tab-related") |> render_click()
+    refute has_element?(view, "#assisted-patient-form")
+    view |> element("#tab-dni") |> render_click()
+    assert has_element?(view, "#patient-selection-next[disabled]")
+    view |> element("#cancel-patient-selection") |> render_click()
+    assert_redirect(view, "/profesional/agenda")
+
+    assert Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows ==
+             before
   end
 
   test "exact DNI confirmation creates only the actor's relationship and preserves B's activity",
