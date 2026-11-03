@@ -32,6 +32,9 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
         selected: nil,
         searched: false,
         dni: "",
+        absent_dni: nil,
+        assisted_input: %{},
+        assisted_attrs: nil,
         error: nil
       )
 
@@ -44,7 +47,17 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
     socket =
       socket
       |> reset_booking()
-      |> assign(tab: tab, selected: nil, patients: [], searched: false, dni: "", error: nil)
+      |> assign(
+        tab: tab,
+        selected: nil,
+        patients: [],
+        searched: false,
+        dni: "",
+        absent_dni: nil,
+        assisted_input: %{},
+        assisted_attrs: nil,
+        error: nil
+      )
 
     {:noreply, if(tab == "related", do: load_related(socket), else: socket)}
   end
@@ -56,7 +69,16 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
     socket =
       socket
       |> reset_booking()
-      |> assign(selected: nil, patients: [], searched: true, dni: dni, error: nil)
+      |> assign(
+        selected: nil,
+        patients: [],
+        searched: true,
+        dni: dni,
+        absent_dni: nil,
+        assisted_input: %{},
+        assisted_attrs: nil,
+        error: nil
+      )
 
     result =
       if document == "" or not Regex.match?(~r/^[A-Z0-9]{1,32}$/, document),
@@ -65,7 +87,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
 
     case result do
       {:ok, nil} ->
-        {:noreply, socket}
+        {:noreply, assign(socket, absent_dni: if(real_booking?(), do: document, else: nil))}
 
       {:ok, patient} when is_map(patient) ->
         {:noreply, assign(socket, patients: [project(patient)])}
@@ -81,12 +103,50 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
 
     case Enum.find(socket.assigns.patients, &(to_string(&1.id) == id)) do
       nil -> {:noreply, assign(socket, selected: nil, error: "La selección no es válida.")}
-      patient -> {:noreply, assign(socket, selected: patient, error: nil)}
+      patient -> {:noreply, assign(socket, selected: patient, assisted_attrs: nil, error: nil)}
+    end
+  end
+
+  def handle_event(
+        "select_assisted_patient",
+        %{"patient" => fields},
+        %{assigns: %{step: 1, tab: "dni", absent_dni: dni, real_booking: true}} = socket
+      )
+      when is_binary(dni) and is_map(fields) do
+    input =
+      Map.new(~w(first_name last_name birthdate phone email), fn field ->
+        value = Map.get(fields, field, "")
+        {field, if(is_binary(value), do: String.trim(value), else: "")}
+      end)
+
+    required = ~w(first_name last_name birthdate phone)
+
+    if Enum.all?(required, &(input[&1] != "")) and
+         match?({:ok, _}, Date.from_iso8601(input["birthdate"])) do
+      patient = %{
+        id: nil,
+        first_name: input["first_name"],
+        last_name: input["last_name"],
+        document_number: dni
+      }
+
+      {:noreply,
+       assign(socket, selected: patient, assisted_attrs: input, assisted_input: input, error: nil)}
+    else
+      {:noreply,
+       assign(socket,
+         selected: nil,
+         assisted_attrs: nil,
+         assisted_input: input,
+         error: "Completá los datos obligatorios y revisá la fecha de nacimiento."
+       )}
     end
   end
 
   def handle_event("clear_patient_selection", _params, %{assigns: %{step: 1}} = socket),
-    do: {:noreply, socket |> reset_booking() |> assign(selected: nil, error: nil)}
+    do:
+      {:noreply,
+       socket |> reset_booking() |> assign(selected: nil, assisted_attrs: nil, error: nil)}
 
   def handle_event(
         "next_booking_step",
@@ -191,6 +251,40 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   def handle_event(
         "confirm_booking",
         _params,
+        %{
+          assigns: %{
+            real_booking: true,
+            step: 4,
+            result: nil,
+            selected: %{id: nil},
+            assisted_attrs: attrs,
+            absent_dni: dni
+          }
+        } = socket
+      )
+      when is_map(attrs) and is_binary(dni) do
+    with true <- real_booking?(),
+         %{id: consultation_id} <- socket.assigns.consultation,
+         %{start_time: start_time} <- socket.assigns.slot,
+         {:ok, result} <-
+           journey_execute(
+             socket,
+             {:register, socket.assigns.current_internal_session,
+              attrs
+              |> Map.put("document_number", dni)
+              |> Map.put("consultation_type_id", consultation_id)
+              |> Map.put("start_time", start_time)}
+           ) do
+      {:noreply, assign(socket, result: result, journey_error: nil)}
+    else
+      {:error, reason} -> {:noreply, assign(socket, journey_error: registration_message(reason))}
+      _ -> {:noreply, assign(socket, journey_error: booking_message(:unavailable))}
+    end
+  end
+
+  def handle_event(
+        "confirm_booking",
+        _params,
         %{assigns: %{real_booking: true, step: 4, result: nil}} = socket
       ) do
     with true <- real_booking?(),
@@ -213,6 +307,18 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
       {:error, reason} -> {:noreply, assign(socket, journey_error: booking_message(reason))}
       _ -> {:noreply, assign(socket, journey_error: booking_message(:unavailable))}
     end
+  end
+
+  def handle_event(
+        "retry_assisted_search",
+        _params,
+        %{assigns: %{step: 4, assisted_attrs: attrs}} = socket
+      )
+      when is_map(attrs) do
+    {:noreply,
+     socket
+     |> reset_booking()
+     |> assign(step: 1, selected: nil, assisted_attrs: nil, absent_dni: nil, searched: false)}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
@@ -316,6 +422,15 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
 
   defp message(_), do: "No se pudieron consultar los pacientes. Intentá nuevamente."
 
+  defp registration_message({:owner, _}), do: booking_message(:unauthorized)
+  defp registration_message({:snapshot, _}), do: booking_message(:slot_unavailable)
+  defp registration_message({:appointment, reason}), do: booking_message(reason)
+
+  defp registration_message({step, _}) when step in [:persona, :profile, :input],
+    do: "No se creó el turno. Revisá los datos del paciente y volvé a buscar el DNI si ya existe."
+
+  defp registration_message(_), do: booking_message(:unavailable)
+
   defp booking_message(reason)
        when reason in [
               :slot_already_booked,
@@ -374,6 +489,13 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
         >
           {@journey_error}
         </p>
+        <button
+          :if={@step == 4 and not is_nil(@journey_error) and not is_nil(@assisted_attrs)}
+          id="retry-assisted-search"
+          type="button"
+          phx-click="retry_assisted_search"
+          class="text-sm font-semibold text-[#0A3847] underline"
+        >Volver a buscar DNI</button>
 
         <section
           :if={@step == 1}
@@ -466,6 +588,38 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
             >
               No se encontró un paciente registrado con ese DNI. Podés corregirlo o cancelar.
             </p>
+
+            <form
+              :if={@real_booking and not is_nil(@absent_dni) and is_nil(@selected)}
+              id="assisted-patient-form"
+              phx-submit="select_assisted_patient"
+              class="space-y-3 rounded-lg border border-stone-200 p-4"
+            >
+              <h3 class="font-semibold text-black">Alta asistida</h3>
+              <p class="text-sm text-stone-600">Los datos se guardan sólo al confirmar el turno.</p>
+              <div :for={
+                {key, label, type} <- [
+                  {"first_name", "Nombre", "text"},
+                  {"last_name", "Apellido", "text"},
+                  {"birthdate", "Fecha de nacimiento", "date"},
+                  {"phone", "Teléfono", "tel"},
+                  {"email", "Email de contacto (opcional)", "email"}
+                ]
+              }>
+                <label for={"assisted-#{key}"} class="block text-sm font-medium text-black">{label}</label>
+                <input
+                  id={"assisted-#{key}"}
+                  name={"patient[#{key}]"}
+                  type={type}
+                  value={Map.get(@assisted_input, key, "")}
+                  autocomplete="off"
+                  class="w-full rounded-lg border-stone-300 text-black"
+                />
+              </div>
+              <button type="submit" class="rounded-lg bg-[#0A3847] px-4 py-2 font-semibold text-white">
+                Continuar con el alta
+              </button>
+            </form>
 
             <ul aria-label="Pacientes disponibles" class="space-y-3">
               <li

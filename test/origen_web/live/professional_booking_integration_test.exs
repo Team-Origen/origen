@@ -81,6 +81,7 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
 
     html = view |> form("#patient-dni-form", %{dni: "30.222.333"}) |> render_submit()
     assert html =~ "Bruno Integración"
+    refute has_element?(view, "#assisted-patient-form")
 
     for secret <- ["30222333@example.test", "+5491100000000", "Consulta ajena", "10:00"],
         do: refute(html =~ secret)
@@ -92,6 +93,150 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert observable_state(ctx) == before
     {:ok, _, html} = open_booking(ctx)
     refute html =~ "30222333"
+  end
+
+  test "absent exact DNI offers an assisted form without registering on search or abandonment",
+       ctx do
+    {:ok, view, _} = open_booking(ctx)
+    view |> element("#tab-dni") |> render_click()
+    before = Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows
+
+    html = view |> form("#patient-dni-form", %{dni: "99.999.999"}) |> render_submit()
+    assert html =~ "Alta asistida"
+    assert has_element?(view, "#assisted-patient-form")
+    assert has_element?(view, "#patient-selection-next[disabled]")
+
+    assert Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows ==
+             before
+
+    html =
+      view
+      |> form("#assisted-patient-form", %{
+        "patient" => %{
+          "first_name" => "Luz",
+          "last_name" => "",
+          "birthdate" => "1990-01-01",
+          "phone" => "+5491100000000"
+        }
+      })
+      |> render_submit()
+
+    assert html =~ "Completá los datos obligatorios"
+    assert has_element?(view, "#patient-selection-next[disabled]")
+
+    view
+    |> form("#assisted-patient-form", %{
+      "patient" => %{
+        "first_name" => "Luz",
+        "last_name" => "Gómez",
+        "birthdate" => "1990-01-01",
+        "phone" => "+5491100000000",
+        "email" => ""
+      }
+    })
+    |> render_submit()
+
+    assert has_element?(view, "#selected-patient", "Luz Gómez")
+    assert has_element?(view, "#patient-selection-next:not([disabled])")
+
+    assert Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows ==
+             before
+
+    view |> element("#clear-patient-selection") |> render_click()
+    assert has_element?(view, "#assisted-patient-form")
+    view |> element("#tab-related") |> render_click()
+    refute has_element?(view, "#assisted-patient-form")
+    view |> element("#tab-dni") |> render_click()
+    assert has_element?(view, "#patient-selection-next[disabled]")
+    view |> element("#cancel-patient-selection") |> render_click()
+    assert_redirect(view, "/profesional/agenda")
+
+    assert Repo.query!("SELECT count(*) FROM personas WHERE document_number = '99999999'").rows ==
+             before
+  end
+
+  test "assisted confirmation books once and persists identity only at the final step", ctx do
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert patient_count("99999999") == 0
+    refute has_element?(view, "#booking-result")
+
+    html =
+      render_click(view, "confirm_booking", %{
+        "professional_id" => ctx.b.session.account_id,
+        "patient_id" => ctx.related,
+        "document_number" => "30111222",
+        "status" => "requested"
+      })
+
+    assert html =~ "Turno confirmado"
+    assert has_element?(view, "#booking-result")
+    assert patient_count("99999999") == 1
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+    assert appointment.status == "confirmed"
+    assert appointment.patient.first_name == "Luz"
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+    assert {:ok, patients} = Booking.list_professional_patients(ctx.a.session)
+    assert Enum.any?(patients, &(&1.document_number == "99999999"))
+    render_click(view, "confirm_booking", %{})
+    assert patient_count("99999999") == 1
+    assert {:ok, %{appointments: [_]}} = agenda(ctx.a, ctx.date)
+  end
+
+  test "an occupied slot rejects assisted booking without partial identity or relationship",
+       ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    seed_booking!(ctx.a, ctx.related, ctx.date, "09:00:00")
+    before = observable_state(ctx)
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute has_element?(view, "#booking-result")
+    assert patient_count("99999999") == 0
+    assert observable_state(ctx) == before
+    view |> element("button[phx-click='go_booking_step'][phx-value-step='3']") |> render_click()
+    refute has_element?(view, "#slot-0900")
+    view |> element("#slot-0930") |> render_click()
+    view |> element("#slot-next") |> render_click()
+    view |> element("#confirm-booking") |> render_click()
+    assert has_element?(view, "#booking-result", "Turno confirmado")
+    assert patient_count("99999999") == 1
+  end
+
+  test "DNI registered after search never creates a second patient or a booking", ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    patient!("Paciente existente", "99999999")
+    before = observable_state(ctx)
+
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute has_element?(view, "#booking-result")
+    assert patient_count("99999999") == 1
+    assert observable_state(ctx) == before
+    view |> element("#retry-assisted-search") |> render_click()
+    html = view |> form("#patient-dni-form", %{dni: "99999999"}) |> render_submit()
+    assert html =~ "Paciente existente"
+    refute has_element?(view, "#assisted-patient-form")
+  end
+
+  test "revoked session cannot confirm assisted registration", ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+
+    Repo.query!("UPDATE internal_account_sessions SET revoked_at = NOW() WHERE id = $1", [
+      ctx.a.session.session_id
+    ])
+
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute has_element?(view, "#booking-result")
+    assert patient_count("99999999") == 0
   end
 
   test "exact DNI confirmation creates only the actor's relationship and preserves B's activity",
@@ -194,6 +339,29 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     view |> element("#tab-dni") |> render_click()
     view |> form("#patient-dni-form", %{dni: "30.222.333"}) |> render_submit()
     view |> element("#patient-#{patient}") |> render_click()
+  end
+
+  defp select_absent(view) do
+    view |> element("#tab-dni") |> render_click()
+    view |> form("#patient-dni-form", %{dni: "99.999.999"}) |> render_submit()
+
+    view
+    |> form("#assisted-patient-form", %{
+      "patient" => %{
+        "first_name" => "Luz",
+        "last_name" => "Gómez",
+        "birthdate" => "1990-01-01",
+        "phone" => "+5491100000000",
+        "email" => ""
+      }
+    })
+    |> render_submit()
+  end
+
+  defp patient_count(dni) do
+    Repo.query!("SELECT count(*) FROM personas WHERE document_number = $1", [dni]).rows
+    |> hd()
+    |> hd()
   end
 
   defp advance_to_confirmation(view, type, date) do
