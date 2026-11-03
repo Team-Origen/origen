@@ -258,7 +258,7 @@ defmodule Origen.Booking.RequestResolutionTest do
                  %{
                    professional_id: ctx.prof_a_id,
                    consultation_type_id: @consultation_type_id,
-                   start_time: ~U[2026-10-17 10:00:00Z]
+                   start_time: ~U[2026-10-16 10:00:00Z]
                  },
                  now: @fixed_now
                )
@@ -280,7 +280,7 @@ defmodule Origen.Booking.RequestResolutionTest do
                  %{
                    professional_id: ctx.prof_a_id,
                    consultation_type_id: @consultation_type_id,
-                   start_time: ~U[2026-10-17 11:00:00Z]
+                   start_time: ~U[2026-10-16 11:00:00Z]
                  },
                  now: @fixed_now
                )

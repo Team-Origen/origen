@@ -190,31 +190,42 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   @impl true
   def handle_event("start_assisted_booking", _params, socket) do
-    professionals = load_professionals()
-    prof_id = (professionals != [] && to_string(hd(professionals).id)) || nil
-    types = if prof_id, do: load_consultation_types(prof_id), else: []
-    type_id = (types != [] && to_string(hd(types).id)) || nil
-    date = next_weekday(Date.utc_today())
-    duration = (types != [] && hd(types)[:duration_minutes]) || 30
-    slots = if prof_id, do: load_slots(prof_id, date, duration), else: []
+    if socket.assigns.current_role != :secretary do
+      {:noreply,
+       assign(
+         socket,
+         :booking_error,
+         "No tenés autorización para realizar esta reserva asistida."
+       )}
+    else
+      professionals = load_professionals()
+      prof_id = (professionals != [] && to_string(hd(professionals).id)) || nil
+      types = if prof_id, do: load_consultation_types(prof_id), else: []
+      type_id = (types != [] && to_string(hd(types).id)) || nil
+      date = next_weekday(Date.utc_today())
+      duration = (types != [] && hd(types)[:duration_minutes]) || 30
+      slots = if prof_id, do: load_slots(prof_id, date, duration), else: []
 
-    approval_mode =
-      if prof_id, do: AssistedBooking.get_professional_approval_mode(prof_id), else: :automatic
+      approval_mode =
+        if prof_id,
+          do: AssistedBooking.get_secretary_effective_approval_mode(prof_id),
+          else: :confirmed
 
-    {:noreply,
-     socket
-     |> assign(:registration_outcome, nil)
-     |> assign(:assisted_booking_active, true)
-     |> assign(:booking_professionals, professionals)
-     |> assign(:selected_prof_id, prof_id)
-     |> assign(:selected_prof_approval_mode, approval_mode)
-     |> assign(:booking_consultation_types, types)
-     |> assign(:selected_consultation_type_id, type_id)
-     |> assign(:booking_date, date)
-     |> assign(:booking_slots, slots)
-     |> assign(:selected_slot_time, nil)
-     |> assign(:booking_success, nil)
-     |> assign(:booking_error, nil)}
+      {:noreply,
+       socket
+       |> assign(:registration_outcome, nil)
+       |> assign(:assisted_booking_active, true)
+       |> assign(:booking_professionals, professionals)
+       |> assign(:selected_prof_id, prof_id)
+       |> assign(:selected_prof_approval_mode, approval_mode)
+       |> assign(:booking_consultation_types, types)
+       |> assign(:selected_consultation_type_id, type_id)
+       |> assign(:booking_date, date)
+       |> assign(:booking_slots, slots)
+       |> assign(:selected_slot_time, nil)
+       |> assign(:booking_success, nil)
+       |> assign(:booking_error, nil)}
+    end
   end
 
   @impl true
@@ -268,16 +279,41 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
           case AssistedBooking.reserve(secretary_id, profile_id, reserve_params) do
             {:ok, result} ->
+              duration =
+                case Enum.find(
+                       socket.assigns.booking_consultation_types,
+                       &(to_string(&1.id) == to_string(type_id))
+                     ) do
+                  %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+                  _ -> 30
+                end
+
+              refreshed_slots = load_slots(prof_id, date, duration)
+
               {:noreply,
                socket
                |> assign(:booking_success, result)
+               |> assign(:booking_slots, refreshed_slots)
                |> assign(:booking_error, nil)
                |> assign(:selected_slot_time, nil)}
 
             {:error, reason} ->
+              duration =
+                case Enum.find(
+                       socket.assigns.booking_consultation_types,
+                       &(to_string(&1.id) == to_string(type_id))
+                     ) do
+                  %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+                  _ -> 30
+                end
+
+              refreshed_slots = load_slots(prof_id, date, duration)
+
               {:noreply,
                socket
                |> assign(:booking_error, format_booking_error(reason))
+               |> assign(:booking_slots, refreshed_slots)
+               |> assign(:selected_slot_time, nil)
                |> assign(:booking_success, nil)}
           end
 
@@ -741,7 +777,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
       end
 
     slots = load_slots(prof_id, date, duration)
-    approval_mode = AssistedBooking.get_professional_approval_mode(prof_id)
+    approval_mode = AssistedBooking.get_secretary_effective_approval_mode(prof_id)
 
     {:noreply,
      socket
@@ -784,6 +820,9 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   defp format_booking_error(:slot_already_booked),
     do: "El horario seleccionado ya no está disponible. Por favor seleccioná otro."
+
+  defp format_booking_error(:slot_unavailable),
+    do: "El horario seleccionado no se encuentra dentro de la disponibilidad del profesional."
 
   defp format_booking_error(:patient_schedule_conflict),
     do: "El paciente ya posee otro turno superpuesto con este horario."
@@ -1294,7 +1333,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
                   </.form>
                 </section>
 
-                <div class="flex flex-wrap gap-2">
+                <div :if={@current_role == :secretary} class="flex flex-wrap gap-2">
                   <.button
                     id="start-assisted-booking"
                     color="primary"
@@ -1363,14 +1402,14 @@ defmodule OrigenWeb.SecretaryPatientLive do
                         </option>
                       </select>
                       <span
-                        :if={@selected_prof_approval_mode == :manual}
+                        :if={@selected_prof_approval_mode in [:manual, :requested]}
                         id="prof-approval-mode-badge"
                         class="inline-block text-xs font-medium text-amber-700 dark:text-amber-400 mt-1"
                       >
                         Aprobación manual requerida (nacerá como Solicitud)
                       </span>
                       <span
-                        :if={@selected_prof_approval_mode == :automatic}
+                        :if={@selected_prof_approval_mode in [:automatic, :confirmed]}
                         id="prof-approval-mode-badge"
                         class="inline-block text-xs font-medium text-green-700 dark:text-green-400 mt-1"
                       >
