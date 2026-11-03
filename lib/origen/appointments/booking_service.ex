@@ -20,6 +20,7 @@ defmodule Origen.Appointments.BookingService do
           required(:consultation_type_id) => String.t(),
           required(:date) => Date.t(),
           required(:slot) => map(),
+          # Legacy callers may provide this, but reserve/2 ignores it.
           optional(:snapshot_override) => map(),
           optional(:now) => DateTime.t()
         }
@@ -41,6 +42,10 @@ defmodule Origen.Appointments.BookingService do
   Patient identity is taken exclusively from `profile`; any patient id supplied
   in the params is ignored. Catalog snapshots are resolved by `Booking` from the
   persisted consultation type, never from client-provided snapshot data.
+  The optional legacy `:snapshot_override` input remains accepted for older
+  callers but is ignored; the persisted catalog name, duration, and price
+  always win. The autonomous flow resolves status from the professional's
+  approval mode and does not call `determine_initial_status/2`.
   """
   @spec reserve(PatientProfile.t() | nil, reservation_params()) ::
           {:ok, reservation_result()} | {:error, term()}
@@ -84,6 +89,8 @@ defmodule Origen.Appointments.BookingService do
           status: initial_status(config.approval_mode)
         }
 
+        # Keep the legacy input compatible, but never pass snapshot_override to
+        # the shared engine: persisted catalog values are the trust boundary.
         case Booking.persist_appointment(attrs, nil) do
           {:ok, appointment} ->
             establish_relationship!(appointment)
@@ -202,12 +209,23 @@ defmodule Origen.Appointments.BookingService do
   defp initial_status("manual"), do: "requested"
   defp initial_status(_automatic), do: "confirmed"
 
+  @deprecated "Use reserve/2; autonomous status is resolved from approval_mode and reserve/2 does not call this helper."
   @doc """
-  Compatibility helper for callers that need the autonomous automatic status.
-  The autonomous beta flow no longer derives status from D-1 proximity.
+  Legacy compatibility helper for callers that still need the pre-#306 date rule.
+
+  Dates on D-1 or D return `"confirmed"`; dates more than one day ahead return
+  `"reserved"`. Autonomous `reserve/2` does not call this helper: it uses the
+  professional's approval mode, returning `"confirmed"` for automatic approval
+  and `"requested"` for manual approval at every date.
   """
   @spec determine_initial_status(Date.t(), DateTime.t()) :: String.t()
-  def determine_initial_status(_appointment_date, _now), do: "confirmed"
+  def determine_initial_status(%Date{} = appointment_date, %DateTime{} = now) do
+    if Date.diff(appointment_date, DateTime.to_date(now)) <= 1 do
+      "confirmed"
+    else
+      "reserved"
+    end
+  end
 
   defp establish_relationship!(%Appointment{} = appointment) do
     %ProfessionalPatientRelationship{}

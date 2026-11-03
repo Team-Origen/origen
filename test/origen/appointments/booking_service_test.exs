@@ -78,6 +78,17 @@ defmodule Origen.Appointments.BookingServiceTest do
     }
   end
 
+  describe "determine_initial_status/2 compatibility" do
+    test "keeps distant appointments reserved for legacy callers" do
+      assert BookingService.determine_initial_status(~D[2026-09-28], @fixed_now) == "reserved"
+    end
+
+    test "keeps D-1 and D appointments confirmed for legacy callers" do
+      assert BookingService.determine_initial_status(~D[2026-09-26], @fixed_now) == "confirmed"
+      assert BookingService.determine_initial_status(~D[2026-09-25], @fixed_now) == "confirmed"
+    end
+  end
+
   describe "reserve/2 - autonomous booking execution" do
     test "rejects every incomplete profile and inactive account without writing reservations",
          ctx do
