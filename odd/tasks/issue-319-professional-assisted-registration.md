@@ -1,0 +1,20 @@
+# Issue #319 — Professional assisted patient registration UI
+
+## Objective
+Extend the existing Professional appointment-creation journey to register an absent patient and confirm an own-agenda appointment atomically, following approved #317 and backend #318. #320 owns end-to-end integration; #286 one-off blocks remain Sprint 4.
+
+## Sources and boundaries
+- Issue: https://github.com/Team-Origen/origen/issues/319; parent #283; OpenSpec `health-center-beta-core`, `openspec/changes/health-center-beta-core/`, frontend slice.
+- Contract: `docs/sprints/sprint-3/contrato-283-alta-y-reserva-profesional.md`.
+- Reuse existing #282 exact-DNI lookup and selection. Show an assisted form only after a valid absent-DNI search. Require name, surname, birth date and phone; email is optional. The search DNI must not be replaced by untrusted confirmation parameters.
+- No independent save, personal account, magic link, cross-professional activity, Secretary impersonation, or invented one-off-block check. A server-confirmed booking is the only success.
+- Stay below 400 changed lines per review slice with tests beside the behavior. Never push/PR without the repository issue gate and reviewed heads.
+
+## Tasks
+- [x] **T1 — Align branch and baseline.** Fast-forwarded clean local feature branch from `61d1685` to `origin/develop` `5c1f7fb` without rewriting history. Fresh private PostgreSQL on 127.0.0.1:55487, partition `_319baseline`: Professional agenda and booking LiveView suites passed 38 tests (seed 285). `mix deps.get` restored missing `tzdata` without changing `mix.lock`; it reported pre-existing security advisories, not fixed in this UI slice. No shared database touched. Evidence committed with this tracker.
+- [ ] **T2 — Add assisted form state test-first.** RED for valid absent DNI → form; required fields and optional email; tab/search/back/abandon reset; found DNI follows #282 without offering registration. GREEN with no persistence before final confirmation. Keep this review unit bounded and commit tests with behavior.
+- [ ] **T3 — Connect final confirmation test-first.** RED/GREEN for selected own consultation/slot, one server-owned session call to `Booking.register_and_reserve_professional_appointment/2`, success, recoverable validation/DNI/slot errors and no false success or client-authority fields. Do not claim #320's full real integration. Commit unit with tests.
+- [ ] **T4 — Verify and prepare reviewable delivery.** Run applicable focused/regression tests, format, strict compile, security/static checks and browser/UI verification where available. Check each PR against immediate base ≤400 lines; follow repository issue-first approval before publication. Record skipped checks and hand off #320 separately.
+
+## Progress
+Read-only mapping complete: `ProfessionalPatientSelectionLive` has four existing steps but absent DNI only shows an empty-state notice; `ProfessionalPatientSelector` calls only existing-patient booking. Local branch initially at `61d1685`; `origin/develop` advanced to `5676e4e` with #300. Issue #319 is open and assigned to Saidqr but lacks `status:approved`. User approved scope in conversation; approval of implementation outcomes is not implied. Baseline existing-patient journey 38 passed; assisted-absence behavior remains unimplemented. The separate Engram mirror was unavailable (`session has already ended`), so this task file is the durable progress record.
