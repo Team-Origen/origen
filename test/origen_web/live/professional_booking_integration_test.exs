@@ -300,6 +300,65 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
   end
 
+  test "#320 a weekly window closed after selection rejects without any assisted writes", ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    before = record_counts()
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+
+    Repo.query!(
+      "UPDATE agenda_settings SET weekly_availability = $1 WHERE owner_account_id = $2",
+      [
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []}),
+        ctx.a.session.account_id
+      ]
+    )
+
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute has_element?(view, "#booking-result")
+    assert record_counts() == before
+    assert patient_count("99999999") == 0
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+    view |> element("button[phx-click='go_booking_step'][phx-value-step='3']") |> render_click()
+    assert has_element?(view, "#slot-next[disabled]")
+    refute has_element?(view, "#slot-0900")
+  end
+
+  test "#320 an active request entered after selection still occupies the slot", ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+
+    {:ok, pending} =
+      Booking.persist_appointment(%{
+        professional_account_id: ctx.a.session.account_id,
+        patient_profile_id: ctx.related,
+        consultation_type_id: ctx.a.type,
+        start_time: DateTime.new!(ctx.date, ~T[09:00:00], "Etc/UTC"),
+        status: "requested"
+      })
+
+    before = record_counts()
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute html =~ "Ana Integración"
+    refute html =~ "Consulta ajena"
+    refute has_element?(view, "#booking-result")
+    assert record_counts() == before
+    assert patient_count("99999999") == 0
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+
+    assert [["requested"]] =
+             Repo.query!("SELECT status FROM appointments WHERE id = $1", [pending.id]).rows
+
+    view |> element("button[phx-click='go_booking_step'][phx-value-step='3']") |> render_click()
+    assert has_element?(view, "#slot-next[disabled]")
+    refute has_element?(view, "#slot-0900")
+  end
+
   test "exact DNI confirmation creates only the actor's relationship and preserves B's activity",
        ctx do
     {:ok, other_before} = agenda(ctx.b, ctx.date)
