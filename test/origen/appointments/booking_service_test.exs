@@ -10,12 +10,16 @@ defmodule Origen.Appointments.BookingServiceTest do
   @fixed_now ~U[2026-09-25 10:00:00Z]
 
   setup do
+    Repo.query!("DELETE FROM professional_patient_relationships")
     Repo.query!("DELETE FROM appointments")
+    Repo.query!("DELETE FROM consultation_types")
+    Repo.query!("DELETE FROM agenda_settings")
+    Repo.query!("DELETE FROM professional_profiles")
     Repo.query!("DELETE FROM patient_profiles")
     Repo.query!("DELETE FROM personas")
     Repo.query!("DELETE FROM internal_accounts")
 
-    # Insert verified patient
+    # Insert a completed patient without phone verification
     {:ok, %{profile: profile}} =
       Patients.complete_profile("paciente_reserva@example.test", %{
         first_name: "Ana",
@@ -26,10 +30,10 @@ defmodule Origen.Appointments.BookingServiceTest do
         phone: "+5491133445566"
       })
 
-    # Verify phone
-    verified_profile =
+    # Booking readiness is based on a completed profile, not phone verification.
+    ready_profile =
       profile
-      |> Ecto.Changeset.change(%{phone_verified: true})
+      |> Ecto.Changeset.change(%{phone_verified: false})
       |> Repo.update!()
 
     # Insert active professional
@@ -41,6 +45,19 @@ defmodule Origen.Appointments.BookingServiceTest do
       """)
 
     prof_id = hd(res.rows) |> hd()
+
+    Repo.query!(
+      """
+      INSERT INTO agenda_settings
+        (owner_account_id, interval_minutes, weekly_availability, booking_horizon_days,
+         minimum_lead_minutes, approval_mode, secretary_approval_mode)
+      VALUES ($1, 30,
+              '{"monday":[{"start":"08:00","end":"18:00"}],"tuesday":[{"start":"08:00","end":"18:00"}],"wednesday":[{"start":"08:00","end":"18:00"}],"thursday":[{"start":"08:00","end":"18:00"}],"friday":[{"start":"08:00","end":"18:00"}],"saturday":[{"start":"08:00","end":"18:00"}],"sunday":[{"start":"08:00","end":"18:00"}]}'::jsonb,
+              30, 0, 'automatic', 'confirmed')
+      """,
+      [prof_id]
+    )
+
     {:ok, %{session: principal}} = Origen.Sessions.create_session(prof_id)
     assert {:ok, _} = Origen.ProfessionalProfiles.save_own_profile(principal, complete_profile())
     type_id = Ecto.UUID.generate()
@@ -54,7 +71,7 @@ defmodule Origen.Appointments.BookingServiceTest do
     )
 
     %{
-      profile: verified_profile,
+      profile: ready_profile,
       prof_id: prof_id,
       type_id: type_id,
       principal: principal
@@ -129,7 +146,7 @@ defmodule Origen.Appointments.BookingServiceTest do
     end
 
     test "successfully reserves appointment and persists historical snapshots", ctx do
-      # 3 days ahead -> RF-10 'reserved'
+      # Automatic approval always creates a confirmed appointment.
       future_date = ~D[2026-09-28]
 
       params = %{
@@ -147,22 +164,22 @@ defmodule Origen.Appointments.BookingServiceTest do
 
       assert {:ok, res} = BookingService.reserve(ctx.profile, params)
 
-      assert res.status == "reserved"
+      assert res.status == "confirmed"
       assert res.consultation_type_name == "Consulta general"
-      assert res.duration_minutes == 30
+      assert res.duration_minutes == 60
       assert res.exact_price_ars == Decimal.new("18000.00")
       assert DateTime.compare(res.start_time, ~U[2026-09-28 10:00:00Z]) == :eq
-      assert DateTime.compare(res.end_time, ~U[2026-09-28 10:30:00Z]) == :eq
+      assert DateTime.compare(res.end_time, ~U[2026-09-28 11:00:00Z]) == :eq
 
       # Verify persisted appointment in PostgreSQL
       persisted = Repo.get!(Appointment, res.appointment_id)
-      assert persisted.status == "reserved"
+      assert persisted.status == "confirmed"
       assert persisted.snapshot_consultation_type_name == "Consulta general"
       assert persisted.snapshot_exact_price_ars == Decimal.new("18000.00")
-      assert persisted.snapshot_duration_minutes == 30
+      assert persisted.snapshot_duration_minutes == 60
     end
 
-    test "determines 'confirmed' status when booked on D-1 or D per RF-10", ctx do
+    test "automatic approval is confirmed regardless of D-1 proximity", ctx do
       # Tomorrow (D-1 relative to @fixed_now which is 2026-09-25)
       tomorrow = ~D[2026-09-26]
 
@@ -187,13 +204,14 @@ defmodule Origen.Appointments.BookingServiceTest do
          ctx do
       Repo.query!(
         """
-        INSERT INTO agenda_settings (owner_account_id, interval_minutes, approval_mode, secretary_approval_mode)
-        VALUES ($1, 30, 'manual', 'confirmed')
+        UPDATE agenda_settings
+        SET approval_mode = 'manual', secretary_approval_mode = 'confirmed'
+        WHERE owner_account_id = $1
         """,
         [ctx.prof_id]
       )
 
-      # 3 days ahead would normally start in 'reserved' (RF-10); manual approval wins.
+      # Manual approval creates a request regardless of date proximity.
       params = %{
         professional_id: ctx.prof_id,
         consultation_type_id: ctx.type_id,
@@ -223,7 +241,7 @@ defmodule Origen.Appointments.BookingServiceTest do
       assert relationship.first_appointment_id == persisted.id
     end
 
-    test "refutes booking when patient phone is not verified", ctx do
+    test "allows booking when patient phone is not verified", ctx do
       unverified =
         ctx.profile
         |> Ecto.Changeset.change(%{phone_verified: false})
@@ -242,8 +260,9 @@ defmodule Origen.Appointments.BookingServiceTest do
         now: @fixed_now
       }
 
-      assert {:error, :patient_not_ready_for_booking} = BookingService.reserve(unverified, params)
-      assert Repo.all(Appointment) == []
+      assert {:ok, result} = BookingService.reserve(unverified, params)
+      assert result.status == "confirmed"
+      assert Repo.get!(Appointment, result.appointment_id).patient_profile_id == unverified.id
     end
 
     test "rejects unauthenticated caller", ctx do
