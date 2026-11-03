@@ -107,6 +107,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       # -------------------------------------------------------------------------
 
       patient_email = "carlos.paciente.demo@example.test"
+      assert {:ok, _profile} = Patients.get_or_create_profile(patient_email)
 
       # 2.1 Solicitar Magic Link
       assert {:ok, :delivered} = PatientAccess.request_magic_link(patient_email)

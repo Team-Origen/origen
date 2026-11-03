@@ -171,7 +171,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     assert {:ok, _} = ConsultationTypes.get_own_configuration(principal)
     editor = open_editor(conn)
     editor |> form("#profile-form", profile: @profile) |> render_submit()
-    {:ok, calendar, _} = live(build_conn(), "/patient/calendar")
+    {:ok, calendar, _} = live(patient_conn!(), "/patient/calendar")
     assert has_element?(calendar, "#professional-form option[value='#{principal.account_id}']")
 
     assert has_element?(
@@ -192,7 +192,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     editor = open_editor(conn)
     editor |> form("#profile-form", profile: @profile) |> render_submit()
     Application.put_env(:origen, :consultation_type_catalog_adapter, UnavailableCatalog)
-    {:ok, calendar, _} = live(build_conn(), "/patient/calendar")
+    {:ok, calendar, _} = live(patient_conn!(), "/patient/calendar")
 
     assert has_element?(
              calendar,
@@ -278,7 +278,11 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
              )
 
     assert {:ok, _} = Patients.verify_phone_code(email, code)
-    build_conn() |> Plug.Test.init_test_session(%{}) |> put_session(:patient_email, email)
+
+    build_conn()
+    |> Plug.Test.init_test_session(%{})
+    |> put_session(:patient_email, email)
+    |> put_session(:patient_authenticated_at, DateTime.to_iso8601(DateTime.utc_now()))
   end
 
   defp account!(role) do

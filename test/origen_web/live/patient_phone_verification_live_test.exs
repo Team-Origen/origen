@@ -29,6 +29,10 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
       conn
       |> Phoenix.ConnTest.init_test_session(%{})
       |> Plug.Conn.put_session(:patient_email, @valid_email)
+      |> Plug.Conn.put_session(
+        :patient_authenticated_at,
+        DateTime.to_iso8601(DateTime.utc_now())
+      )
 
     %{conn: authed_conn, profile: profile}
   end
