@@ -31,4 +31,7 @@ defmodule OrigenWeb.ProfessionalPatientSelector do
 
   def execute({:confirm, session, params}),
     do: Booking.reserve_professional_appointment(session, params)
+
+  def execute({:register, session, params}),
+    do: Booking.register_and_reserve_professional_appointment(session, params)
 end

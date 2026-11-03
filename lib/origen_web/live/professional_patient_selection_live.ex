@@ -251,6 +251,40 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   def handle_event(
         "confirm_booking",
         _params,
+        %{
+          assigns: %{
+            real_booking: true,
+            step: 4,
+            result: nil,
+            selected: %{id: nil},
+            assisted_attrs: attrs,
+            absent_dni: dni
+          }
+        } = socket
+      )
+      when is_map(attrs) and is_binary(dni) do
+    with true <- real_booking?(),
+         %{id: consultation_id} <- socket.assigns.consultation,
+         %{start_time: start_time} <- socket.assigns.slot,
+         {:ok, result} <-
+           journey_execute(
+             socket,
+             {:register, socket.assigns.current_internal_session,
+              attrs
+              |> Map.put("document_number", dni)
+              |> Map.put("consultation_type_id", consultation_id)
+              |> Map.put("start_time", start_time)}
+           ) do
+      {:noreply, assign(socket, result: result, journey_error: nil)}
+    else
+      {:error, reason} -> {:noreply, assign(socket, journey_error: registration_message(reason))}
+      _ -> {:noreply, assign(socket, journey_error: booking_message(:unavailable))}
+    end
+  end
+
+  def handle_event(
+        "confirm_booking",
+        _params,
         %{assigns: %{real_booking: true, step: 4, result: nil}} = socket
       ) do
     with true <- real_booking?(),
@@ -273,6 +307,18 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
       {:error, reason} -> {:noreply, assign(socket, journey_error: booking_message(reason))}
       _ -> {:noreply, assign(socket, journey_error: booking_message(:unavailable))}
     end
+  end
+
+  def handle_event(
+        "retry_assisted_search",
+        _params,
+        %{assigns: %{step: 4, assisted_attrs: attrs}} = socket
+      )
+      when is_map(attrs) do
+    {:noreply,
+     socket
+     |> reset_booking()
+     |> assign(step: 1, selected: nil, assisted_attrs: nil, absent_dni: nil, searched: false)}
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
@@ -376,6 +422,15 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
 
   defp message(_), do: "No se pudieron consultar los pacientes. Intentá nuevamente."
 
+  defp registration_message({:owner, _}), do: booking_message(:unauthorized)
+  defp registration_message({:snapshot, _}), do: booking_message(:slot_unavailable)
+  defp registration_message({:appointment, reason}), do: booking_message(reason)
+
+  defp registration_message({step, _}) when step in [:persona, :profile, :input],
+    do: "No se creó el turno. Revisá los datos del paciente y volvé a buscar el DNI si ya existe."
+
+  defp registration_message(_), do: booking_message(:unavailable)
+
   defp booking_message(reason)
        when reason in [
               :slot_already_booked,
@@ -434,6 +489,13 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
         >
           {@journey_error}
         </p>
+        <button
+          :if={@step == 4 and not is_nil(@journey_error) and not is_nil(@assisted_attrs)}
+          id="retry-assisted-search"
+          type="button"
+          phx-click="retry_assisted_search"
+          class="text-sm font-semibold text-[#0A3847] underline"
+        >Volver a buscar DNI</button>
 
         <section
           :if={@step == 1}
