@@ -110,6 +110,13 @@ git diff --check: exit 0.
 
 Verdicts: S7 met; S2-S4/S6 preserved. Historical helper behavior, ignored legacy snapshot input, autonomous approval-mode outcomes and persisted LiveView bookings pass independently. The expected helper deprecation and existing OTP 28 regex performance warnings remain. The earlier runtime limitation is resolved; the previous native `escalated/unknown_causality` outcome is not reclassified or altered.
 
+## Compatibility delivery and assessment
+
+- Compatibility commit: `135406c7ab7fa86a0b304f3815a540724dc5fae1` on `feat/306-patient-booking-backend`, assessed against exact prior boundary `bb1074c5ce9a5dcf37fac4da595d376227b90ad4` (92 authored changed lines, five paths). This is a separate reviewable unit in the existing `feature-branch-chain`, not the accumulated branch candidate.
+- Committed-only native assessment returned `nativeRisk: medium`, `reviewDue: false`, `reviewDueReason: under_budget`, `rddLine: on`, and `nativeReviewOutcome: unknown`. Item-3 escalation retains the independent-verifier requirement; it is satisfied by the completed 24-test independent run and static inspection on unchanged application source. Writer/parent functional checks also passed.
+- No further native review route was offered, so no new review was started. This assessment is not native approval and does not supersede the prior backend `escalated/unknown_causality` result.
+- The following closeout changes only evidence and task tracking. No source changes, publishing, PR creation, merge or issue closure are included.
+
 ## Approval boundary
 
 This evidence records implementation, passing self-verification and independent compatibility verification. Human approval belongs to the user. It does not close #280, start #308, or authorize frontend/integration work.
