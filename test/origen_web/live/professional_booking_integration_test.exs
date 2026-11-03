@@ -239,6 +239,67 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert patient_count("99999999") == 0
   end
 
+  test "#320 real absent-DNI journey persists only at confirmation with no personal access",
+       ctx do
+    before = record_counts()
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+    {:ok, view, html} = open_booking(ctx)
+    refute html =~ "Consulta ajena"
+    select_absent(view)
+    assert record_counts() == before
+    assert patient_count("99999999") == 0
+    assert {:ok, patients} = Booking.list_professional_patients(ctx.a.session)
+    refute Enum.any?(patients, &(&1.document_number == "99999999"))
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert record_counts() == before
+    view |> element("#cancel-patient-selection") |> render_click()
+    assert_redirect(view, "/profesional/agenda")
+    assert record_counts() == before
+
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "Turno confirmado"
+    refute html =~ "Consulta ajena"
+    refute html =~ "Bruno Integración"
+
+    assert record_counts() == Map.new(before, fn {key, count} -> {key, count + 1} end)
+
+    assert [[profile_id, nil, nil, false]] =
+             Repo.query!(
+               """
+               SELECT pp.id, pp.email, pp.contact_email, pp.phone_verified
+               FROM patient_profiles pp JOIN personas p ON p.id = pp.persona_id
+               WHERE p.document_number = $1
+               """,
+               ["99999999"]
+             ).rows
+
+    assert [[1]] =
+             Repo.query!(
+               """
+               SELECT count(*) FROM professional_patient_relationships
+               WHERE professional_account_id = $1 AND patient_profile_id = $2
+               """,
+               [ctx.a.session.account_id, profile_id]
+             ).rows
+
+    assert [[0]] =
+             Repo.query!(
+               """
+               SELECT count(*) FROM professional_patient_relationships
+               WHERE professional_account_id = $1 AND patient_profile_id = $2
+               """,
+               [ctx.b.session.account_id, profile_id]
+             ).rows
+
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+    assert appointment.status == "confirmed"
+    assert appointment.patient.first_name == "Luz"
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+  end
+
   test "exact DNI confirmation creates only the actor's relationship and preserves B's activity",
        ctx do
     {:ok, other_before} = agenda(ctx.b, ctx.date)
@@ -362,6 +423,16 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     Repo.query!("SELECT count(*) FROM personas WHERE document_number = $1", [dni]).rows
     |> hd()
     |> hd()
+  end
+
+  defp record_counts do
+    Map.new(
+      ~w(personas patient_profiles appointments professional_patient_relationships audit_events),
+      fn table ->
+        [[count]] = Repo.query!("SELECT count(*) FROM #{table}").rows
+        {table, count}
+      end
+    )
   end
 
   defp advance_to_confirmation(view, type, date) do
