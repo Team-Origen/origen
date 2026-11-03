@@ -7,7 +7,11 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
   @fixed_now ~U[2026-09-25 08:00:00Z]
 
   setup do
+    Repo.query!("DELETE FROM professional_patient_relationships")
+    Repo.query!("DELETE FROM appointments")
+    Repo.query!("DELETE FROM consultation_types")
     Repo.query!("DELETE FROM agenda_settings")
+    Repo.query!("DELETE FROM professional_profiles")
     Repo.query!("DELETE FROM internal_accounts")
 
     # Insert an active professional
@@ -104,12 +108,66 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
       assert {:ok, _} = ProfessionalProfiles.save_own_profile(owner, %{first_name: nil})
       assert {:ok, []} = DatabaseCalendar.list_professionals()
 
-      assert {:ok, ^before} =
+      assert {:ok, after_profile} =
                DatabaseCalendar.get_daily_schedule(id, ~D[2026-09-25], now: @fixed_now)
+
+      assert after_profile.date == before.date
+      assert after_profile.slots == before.slots
+      assert after_profile.specialty == "Cardiología"
     end
   end
 
   describe "get_daily_schedule/3" do
+    for status <- ["requested", "confirmed", "reserved", "cancelled"] do
+      @status status
+      test "persisted #{@status} appointments have the expected calendar occupancy", %{
+        account_id: account_id
+      } do
+        [[patient_id]] =
+          Repo.query!("""
+          INSERT INTO patient_profiles (email, state)
+          VALUES ('calendar-occupancy@example.test', 'completed') RETURNING id
+          """).rows
+
+        type_id = Ecto.UUID.generate()
+
+        Repo.query!(
+          """
+          INSERT INTO consultation_types
+            (id, owner_account_id, name, exact_price_ars, color, interval_count, status)
+          VALUES ($1, $2, 'Calendar Consultation', 100.00, '#123456', 1, 'active')
+          """,
+          [Ecto.UUID.dump!(type_id), account_id]
+        )
+
+        assert {:ok, _appointment} =
+                 Origen.Booking.persist_appointment(
+                   %{
+                     patient_profile_id: patient_id,
+                     professional_account_id: account_id,
+                     consultation_type_id: type_id,
+                     start_time: ~U[2026-09-25 14:00:00Z],
+                     status: @status
+                   },
+                   %{
+                     name: "Calendar Consultation",
+                     duration_minutes: 30,
+                     exact_price_ars: Decimal.new("100.00")
+                   }
+                 )
+
+        assert {:ok, schedule} =
+                 DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25],
+                   now: @fixed_now,
+                   duration_minutes: 30
+                 )
+
+        expected = ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30"]
+        expected = if @status == "cancelled", do: expected, else: tl(expected)
+        assert Enum.map(schedule.slots, & &1.start_formatted) == expected
+      end
+    end
+
     test "calculates slots from real persisted agenda_settings for Friday", %{
       account_id: account_id
     } do
