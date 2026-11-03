@@ -1,16 +1,38 @@
 defmodule Origen.Booking.ProfessionalRegistration do
   @moduledoc false
 
-  # Internal staged foundation, not a booking API. The final gate deliberately
-  # rolls everything back until #286 supplies write-time block validation.
   alias Ecto.Multi
   alias Origen.Booking
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Patients.{PatientProfile, Persona}
+  alias Origen.Repo
   alias Origen.Sessions
+  alias Origen.Sessions.InternalSession
 
   @fields ~w(first_name last_name document_number birthdate phone email consultation_type_id start_time)a
   @days ~w(monday tuesday wednesday thursday friday saturday sunday)
+
+  @doc """
+  Registra un paciente inexistente y concreta un turno confirmado en la agenda
+  del Profesional en una única transacción atómica (Issue #318).
+  """
+  def register_and_book(principal, attrs) do
+    case Repo.transaction(transaction(principal, attrs)) do
+      {:ok,
+       %{appointment: appointment, persona: persona, profile: profile, relationship: relationship}} ->
+        {:ok,
+         %{
+           appointment: appointment,
+           persona: persona,
+           profile: profile,
+           relationship: relationship,
+           response: Booking.to_response(appointment, true)
+         }}
+
+      {:error, failed_step, reason, _changes} ->
+        {:error, {failed_step, reason}}
+    end
+  end
 
   @doc false
   def transaction(principal, attrs) do
@@ -59,7 +81,10 @@ defmodule Origen.Booking.ProfessionalRegistration do
         ["internal_account:#{owner}", "appointment:#{appointment.id}"]
       )
     end)
-    |> Multi.run(:blocks, fn _repo, _changes -> {:error, :block_validation_unavailable} end)
+  end
+
+  defp owner(%InternalSession{id: session_id, account_id: account_id}) do
+    owner(%{session_id: session_id, account_id: account_id})
   end
 
   defp owner(%{session_id: session_id, account_id: account_id}) do
