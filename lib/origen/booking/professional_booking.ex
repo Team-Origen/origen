@@ -84,8 +84,14 @@ defmodule Origen.Booking.ProfessionalBooking do
   defp schedule(owner, type_id, %Date{} = date, opts) do
     with {:ok, types} <- AssistedBooking.list_consultation_types(owner),
          %{duration_minutes: duration} <- Enum.find(types, &(&1.id == type_id)) do
-      start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-      end_day = DateTime.add(start_day, 1, :day)
+      timezone = Application.fetch_env!(:origen, :organization_timezone)
+      start_day = DateTime.new!(date, ~T[00:00:00], timezone) |> DateTime.shift_zone!("Etc/UTC")
+
+      end_day =
+        date
+        |> Date.add(1)
+        |> DateTime.new!(~T[00:00:00], timezone)
+        |> DateTime.shift_zone!("Etc/UTC")
 
       appointments =
         Repo.all(
@@ -100,12 +106,12 @@ defmodule Origen.Booking.ProfessionalBooking do
           start_time =
             if DateTime.compare(a.start_time, start_day) == :lt,
               do: ~T[00:00:00],
-              else: DateTime.to_time(a.start_time)
+              else: a.start_time |> DateTime.shift_zone!(timezone) |> DateTime.to_time()
 
           end_time =
             if DateTime.compare(a.end_time, end_day) != :lt,
               do: ~T[23:59:59.999999],
-              else: DateTime.to_time(a.end_time)
+              else: a.end_time |> DateTime.shift_zone!(timezone) |> DateTime.to_time()
 
           {start_time, end_time}
         end)
@@ -113,7 +119,8 @@ defmodule Origen.Booking.ProfessionalBooking do
       DatabaseCalendar.get_daily_schedule(owner, date,
         duration_minutes: duration,
         occupancies: occupancies,
-        now: Keyword.get(opts, :now, DateTime.utc_now())
+        now: Keyword.get(opts, :now, DateTime.utc_now()),
+        timezone: timezone
       )
     else
       nil -> {:error, :consultation_type_not_found}
@@ -124,18 +131,19 @@ defmodule Origen.Booking.ProfessionalBooking do
   defp schedule(_owner, _type_id, _date, _opts), do: {:error, :invalid_date}
 
   defp validate_slot(owner, request, opts) do
+    local_start =
+      DateTime.shift_zone!(
+        request.start_time,
+        Application.fetch_env!(:origen, :organization_timezone)
+      )
+
     with {:ok, schedule} <-
-           schedule(
-             owner,
-             request.consultation_type_id,
-             DateTime.to_date(request.start_time),
-             opts
-           ) do
+           schedule(owner, request.consultation_type_id, DateTime.to_date(local_start), opts) do
       if Enum.any?(
            schedule.slots,
            &(Time.compare(
                &1.start_time,
-               DateTime.to_time(request.start_time)
+               DateTime.to_time(local_start)
              ) == :eq)
          ) do
         :ok

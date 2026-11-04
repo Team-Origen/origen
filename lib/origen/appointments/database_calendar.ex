@@ -86,7 +86,8 @@ defmodule Origen.Appointments.DatabaseCalendar do
           duration_minutes: duration,
           min_lead_time_minutes: settings.minimum_lead_minutes,
           booking_horizon_days: settings.booking_horizon_days,
-          now: Keyword.get(opts, :now, DateTime.utc_now())
+          now: Keyword.get(opts, :now, DateTime.utc_now()),
+          timezone: Keyword.get(opts, :timezone, "Etc/UTC")
         )
 
       {:ok,

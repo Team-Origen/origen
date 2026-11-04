@@ -185,6 +185,83 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert {:ok, %{appointments: [_]}} = agenda(ctx.a, ctx.date)
   end
 
+  test "assisted booking preserves Buenos Aires wall time through confirmation", ctx do
+    previous = Application.fetch_env!(:origen, :organization_timezone)
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous) end)
+
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert patient_count("99999999") == 0
+
+    assert view |> element("#confirm-booking") |> render_click() =~ "Turno confirmado"
+    assert patient_count("99999999") == 1
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+
+    expected =
+      DateTime.new!(ctx.date, ~T[09:00:00], "America/Argentina/Buenos_Aires")
+      |> DateTime.shift_zone!("Etc/UTC")
+
+    assert DateTime.compare(appointment.start_time, expected) == :eq
+  end
+
+  test "own schedule shows same-day Buenos Aires slots after local lead time", ctx do
+    previous = Application.fetch_env!(:origen, :organization_timezone)
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous) end)
+
+    week =
+      Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), fn day ->
+        {day, [%{"start" => "14:00", "end" => "18:00"}]}
+      end)
+
+    Repo.query!(
+      "UPDATE agenda_settings SET weekly_availability = $1 WHERE owner_account_id = $2",
+      [
+        week,
+        ctx.a.session.account_id
+      ]
+    )
+
+    assert {:ok, schedule} =
+             Booking.get_professional_booking_schedule(
+               ctx.a.session,
+               ctx.a.type,
+               ~D[2026-11-04],
+               now: ~U[2026-11-04 17:15:00Z]
+             )
+
+    starts = Enum.map(schedule.slots, & &1.start_time)
+    refute ~T[14:30:00] in starts
+    assert ~T[15:00:00] in starts
+  end
+
+  test "existing patient booking uses local time and hides its occupied slot", ctx do
+    previous = Application.fetch_env!(:origen, :organization_timezone)
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous) end)
+
+    {:ok, view, _} = open_booking(ctx)
+    select_related(view, ctx.related)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert view |> element("#confirm-booking") |> render_click() =~ "Turno confirmado"
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+
+    expected =
+      DateTime.new!(ctx.date, ~T[09:00:00], "America/Argentina/Buenos_Aires")
+      |> DateTime.shift_zone!("Etc/UTC")
+
+    assert DateTime.compare(appointment.start_time, expected) == :eq
+    {:ok, refreshed, _} = open_booking(ctx)
+    select_related(refreshed, ctx.related)
+    refreshed |> element("#patient-selection-next") |> render_click()
+    refreshed |> element("#consultation-#{ctx.a.type}") |> render_click()
+    refreshed |> element("#consultation-next") |> render_click()
+    refreshed |> form("#booking-date-form", %{date: Date.to_iso8601(ctx.date)}) |> render_change()
+    refute has_element?(refreshed, "#slot-0900")
+  end
+
   test "an occupied slot rejects assisted booking without partial identity or relationship",
        ctx do
     {:ok, view, _} = open_booking(ctx)

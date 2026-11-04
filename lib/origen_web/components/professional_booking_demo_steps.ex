@@ -168,7 +168,7 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
           name="date"
           type="date"
           value={@date}
-          min={Date.to_iso8601(Date.utc_today())}
+          min={Date.to_iso8601(organization_today())}
           required
           class="w-full rounded-lg border-stone-300 text-black sm:w-auto"
         />
@@ -359,6 +359,12 @@ defmodule OrigenWeb.ProfessionalBookingDemoSteps do
       |> String.reverse()
 
     "ARS #{grouped},#{String.pad_trailing(fraction, 2, "0")}"
+  end
+
+  defp organization_today do
+    Application.fetch_env!(:origen, :organization_timezone)
+    |> DateTime.now!()
+    |> DateTime.to_date()
   end
 
   defp step_name(1), do: "Paciente"
