@@ -150,14 +150,12 @@ defmodule Origen.Patients do
 
   @doc """
   Checks if a patient profile is ready for autonomous appointment booking.
-  Requires both:
-  1. Profile state is "completed"
-  2. Phone is verified (phone_verified: true)
-  Per acceptance criteria of #87, phone verification is not granted here,
-  so completed profiles remain unready for booking until #90 is solved.
+
+  The beta requires an authenticated, completed patient profile. Phone
+  verification is intentionally not a booking prerequisite.
   """
   @spec ready_for_booking?(PatientProfile.t()) :: boolean()
-  def ready_for_booking?(%PatientProfile{state: "completed", phone_verified: true}), do: true
+  def ready_for_booking?(%PatientProfile{state: "completed"}), do: true
   def ready_for_booking?(_profile), do: false
 
   @doc """
