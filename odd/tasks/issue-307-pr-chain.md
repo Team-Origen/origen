@@ -16,7 +16,7 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - T2 [S1,S2,S4] delegated (context backstop): done — availability/catalog readiness, safe failure and empty states, supporting doubles, and regression tests; commit `1db5584` (191 changed lines).
 - T3 [S1,S2,S4] delegated (context backstop): done — validated professional/type/date/slot selection and navigation with rejection tests; commit `0b668ee` (156 changed lines).
 - T4 [S1,S2,S4] delegated (context backstop): done — validated booking submission, duplicate/in-progress guards, stale-slot conflict handling, and sanitized failures with matching tests; commit `5632e24` (291 changed lines).
-- T5 [S1–S5] delegated (context backstop): done — truthful booking outcomes, refreshed new-booking availability, frozen historical surfaces, and final evidence; commit pending.
+- T5 [S1–S5] delegated (context backstop): done — truthful booking outcomes, refreshed new-booking availability, frozen historical surfaces, and final evidence; implementation commit `2e4a7da`.
 
 ## Log
 
@@ -59,3 +59,4 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - L37 Parent retrospective behavioral RED: the exact final 19-test file against the complete T4 LiveView loaded only in an isolated test process passed 17/19 and exited 2. The only failures were the expected confirmed/pending outcome headings; this corrects the invalid initial RED evidence without changing source files or beams.
 - L38 Parent final GREEN: 51 booking seam tests passed, exit 0, seed 307, including calendar, patient self-booking/concurrency, assisted booking and all 19 LiveView tests. Parent independently verified all five frozen blobs match `65af7e6`; no full-suite rerun or agent browser run is claimed.
 - L39 GitHub merge policy readback: develop requires one independent approval, last-push approval and resolved review threads; auto-merge is disabled. The user's merge authorization does not waive these protections. Publish the full chain, then merge only if GitHub requirements are satisfied; never self-approve or use an administrative bypass.
+- L40 T5 implementation commit: `2e4a7da`; this receipt records its hash without rewriting history. The final PR size is measured from `feat/307-04-booking` to `feat/307-05-results`, including this receipt.
