@@ -193,6 +193,24 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert has_element?(view, "button[phx-click='select_slot']")
     end
 
+    test "an incomplete profile receives a completion reminder without phone verification copy",
+         %{
+           conn: conn,
+           profile: profile
+         } do
+      Repo.update!(Ecto.Changeset.change(profile, state: "pending_completion"))
+
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+
+      assert html =~ "Completá tu perfil para reservar"
+      refute html =~ "verificar tu teléfono"
+      refute html =~ "Verificar Teléfono"
+
+      html = render_click(view, "confirm_booking")
+      assert html =~ "Completá tu perfil para reservar."
+      refute html =~ "verificar tu teléfono"
+    end
+
     test "renders the real profile and slots and navigates dates", %{conn: conn} do
       {:ok, view, html} = live(conn, ~p"/patient/calendar")
       booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
@@ -287,8 +305,9 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert html =~ "Confirmar Reserva"
       assert html =~ "#{Date.to_iso8601(booking_date)}"
-      assert html =~ "Límite sin cargo:"
-      assert html =~ "18:00" and html =~ "anterior a la cita (D-1)" and html =~ "50%"
+      refute html =~ "Políticas de Cancelación y Asistencia"
+      refute html =~ "D-1"
+      refute html =~ "Verificación de Teléfono"
 
       assert render_click(view, "clear_slot") =~
                "Horarios Disponibles para #{Date.to_iso8601(booking_date)}"

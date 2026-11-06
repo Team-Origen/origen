@@ -127,24 +127,14 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
           {:noreply, assign(socket, confirmed?: true, booking_result: result)}
 
         {:error, :patient_not_ready_for_booking} ->
-          {:noreply,
-           put_flash(
-             socket,
-             :error,
-             "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
-           )}
+          {:noreply, put_flash(socket, :error, "Completá tu perfil para reservar.")}
 
         {:error, reason} ->
           {:noreply,
            put_flash(socket, :error, "No se pudo realizar la reserva: #{inspect(reason)}")}
       end
     else
-      {:noreply,
-       put_flash(
-         socket,
-         :error,
-         "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
-       )}
+      {:noreply, put_flash(socket, :error, "Completá tu perfil para reservar.")}
     end
   end
 
@@ -236,24 +226,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         </div>
 
         <div
-          :if={not @ready?}
-          class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm flex items-start gap-3 border border-amber-200"
+          :if={@profile && not @ready?}
+          class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm border border-amber-200"
         >
-          <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-          <div class="flex-1">
-            <p class="font-semibold">Perfil pendiente de verificación</p>
-
-            <p class="mt-0.5">
-              Para confirmar turnos de manera autónoma, tu teléfono debe estar verificado.
-            </p>
-          </div>
-
-          <.link
-            navigate={~p"/patient/phone/verify"}
-            class="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shrink-0 hover:bg-amber-700"
-          >
-            Verificar Teléfono
-          </.link>
+          Completá tu perfil para reservar de manera autónoma.
         </div>
 
         <div
@@ -432,27 +408,13 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 </div>
               </div>
 
-              <div class="space-y-2 border-t pt-3 text-xs text-[#0A3847]">
-                <h4 class="font-semibold uppercase tracking-wider text-stone-700">
-                  Políticas de Cancelación y Asistencia
-                </h4>
-
-                <p>
-                  <strong>Límite sin cargo:</strong> {@schedule.cancellation_policy.cutoff_description}
-                </p>
-
-                <p>
-                  <strong>Política de multa ({@schedule.cancellation_policy.penalty_percentage}%):</strong> {@schedule.cancellation_policy.penalty_description}
-                </p>
-              </div>
-
               <div class="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   phx-click="confirm_booking"
                   disabled={not @ready?}
                   class={"w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm " <> if @ready?, do: "bg-[#0A3847] hover:bg-[#35545A] text-white", else: "bg-stone-300 text-stone-500 cursor-not-allowed"}
                 >
-                  {if @ready?, do: "Confirmar Turno", else: "Verificación de Teléfono Requerida"}
+                  {if @ready?, do: "Confirmar Turno", else: "Completá tu perfil para reservar"}
                 </button>
 
                 <button
