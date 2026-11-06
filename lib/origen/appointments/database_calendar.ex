@@ -1,7 +1,7 @@
 defmodule Origen.Appointments.DatabaseCalendar do
   @moduledoc """
-  Database-backed calendar adapter that queries real persisted `agenda_settings`
-  from PostgreSQL (#77) and passes continuous windows to `Availability.calculate_slots/4` (#92).
+  Database-backed calendar adapter for persisted professional settings,
+  consultation durations, and active appointment occupancy.
   """
 
   @behaviour Origen.Appointments.Calendar
@@ -63,26 +63,25 @@ defmodule Origen.Appointments.DatabaseCalendar do
   @impl true
   def get_daily_schedule(professional_id, %Date{} = date, opts) do
     with {:ok, owner_id} <- parse_owner_id(professional_id),
-         {:ok, settings} <- fetch_agenda_settings(owner_id) do
+         {:ok, settings} <- fetch_agenda_settings(owner_id),
+         {:ok, occupancies} <- fetch_occupancies(owner_id, date, opts),
+         {:ok, identity} <- fetch_professional_identity(owner_id) do
       day_key = Map.fetch!(@weekday_map, Date.day_of_week(date))
       week = decode_week(settings.weekly_availability)
-      raw_windows = Map.get(week, day_key, [])
 
       windows =
-        Enum.map(raw_windows, fn %{"start" => s, "end" => e} ->
-          {parse_time!(s), parse_time!(e)}
+        Enum.map(Map.get(week, day_key, []), fn %{"start" => start_time, "end" => end_time} ->
+          {parse_time!(start_time), parse_time!(end_time)}
         end)
 
       duration = Keyword.get(opts, :duration_minutes, 30)
-      interval = settings.interval_minutes
-      occupancies = Keyword.get(opts, :occupancies, [])
 
       slots =
         Availability.calculate_slots(
           date,
           windows,
           occupancies,
-          agenda_interval_minutes: interval,
+          agenda_interval_minutes: settings.interval_minutes,
           duration_minutes: duration,
           min_lead_time_minutes: settings.minimum_lead_minutes,
           booking_horizon_days: settings.booking_horizon_days,
@@ -94,8 +93,8 @@ defmodule Origen.Appointments.DatabaseCalendar do
        %{
          date: date,
          professional_id: to_string(owner_id),
-         professional_name: "Profesional ##{owner_id}",
-         specialty: "Medicina General",
+         professional_name: identity.name,
+         specialty: identity.specialty,
          slots: slots,
          cancellation_policy: @default_policy
        }}
@@ -104,11 +103,11 @@ defmodule Origen.Appointments.DatabaseCalendar do
     end
   end
 
-  defp parse_owner_id(id) when is_integer(id), do: {:ok, id}
+  defp parse_owner_id(id) when is_integer(id) and id > 0, do: {:ok, id}
 
   defp parse_owner_id(id) when is_binary(id) do
     case Integer.parse(id) do
-      {num, ""} -> {:ok, num}
+      {number, ""} when number > 0 -> {:ok, number}
       _ -> {:error, :invalid_professional}
     end
   end
@@ -134,6 +133,68 @@ defmodule Origen.Appointments.DatabaseCalendar do
 
       {:ok, %{rows: []}} ->
         {:error, :invalid_professional}
+
+      _error ->
+        {:error, :unavailable}
+    end
+  end
+
+  defp fetch_occupancies(owner_id, date, opts) do
+    case Keyword.fetch(opts, :occupancies) do
+      {:ok, occupancies} ->
+        {:ok, occupancies}
+
+      :error ->
+        start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+        end_day = DateTime.add(start_day, 1, :day)
+
+        query = """
+        SELECT start_time, end_time
+        FROM appointments
+        WHERE professional_account_id = $1
+          AND status NOT IN ('cancelled', 'rejected')
+          AND start_time < $2 AND end_time > $3
+        ORDER BY start_time
+        """
+
+        case Repo.query(query, [owner_id, end_day, start_day]) do
+          {:ok, %{rows: rows}} ->
+            {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day))}
+
+          _error ->
+            {:error, :unavailable}
+        end
+    end
+  end
+
+  defp occupancy_for_day([start_datetime, end_datetime], start_day, end_day) do
+    start_time =
+      if DateTime.compare(start_datetime, start_day) == :lt,
+        do: ~T[00:00:00],
+        else: DateTime.to_time(start_datetime)
+
+    end_time =
+      if DateTime.compare(end_datetime, end_day) != :lt,
+        do: ~T[23:59:59.999999],
+        else: DateTime.to_time(end_datetime)
+
+    {start_time, end_time}
+  end
+
+  defp fetch_professional_identity(owner_id) do
+    case Repo.query(
+           """
+           SELECT first_name, last_name, specialty
+           FROM professional_profiles
+           WHERE owner_account_id = $1
+           """,
+           [owner_id]
+         ) do
+      {:ok, %{rows: [[first_name, last_name, specialty]]}} ->
+        {:ok, %{name: "#{first_name} #{last_name}", specialty: specialty}}
+
+      {:ok, %{rows: []}} ->
+        {:ok, %{name: "Profesional ##{owner_id}", specialty: "Medicina General"}}
 
       _error ->
         {:error, :unavailable}

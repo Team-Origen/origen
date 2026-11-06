@@ -87,11 +87,12 @@ defmodule Origen.Booking.Overlap do
         else: :patient_schedule_conflict
 
     query =
-      from a in Appointment,
+      from(a in Appointment,
         where: field(a, ^scope_field) == ^Map.fetch!(params, scope_field),
         where: a.status not in ^@slot_freeing_statuses,
         where: a.start_time < ^params.end_time and a.end_time > ^params.start_time,
         limit: 1
+      )
 
     case Repo.one(query) do
       %Appointment{} -> {:error, conflict_reason}

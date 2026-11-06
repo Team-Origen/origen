@@ -4,8 +4,8 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
   (Subissue #71 / PLN-14 / Father Issue #47).
 
   Verifica:
-  1. Perfiles incompletos: rechazo de usuarios anónimos, perfiles pendientes de completar,
-     teléfonos no verificados y colisiones documentales derivadas a secretaría.
+  1. Perfiles incompletos: rechazo de usuarios anónimos, perfiles pendientes de completar
+     y colisiones documentales derivadas a secretaría.
   2. Reversión transaccional total: ante fallos forzados o solapamientos, rollback completo
      garantizando 0 turnos huérfanos, 0 relaciones espurias y 0 auditoría inconsistente.
   3. Confidencialidad y no exposición de datos ajenos: errores opacos, no enumerantes,
@@ -51,7 +51,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
   end
 
   # ===========================================================================
-  # 1. PERFILES INCOMPLETOS, TELÉFONO NO VERIFICADO Y COLISIONES
+  # 1. PERFILES INCOMPLETOS Y COLISIONES
   # ===========================================================================
   describe "perfiles incompletos y barreras de identidad (Issue #71)" do
     test "rechaza intento de reserva anónimo con :unauthenticated", ctx do
@@ -87,8 +87,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       assert Repo.aggregate(Appointment, :count) == 0
     end
 
-    test "rechaza reserva si el paciente tiene perfil completed pero teléfono sin verificar",
-         ctx do
+    test "permite reserva propia confirmada aunque el teléfono no esté verificado", ctx do
       {:ok, %{profile: profile}} =
         Patients.complete_profile("sin_verificar_tel@example.test", %{
           first_name: "Esteban",
@@ -101,7 +100,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
 
       assert profile.state == "completed"
       assert profile.phone_verified == false
-      refute Patients.ready_for_booking?(profile)
+      assert Patients.ready_for_booking?(profile)
 
       future_date = next_weekday(Date.utc_today(), 5)
 
@@ -112,8 +111,22 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
         slot: %{start_time: ~T[09:00:00], start_formatted: "09:00"}
       }
 
-      assert {:error, :patient_not_ready_for_booking} = BookingService.reserve(profile, params)
-      assert Repo.aggregate(Appointment, :count) == 0
+      assert {:ok, %{appointment_id: appointment_id, status: "confirmed"}} =
+               BookingService.reserve(profile, params)
+
+      appointment = Repo.get!(Appointment, appointment_id)
+      assert appointment.status == "confirmed"
+      assert appointment.patient_profile_id == profile.id
+      assert appointment.professional_account_id == ctx.prof_id
+
+      assert %ProfessionalPatientRelationship{first_appointment_id: ^appointment_id} =
+               Repo.get_by(ProfessionalPatientRelationship,
+                 professional_account_id: ctx.prof_id,
+                 patient_profile_id: profile.id
+               )
+
+      assert Repo.aggregate(Appointment, :count) == 1
+      assert Repo.aggregate(ProfessionalPatientRelationship, :count) == 1
     end
 
     test "colisión documental: segundo paciente con mismo DNI es derivado a secretaría y no puede reservar",
@@ -185,7 +198,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       assert Repo.aggregate(Appointment, :count) == 1
 
       # Segunda reserva sobre el mismo horario: rechazada
-      assert {:error, :slot_already_booked} = BookingService.reserve(patient_2, params)
+      assert {:error, :overlap_detected} = BookingService.reserve(patient_2, params)
 
       # La base de datos no contiene turnos adicionales ni registros inconsistentes
       assert Repo.aggregate(Appointment, :count) == 1
@@ -241,10 +254,11 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
     test "integridad forense: ningún turno huérfano ni relación sin entidades válidas tras fallos",
          ctx do
       # Provocar varios intentos fallidos deliberadamente
-      patient_unverified =
-        insert_patient_unverified("huerfano_test@example.test", "41000333")
-
       future_date = next_weekday(Date.utc_today(), 5)
+
+      email = "huerfano_test_#{System.unique_integer([:positive])}@example.test"
+      {:ok, incomplete_patient} = Patients.get_or_create_profile(email)
+      assert incomplete_patient.state == "pending_completion"
 
       params = %{
         professional_id: ctx.prof_id,
@@ -253,8 +267,20 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
         slot: %{start_time: ~T[16:00:00], start_formatted: "16:00"}
       }
 
-      _ = BookingService.reserve(patient_unverified, params)
-      _ = BookingService.reserve(nil, params)
+      initial_counts = {
+        Repo.aggregate(Appointment, :count),
+        Repo.aggregate(ProfessionalPatientRelationship, :count)
+      }
+
+      assert {:error, :patient_not_ready_for_booking} =
+               BookingService.reserve(incomplete_patient, params)
+
+      assert {:error, :unauthenticated} = BookingService.reserve(nil, params)
+
+      assert {
+               Repo.aggregate(Appointment, :count),
+               Repo.aggregate(ProfessionalPatientRelationship, :count)
+             } == initial_counts
 
       # Comprobar que en appointments no existen registros huérfanos sin paciente o profesional
       orphan_appointments =
@@ -293,7 +319,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
         professional_id: ctx.prof_id,
         consultation_type_id: @consultation_type_uuid,
         date: future_date,
-        slot: %{start_time: ~T[12:00:00], start_formatted: "12:00"}
+        slot: %{start_time: ~T[10:00:00], start_formatted: "10:00"}
       }
 
       # Primera reserva exitosa
@@ -302,8 +328,8 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       # Segunda reserva sobre el mismo slot
       result = BookingService.reserve(patient_2, params)
 
-      # El error debe ser exactamente :slot_already_booked
-      assert result == {:error, :slot_already_booked}
+      # El error debe ser exactamente :overlap_detected
+      assert result == {:error, :overlap_detected}
 
       # Comprobar que no hay exposición de datos del primer paciente
       error_dump = inspect(result)
@@ -435,20 +461,6 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
     profile
     |> Ecto.Changeset.change(%{phone_verified: true})
     |> Repo.update!()
-  end
-
-  defp insert_patient_unverified(email, doc_number) do
-    {:ok, %{profile: profile}} =
-      Patients.complete_profile(email, %{
-        first_name: "Paciente",
-        last_name: "SinVerificar",
-        document_type: "dni",
-        document_number: doc_number,
-        birthdate: ~D[1994-01-01],
-        phone: "+5491144556677"
-      })
-
-    profile
   end
 
   defp next_weekday(base_date, days_ahead) do

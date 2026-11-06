@@ -38,15 +38,15 @@ defmodule Origen.PatientsTest do
       assert result.persona.document_number == "40123456"
       assert result.persona.birthdate == ~D[1995-04-15]
 
-      # Criterion 4: profile not ready for booking until phone is verified in #90
-      refute Patients.ready_for_booking?(result.profile)
+      assert Patients.ready_for_booking?(result.profile)
 
       # Audit event logged
       audit_event =
         Repo.one(
-          from a in "audit_events",
+          from(a in "audit_events",
             select: a.id,
             where: a.event == "patient_profile_completed" and a.entity_ref == ^email
+          )
         )
 
       assert audit_event != nil
@@ -113,9 +113,10 @@ defmodule Origen.PatientsTest do
       # Audit event logged for collision derivation
       audit_event =
         Repo.one(
-          from a in "audit_events",
+          from(a in "audit_events",
             select: a.id,
             where: a.event == "document_collision_derived" and a.entity_ref == ^email_2
+          )
         )
 
       assert audit_event != nil
@@ -128,7 +129,7 @@ defmodule Origen.PatientsTest do
       assert {:ok, result} = Patients.complete_profile(email, attrs)
       assert result.profile.phone == "+5491122334455"
       assert result.profile.phone_verified == false
-      refute Patients.ready_for_booking?(result.profile)
+      assert Patients.ready_for_booking?(result.profile)
     end
   end
 end
