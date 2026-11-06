@@ -3,9 +3,15 @@ defmodule OrigenWeb.PatientAccessControllerTest do
 
   alias Origen.PatientAccess
   alias Origen.PatientAccess.MagicLink
+  alias Origen.Patients
   alias Origen.Repo
 
   @valid_email "paciente_web@example.test"
+
+  setup do
+    {:ok, _profile} = Patients.get_or_create_profile(@valid_email)
+    :ok
+  end
 
   describe "GET /access/verify" do
     test "authenticates session and redirects to / on valid token", %{conn: conn} do

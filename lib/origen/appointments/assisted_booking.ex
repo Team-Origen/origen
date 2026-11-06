@@ -13,9 +13,12 @@ defmodule Origen.Appointments.AssistedBooking do
   - Negar expresamente la facultad de Secretaría de aceptar o rechazar solicitudes (#284).
   """
 
+  import Ecto.Query, only: [from: 2]
+
   alias Ecto.Adapters.SQL
   alias Origen.Appointments.Calendar
   alias Origen.Booking
+  alias Origen.Booking.Appointment
   alias Origen.Patients.PatientProfile
   alias Origen.Repo
 
@@ -26,12 +29,25 @@ defmodule Origen.Appointments.AssistedBooking do
   def list_professionals, do: Calendar.list_professionals()
 
   @doc """
-  Consulta la agenda diaria y slots calculados para un profesional y fecha dados.
+  Consulta la agenda diaria y slots calculados para un profesional y fecha dados,
+  excluyendo automáticamente los turnos activos persistidos en esa fecha.
   """
   @spec get_daily_schedule(String.t() | integer(), Date.t(), keyword()) ::
           {:ok, map()} | {:error, term()}
-  def get_daily_schedule(professional_id, date, opts \\ []) do
+  def get_daily_schedule(professional_id, %Date{} = date, opts \\ []) do
     adapter = Keyword.get(opts, :calendar_adapter) || Calendar
+
+    opts =
+      case parse_id(professional_id) do
+        {:ok, owner_id} ->
+          existing_occ = Keyword.get(opts, :occupancies, [])
+          db_occ = fetch_daily_occupancies(owner_id, date)
+          Keyword.put(opts, :occupancies, existing_occ ++ db_occ)
+
+        _ ->
+          opts
+      end
+
     adapter.get_daily_schedule(to_string(professional_id), date, opts)
   end
 
@@ -86,7 +102,9 @@ defmodule Origen.Appointments.AssistedBooking do
          {:ok, prof_id} <- parse_id(params[:professional_id] || params["professional_id"]),
          :ok <- ensure_active_professional(prof_id),
          {:ok, consultation_type_id} <- validate_consultation_type_id(params),
-         {:ok, start_time} <- resolve_start_time(params) do
+         {:ok, start_time} <- resolve_start_time(params),
+         :ok <-
+           validate_slot_availability(prof_id, profile.id, consultation_type_id, start_time, opts) do
       # La modalidad de aprobación se resuelve estrictamente desde la configuración
       # persistida del profesional (public.agenda_settings) en el momento de reservar;
       # los parámetros del llamador (approval_mode / secretary_approval_mode) se ignoran
@@ -142,6 +160,18 @@ defmodule Origen.Appointments.AssistedBooking do
         {:error, reason} ->
           {:error, reason}
       end
+    end
+  end
+
+  @doc """
+  Retorna la modalidad de aprobación efectiva para Secretaría sobre un profesional
+  (:confirmed o :requested).
+  """
+  @spec get_secretary_effective_approval_mode(integer() | String.t()) :: :confirmed | :requested
+  def get_secretary_effective_approval_mode(professional_id) do
+    case Booking.get_approval_configuration(professional_id) do
+      {:ok, %{approval_mode: :manual, secretary_approval_mode: :requested}} -> :requested
+      _ -> :confirmed
     end
   end
 
@@ -292,4 +322,70 @@ defmodule Origen.Appointments.AssistedBooking do
   end
 
   defp get_account_role(_), do: {:error, :not_found}
+
+  defp fetch_daily_occupancies(owner_id, %Date{} = date) when is_integer(owner_id) do
+    start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+    end_day = DateTime.add(start_day, 1, :day)
+
+    appointments =
+      Repo.all(
+        from a in Appointment,
+          where: a.professional_account_id == ^owner_id,
+          where: a.status not in ["cancelled", "rejected"],
+          where: a.start_time < ^end_day and a.end_time > ^start_day
+      )
+
+    Enum.map(appointments, fn a ->
+      s =
+        if DateTime.compare(a.start_time, start_day) == :lt,
+          do: ~T[00:00:00],
+          else: DateTime.to_time(a.start_time)
+
+      e =
+        if DateTime.compare(a.end_time, end_day) != :lt,
+          do: ~T[23:59:59.999999],
+          else: DateTime.to_time(a.end_time)
+
+      {s, e}
+    end)
+  end
+
+  defp validate_slot_availability(prof_id, patient_id, consultation_type_id, start_time, opts) do
+    with {:ok, types} <- list_consultation_types(prof_id),
+         %{duration_minutes: duration} <- Enum.find(types, &(&1.id == consultation_type_id)) do
+      date = DateTime.to_date(start_time)
+      now = Keyword.get(opts, :now, DateTime.utc_now())
+
+      schedule_opts = [
+        duration_minutes: duration,
+        now: now,
+        calendar_adapter: Origen.Appointments.DatabaseCalendar
+      ]
+
+      case get_daily_schedule(prof_id, date, schedule_opts) do
+        {:ok, %{slots: slots}} ->
+          if Enum.any?(slots, &(Time.compare(&1.start_time, DateTime.to_time(start_time)) == :eq)) do
+            :ok
+          else
+            case Booking.check_overlaps(%{
+                   professional_account_id: prof_id,
+                   patient_profile_id: patient_id,
+                   start_time: start_time,
+                   end_time: DateTime.add(start_time, duration, :minute)
+                 }) do
+              {:error, :professional_schedule_conflict} -> {:error, :slot_already_booked}
+              {:error, :patient_schedule_conflict} -> {:error, :patient_schedule_conflict}
+              _ -> {:error, :slot_unavailable}
+            end
+          end
+
+        _ ->
+          # Si el profesional no tiene agenda_settings configurada aún, se delega a Booking.reserve_appointment
+          :ok
+      end
+    else
+      nil -> {:error, :consultation_type_not_found}
+      error -> error
+    end
+  end
 end

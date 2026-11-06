@@ -4,8 +4,8 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
   (Subissue #71 / PLN-14 / Father Issue #47).
 
   Verifica:
-  1. Perfiles incompletos: rechazo de usuarios anónimos, perfiles pendientes de completar,
-     teléfonos no verificados y colisiones documentales derivadas a secretaría.
+  1. Perfiles incompletos: rechazo de usuarios anónimos, perfiles pendientes de completar
+     y colisiones documentales derivadas a secretaría.
   2. Reversión transaccional total: ante fallos forzados o solapamientos, rollback completo
      garantizando 0 turnos huérfanos, 0 relaciones espurias y 0 auditoría inconsistente.
   3. Confidencialidad y no exposición de datos ajenos: errores opacos, no enumerantes,
@@ -51,7 +51,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
   end
 
   # ===========================================================================
-  # 1. PERFILES INCOMPLETOS, TELÉFONO NO VERIFICADO Y COLISIONES
+  # 1. PERFILES INCOMPLETOS Y COLISIONES
   # ===========================================================================
   describe "perfiles incompletos y barreras de identidad (Issue #71)" do
     test "rechaza intento de reserva anónimo con :unauthenticated", ctx do
@@ -87,8 +87,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       assert Repo.aggregate(Appointment, :count) == 0
     end
 
-    test "rechaza reserva si el paciente tiene perfil completed pero teléfono sin verificar",
-         ctx do
+    test "permite reserva propia confirmada aunque el teléfono no esté verificado", ctx do
       {:ok, %{profile: profile}} =
         Patients.complete_profile("sin_verificar_tel@example.test", %{
           first_name: "Esteban",
@@ -101,7 +100,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
 
       assert profile.state == "completed"
       assert profile.phone_verified == false
-      refute Patients.ready_for_booking?(profile)
+      assert Patients.ready_for_booking?(profile)
 
       future_date = next_weekday(Date.utc_today(), 5)
 
@@ -112,8 +111,22 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
         slot: %{start_time: ~T[09:00:00], start_formatted: "09:00"}
       }
 
-      assert {:error, :patient_not_ready_for_booking} = BookingService.reserve(profile, params)
-      assert Repo.aggregate(Appointment, :count) == 0
+      assert {:ok, %{appointment_id: appointment_id, status: "confirmed"}} =
+               BookingService.reserve(profile, params)
+
+      appointment = Repo.get!(Appointment, appointment_id)
+      assert appointment.status == "confirmed"
+      assert appointment.patient_profile_id == profile.id
+      assert appointment.professional_account_id == ctx.prof_id
+
+      assert %ProfessionalPatientRelationship{first_appointment_id: ^appointment_id} =
+               Repo.get_by(ProfessionalPatientRelationship,
+                 professional_account_id: ctx.prof_id,
+                 patient_profile_id: profile.id
+               )
+
+      assert Repo.aggregate(Appointment, :count) == 1
+      assert Repo.aggregate(ProfessionalPatientRelationship, :count) == 1
     end
 
     test "colisión documental: segundo paciente con mismo DNI es derivado a secretaría y no puede reservar",
@@ -185,7 +198,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       assert Repo.aggregate(Appointment, :count) == 1
 
       # Segunda reserva sobre el mismo horario: rechazada
-      assert {:error, :slot_already_booked} = BookingService.reserve(patient_2, params)
+      assert {:error, :overlap_detected} = BookingService.reserve(patient_2, params)
 
       # La base de datos no contiene turnos adicionales ni registros inconsistentes
       assert Repo.aggregate(Appointment, :count) == 1
@@ -241,10 +254,11 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
     test "integridad forense: ningún turno huérfano ni relación sin entidades válidas tras fallos",
          ctx do
       # Provocar varios intentos fallidos deliberadamente
-      patient_unverified =
-        insert_patient_unverified("huerfano_test@example.test", "41000333")
-
       future_date = next_weekday(Date.utc_today(), 5)
+
+      email = "huerfano_test_#{System.unique_integer([:positive])}@example.test"
+      {:ok, incomplete_patient} = Patients.get_or_create_profile(email)
+      assert incomplete_patient.state == "pending_completion"
 
       params = %{
         professional_id: ctx.prof_id,
@@ -253,8 +267,20 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
         slot: %{start_time: ~T[16:00:00], start_formatted: "16:00"}
       }
 
-      _ = BookingService.reserve(patient_unverified, params)
-      _ = BookingService.reserve(nil, params)
+      initial_counts = {
+        Repo.aggregate(Appointment, :count),
+        Repo.aggregate(ProfessionalPatientRelationship, :count)
+      }
+
+      assert {:error, :patient_not_ready_for_booking} =
+               BookingService.reserve(incomplete_patient, params)
+
+      assert {:error, :unauthenticated} = BookingService.reserve(nil, params)
+
+      assert {
+               Repo.aggregate(Appointment, :count),
+               Repo.aggregate(ProfessionalPatientRelationship, :count)
+             } == initial_counts
 
       # Comprobar que en appointments no existen registros huérfanos sin paciente o profesional
       orphan_appointments =
@@ -293,7 +319,7 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
         professional_id: ctx.prof_id,
         consultation_type_id: @consultation_type_uuid,
         date: future_date,
-        slot: %{start_time: ~T[12:00:00], start_formatted: "12:00"}
+        slot: %{start_time: ~T[10:00:00], start_formatted: "10:00"}
       }
 
       # Primera reserva exitosa
@@ -302,8 +328,8 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
       # Segunda reserva sobre el mismo slot
       result = BookingService.reserve(patient_2, params)
 
-      # El error debe ser exactamente :slot_already_booked
-      assert result == {:error, :slot_already_booked}
+      # El error debe ser exactamente :overlap_detected
+      assert result == {:error, :overlap_detected}
 
       # Comprobar que no hay exposición de datos del primer paciente
       error_dump = inspect(result)
@@ -437,20 +463,6 @@ defmodule Origen.Integration.JourneyFailureRegressionTest do
     |> Repo.update!()
   end
 
-  defp insert_patient_unverified(email, doc_number) do
-    {:ok, %{profile: profile}} =
-      Patients.complete_profile(email, %{
-        first_name: "Paciente",
-        last_name: "SinVerificar",
-        document_type: "dni",
-        document_number: doc_number,
-        birthdate: ~D[1994-01-01],
-        phone: "+5491144556677"
-      })
-
-    profile
-  end
-
   defp next_weekday(base_date, days_ahead) do
     target = Date.add(base_date, days_ahead)
 
@@ -566,74 +578,144 @@ defmodule Origen.Integration.JourneyConcurrencyRegressionTest do
     end
   end
 
-  defp insert_race_fixture!(racer_count) do
-    suffix = System.unique_integer([:positive])
+  test "race fixture keeps patient documents distinct for long suffixes and removes its personas" do
+    :ok = Sandbox.checkout(Repo)
+    fixture = insert_race_fixture!(3, 1_234_567)
 
-    {:ok, %{rows: [[professional_id]]}} =
-      Ecto.Adapters.SQL.query(
-        Repo,
+    rows =
+      Repo.query!(
         """
-        INSERT INTO public.internal_accounts
-          (email, role, state, password_hash, totp_secret, activated_at, created_at, updated_at)
-        VALUES
-          ($1, 'professional', 'active', 'hash', decode('010203', 'hex'), clock_timestamp(), clock_timestamp(), clock_timestamp())
-        RETURNING id
+        SELECT p.id, p.document_number FROM public.personas p
+        JOIN public.patient_profiles pp ON pp.persona_id = p.id
+        WHERE pp.id = ANY($1)
         """,
-        ["dr.carrera_#{suffix}@example.test"]
-      )
+        [fixture.patient_ids]
+      ).rows
 
-    consultation_type_id = Ecto.UUID.generate()
+    assert length(rows) == 3
+    assert rows |> Enum.map(&List.last/1) |> Enum.uniq() |> length() == 3
+    assert Enum.all?(rows, fn [_, document] -> document =~ ~r/^\d{8}$/ end)
+    persona_ids = Enum.map(rows, &hd/1)
 
-    {:ok, _} =
-      Ecto.Adapters.SQL.query(
-        Repo,
-        """
-        INSERT INTO public.consultation_types
-          (id, owner_account_id, name, exact_price_ars, color, interval_count, status, created_at, updated_at)
-        VALUES
-          ($1, $2, 'Consulta Carrera', 15000.00, '#0A3847', 1, 'active', clock_timestamp(), clock_timestamp())
-        """,
-        [Ecto.UUID.dump!(consultation_type_id), professional_id]
-      )
+    cleanup_race_fixture!(fixture)
 
-    patient_ids =
-      Enum.map(1..racer_count, fn index ->
-        doc_num = "49#{suffix}#{index}" |> String.slice(0, 8)
+    assert Repo.query!("SELECT id FROM public.personas WHERE id = ANY($1)", [persona_ids]).rows ==
+             []
 
-        {:ok, %{rows: [[persona_id]]}} =
+    assert Repo.query!("SELECT id FROM public.patient_profiles WHERE id = ANY($1)", [
+             fixture.patient_ids
+           ]).rows == []
+
+    assert Repo.query!("SELECT id FROM public.consultation_types WHERE owner_account_id = $1", [
+             fixture.professional_id
+           ]).rows == []
+
+    assert Repo.query!("SELECT id FROM public.internal_accounts WHERE id = $1", [
+             fixture.professional_id
+           ]).rows == []
+  end
+
+  test "failed race fixture setup rolls back all partially inserted records" do
+    :ok = Sandbox.checkout(Repo)
+    suffix = 7_654_321
+
+    Repo.query!(
+      """
+      INSERT INTO public.patient_profiles
+        (email, state, phone, phone_verified, created_at, updated_at)
+      VALUES ($1, 'completed', '+5491100000000', true, clock_timestamp(), clock_timestamp())
+      """,
+      ["corredor_#{suffix}_2@example.test"]
+    )
+
+    before = race_fixture_counts()
+
+    assert_raise MatchError, fn -> insert_race_fixture!(3, suffix) end
+
+    assert race_fixture_counts() == before
+  end
+
+  defp race_fixture_counts do
+    Repo.query!("""
+    SELECT
+      (SELECT count(*) FROM public.internal_accounts),
+      (SELECT count(*) FROM public.consultation_types),
+      (SELECT count(*) FROM public.personas),
+      (SELECT count(*) FROM public.patient_profiles)
+    """).rows
+  end
+
+  defp insert_race_fixture!(racer_count, suffix \\ System.unique_integer([:positive])) do
+    {:ok, fixture} =
+      Repo.transaction(fn ->
+        {:ok, %{rows: [[professional_id]]}} =
           Ecto.Adapters.SQL.query(
             Repo,
             """
-            INSERT INTO public.personas
-              (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
+            INSERT INTO public.internal_accounts
+              (email, role, state, password_hash, totp_secret, activated_at, created_at, updated_at)
             VALUES
-              ('Corredor', $1, 'dni', $2, '1992-01-01', clock_timestamp(), clock_timestamp())
+              ($1, 'professional', 'active', 'hash', decode('010203', 'hex'), clock_timestamp(), clock_timestamp(), clock_timestamp())
             RETURNING id
             """,
-            ["#{index}", doc_num]
+            ["dr.carrera_#{suffix}@example.test"]
           )
 
-        {:ok, %{rows: [[profile_id]]}} =
+        consultation_type_id = Ecto.UUID.generate()
+
+        {:ok, _} =
           Ecto.Adapters.SQL.query(
             Repo,
             """
-            INSERT INTO public.patient_profiles
-              (persona_id, email, state, phone, phone_verified, created_at, updated_at)
+            INSERT INTO public.consultation_types
+              (id, owner_account_id, name, exact_price_ars, color, interval_count, status, created_at, updated_at)
             VALUES
-              ($1, $2, 'completed', '+5491100000000', true, clock_timestamp(), clock_timestamp())
-            RETURNING id
+              ($1, $2, 'Consulta Carrera', 15000.00, '#0A3847', 1, 'active', clock_timestamp(), clock_timestamp())
             """,
-            [persona_id, "corredor_#{suffix}_#{index}@example.test"]
+            [Ecto.UUID.dump!(consultation_type_id), professional_id]
           )
 
-        profile_id
+        patient_ids =
+          Enum.map(1..racer_count, fn index ->
+            doc_num = Integer.to_string(49_000_000 + rem(suffix, 1_000_000) * 3 + index)
+
+            {:ok, %{rows: [[persona_id]]}} =
+              Ecto.Adapters.SQL.query(
+                Repo,
+                """
+                INSERT INTO public.personas
+                  (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
+                VALUES
+                  ('Corredor', $1, 'dni', $2, '1992-01-01', clock_timestamp(), clock_timestamp())
+                RETURNING id
+                """,
+                ["#{index}", doc_num]
+              )
+
+            {:ok, %{rows: [[profile_id]]}} =
+              Ecto.Adapters.SQL.query(
+                Repo,
+                """
+                INSERT INTO public.patient_profiles
+                  (persona_id, email, state, phone, phone_verified, created_at, updated_at)
+                VALUES
+                  ($1, $2, 'completed', '+5491100000000', true, clock_timestamp(), clock_timestamp())
+                RETURNING id
+                """,
+                [persona_id, "corredor_#{suffix}_#{index}@example.test"]
+              )
+
+            profile_id
+          end)
+
+        %{
+          professional_id: professional_id,
+          consultation_type_id: consultation_type_id,
+          patient_ids: patient_ids
+        }
       end)
 
-    %{
-      professional_id: professional_id,
-      consultation_type_id: consultation_type_id,
-      patient_ids: patient_ids
-    }
+    fixture
   end
 
   defp cleanup_race_fixture!(fixture) do
@@ -647,6 +729,13 @@ defmodule Origen.Integration.JourneyConcurrencyRegressionTest do
 
     Repo.query!("DELETE FROM public.internal_accounts WHERE id = $1", [fixture.professional_id])
 
+    persona_ids =
+      Repo.query!("SELECT persona_id FROM public.patient_profiles WHERE id = ANY($1)", [
+        fixture.patient_ids
+      ]).rows
+      |> Enum.map(&hd/1)
+
     Repo.query!("DELETE FROM public.patient_profiles WHERE id = ANY($1)", [fixture.patient_ids])
+    Repo.query!("DELETE FROM public.personas WHERE id = ANY($1)", [persona_ids])
   end
 end

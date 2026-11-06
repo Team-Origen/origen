@@ -55,6 +55,13 @@ defmodule Origen.Integration.PrototypeJourneyTest do
                  license_type: "Libre",
                  license_number: "PRO/001"
                })
+
+      assert {:ok, _} =
+               Availability.replace_own_configuration(principal, %{
+                 weekly_availability: @default_week,
+                 booking_horizon_days: 60,
+                 minimum_lead_minutes: 0
+               })
     end
 
     %{
@@ -107,6 +114,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       # -------------------------------------------------------------------------
 
       patient_email = "carlos.paciente.demo@example.test"
+      assert {:ok, _profile} = Patients.get_or_create_profile(patient_email)
 
       # 2.1 Solicitar Magic Link
       assert {:ok, :delivered} = PatientAccess.request_magic_link(patient_email)
@@ -139,9 +147,9 @@ defmodule Origen.Integration.PrototypeJourneyTest do
 
       assert profile.state == "completed"
       assert profile.phone_verified == false
-      refute Patients.ready_for_booking?(profile)
+      assert Patients.ready_for_booking?(profile)
 
-      # 2.5 Desafío de verificación telefónica
+      # 2.5 Phone verification remains optional for booking.
       challenge_code = "654321"
 
       assert {:ok, %{delivery: :delivered}} =
@@ -176,7 +184,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       assert {:ok, result} = BookingService.reserve(verified_profile, reservation_params)
 
       assert is_integer(result.appointment_id)
-      assert result.status == "reserved"
+      assert result.status == "confirmed"
       assert result.consultation_type_name == "Consulta Médica General"
       assert result.duration_minutes == 30
       assert Decimal.equal?(result.exact_price_ars, Decimal.new("22500.00"))
@@ -185,7 +193,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       persisted_appointment = Repo.get!(Appointment, result.appointment_id)
       assert persisted_appointment.professional_account_id == ctx.prof_a_id
       assert persisted_appointment.patient_profile_id == verified_profile.id
-      assert persisted_appointment.status == "reserved"
+      assert persisted_appointment.status == "confirmed"
       assert persisted_appointment.snapshot_consultation_type_name == "Consulta Médica General"
 
       assert Decimal.equal?(
@@ -244,7 +252,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
 
       [appointment_summary] = agenda.appointments
       assert appointment_summary.id == result.appointment_id
-      assert appointment_summary.status == "reserved"
+      assert appointment_summary.status == "confirmed"
       assert appointment_summary.consultation_type_name == "Consulta Médica General"
       assert appointment_summary.duration_minutes == 30
       assert Decimal.equal?(appointment_summary.price_ars, Decimal.new("22500.00"))
@@ -279,7 +287,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       assert html =~ "10:00 - 10:30"
       assert html =~ "38999888"
       assert html =~ "+5491188776655"
-      assert html =~ "Reservado"
+      assert html =~ "Confirmado"
 
       # Navegar a otra fecha sin turnos: debe mostrar el estado vacío
       other_date = Date.add(booking_date, 1)
@@ -325,7 +333,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       refute html_b =~ "39000111"
     end
 
-    test "rechaza reserva si el paciente no tiene teléfono verificado", ctx do
+    test "permite reserva si el paciente no tiene teléfono verificado", ctx do
       consultation = insert_consultation_type_record(ctx.prof_a_id, "Consulta A", "20000.00")
       booking_date = next_weekday(Date.utc_today(), 4)
 
@@ -342,7 +350,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
 
       refute unverified_profile.phone_verified
 
-      assert {:error, :patient_not_ready_for_booking} =
+      assert {:ok, result} =
                BookingService.reserve(unverified_profile, %{
                  professional_id: ctx.prof_a_id,
                  consultation_type_id: consultation.id,
@@ -350,8 +358,8 @@ defmodule Origen.Integration.PrototypeJourneyTest do
                  slot: %{start_time: ~T[14:00:00], start_formatted: "14:00"}
                })
 
-      # Ningún turno es creado
-      assert Repo.aggregate(Appointment, :count) == 0
+      assert result.status == "confirmed"
+      assert Repo.aggregate(Appointment, :count) == 1
     end
 
     test "previene doble reserva y solapamiento para el mismo profesional", ctx do
@@ -373,7 +381,7 @@ defmodule Origen.Integration.PrototypeJourneyTest do
                })
 
       # Segunda reserva sobre el mismo horario -> conflicto
-      assert {:error, :slot_already_booked} =
+      assert {:error, :overlap_detected} =
                BookingService.reserve(patient_2, %{
                  professional_id: ctx.prof_a_id,
                  consultation_type_id: consultation.id,

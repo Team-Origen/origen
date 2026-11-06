@@ -181,6 +181,40 @@ defmodule Origen.Appointments.AssistedBookingTest do
                AssistedBooking.reject_request(ctx.secretary_id, 123)
     end
 
+    test "C13: rechaza reservar en horario fuera de la disponibilidad semanal, lead time o horizonte del profesional",
+         ctx do
+      # 2026-10-15 es jueves; disponibilidad por defecto es 08:00-12:00 y 14:00-18:00.
+      # 13:00 está fuera de las ventanas de atención:
+      outside_window_params = %{
+        professional_id: ctx.professional_id,
+        consultation_type_id: @consultation_type_id,
+        start_time: ~U[2026-10-15 13:00:00Z]
+      }
+
+      assert {:error, :slot_unavailable} =
+               AssistedBooking.reserve(
+                 ctx.secretary_id,
+                 ctx.patient_profile_id,
+                 outside_window_params,
+                 now: @fixed_now
+               )
+
+      # 2026-11-25 supera el horizonte de 30 días desde @fixed_now (2026-10-10):
+      beyond_horizon_params = %{
+        professional_id: ctx.professional_id,
+        consultation_type_id: @consultation_type_id,
+        start_time: ~U[2026-11-25 09:00:00Z]
+      }
+
+      assert {:error, :slot_unavailable} =
+               AssistedBooking.reserve(
+                 ctx.secretary_id,
+                 ctx.patient_profile_id,
+                 beyond_horizon_params,
+                 now: @fixed_now
+               )
+    end
+
     test "C8: actor no autorizado (profesional o paciente) no puede operar reserva asistida",
          ctx do
       params = %{
@@ -248,7 +282,7 @@ defmodule Origen.Appointments.AssistedBookingTest do
       params = %{
         professional_id: manual_prof_id,
         consultation_type_id: manual_type_id,
-        start_time: ~U[2026-10-15 19:00:00Z],
+        start_time: ~U[2026-10-15 16:30:00Z],
         approval_mode: :automatic
       }
 
@@ -273,14 +307,31 @@ defmodule Origen.Appointments.AssistedBookingTest do
       assert type.status == :active
     end
 
-    test "get_daily_schedule/3 consulta slots con el calendario", ctx do
+    test "get_daily_schedule/3 consulta slots con el calendario y excluye turnos ocupados", ctx do
+      start_time = ~U[2026-10-15 09:00:00Z]
+
+      assert {:ok, _} =
+               AssistedBooking.reserve(
+                 ctx.secretary_id,
+                 ctx.patient_profile_id,
+                 %{
+                   professional_id: ctx.professional_id,
+                   consultation_type_id: @consultation_type_id,
+                   start_time: start_time
+                 },
+                 now: @fixed_now
+               )
+
       assert {:ok, schedule} =
                AssistedBooking.get_daily_schedule(ctx.professional_id, ~D[2026-10-15],
                  duration_minutes: 30,
+                 now: @fixed_now,
                  calendar_adapter: Origen.Appointments.DatabaseCalendar
                )
 
       assert is_list(schedule.slots)
+      refute Enum.any?(schedule.slots, &(&1.start_formatted == "09:00"))
+      assert Enum.any?(schedule.slots, &(&1.start_formatted == "09:30"))
     end
 
     test "list_consultation_types/1 calcula duration_minutes desde interval_minutes del profesional" do

@@ -5,12 +5,14 @@ defmodule Origen.PatientAccessTest do
   import Swoosh.TestAssertions
   alias Origen.PatientAccess
   alias Origen.PatientAccess.MagicLink
+  alias Origen.Patients
   alias Origen.Repo
 
   @valid_email "paciente_unit@example.test"
 
   setup do
     Repo.delete_all(MagicLink)
+    {:ok, _profile} = Patients.get_or_create_profile(@valid_email)
     :ok
   end
 
@@ -63,10 +65,13 @@ defmodule Origen.PatientAccessTest do
       assert hd(active_links).id != link1.id
     end
 
-    test "is non-enumerating and returns {:ok, :delivered} for arbitrary inputs" do
+    test "is non-enumerating and does not issue links for unknown inputs" do
       assert {:ok, :delivered} = PatientAccess.request_magic_link("inexistente@example.test")
       assert {:ok, :delivered} = PatientAccess.request_magic_link("formato_invalido")
       assert {:ok, :delivered} = PatientAccess.request_magic_link("")
+
+      refute Repo.exists?(from m in MagicLink, where: m.email == "inexistente@example.test")
+      refute Repo.exists?(from m in MagicLink, where: m.email == "formato_invalido")
     end
 
     test "verifies audit event is created without raw token" do

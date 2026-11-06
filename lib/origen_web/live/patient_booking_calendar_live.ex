@@ -119,13 +119,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         professional_id: socket.assigns.prof_id,
         consultation_type_id: socket.assigns.selected_type.id,
         date: socket.assigns.date,
-        slot: socket.assigns.selected_slot,
-        snapshot_override: %{
-          name: socket.assigns.selected_type.name,
-          duration_minutes:
-            socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes,
-          exact_price_ars: socket.assigns.selected_type.exact_price_ars
-        }
+        slot: socket.assigns.selected_slot
       }
 
       case Origen.Appointments.BookingService.reserve(socket.assigns.profile, params) do

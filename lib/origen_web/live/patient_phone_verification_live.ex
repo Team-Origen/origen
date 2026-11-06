@@ -5,17 +5,8 @@ defmodule OrigenWeb.PatientPhoneVerificationLive do
 
   @impl true
   def mount(_params, session, socket) do
-    email =
-      session["patient_email"] ||
-        if(Application.get_env(:origen, :env) == :dev, do: "paciente@example.test")
-
-    profile =
-      if email,
-        do:
-          (case Patients.get_or_create_profile(email) do
-             {:ok, p} -> p
-             _ -> nil
-           end)
+    email = session["patient_email"]
+    profile = socket.assigns[:current_patient_profile]
 
     state = if profile && profile.phone_verified, do: :verified, else: :input
 
