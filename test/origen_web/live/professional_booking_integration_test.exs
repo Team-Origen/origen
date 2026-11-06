@@ -185,6 +185,83 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert {:ok, %{appointments: [_]}} = agenda(ctx.a, ctx.date)
   end
 
+  test "assisted booking preserves Buenos Aires wall time through confirmation", ctx do
+    previous = Application.fetch_env!(:origen, :organization_timezone)
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous) end)
+
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert patient_count("99999999") == 0
+
+    assert view |> element("#confirm-booking") |> render_click() =~ "Turno confirmado"
+    assert patient_count("99999999") == 1
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+
+    expected =
+      DateTime.new!(ctx.date, ~T[09:00:00], "America/Argentina/Buenos_Aires")
+      |> DateTime.shift_zone!("Etc/UTC")
+
+    assert DateTime.compare(appointment.start_time, expected) == :eq
+  end
+
+  test "own schedule shows same-day Buenos Aires slots after local lead time", ctx do
+    previous = Application.fetch_env!(:origen, :organization_timezone)
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous) end)
+
+    week =
+      Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), fn day ->
+        {day, [%{"start" => "14:00", "end" => "18:00"}]}
+      end)
+
+    Repo.query!(
+      "UPDATE agenda_settings SET weekly_availability = $1 WHERE owner_account_id = $2",
+      [
+        week,
+        ctx.a.session.account_id
+      ]
+    )
+
+    assert {:ok, schedule} =
+             Booking.get_professional_booking_schedule(
+               ctx.a.session,
+               ctx.a.type,
+               ~D[2026-11-04],
+               now: ~U[2026-11-04 17:15:00Z]
+             )
+
+    starts = Enum.map(schedule.slots, & &1.start_time)
+    refute ~T[14:30:00] in starts
+    assert ~T[15:00:00] in starts
+  end
+
+  test "existing patient booking uses local time and hides its occupied slot", ctx do
+    previous = Application.fetch_env!(:origen, :organization_timezone)
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous) end)
+
+    {:ok, view, _} = open_booking(ctx)
+    select_related(view, ctx.related)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert view |> element("#confirm-booking") |> render_click() =~ "Turno confirmado"
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+
+    expected =
+      DateTime.new!(ctx.date, ~T[09:00:00], "America/Argentina/Buenos_Aires")
+      |> DateTime.shift_zone!("Etc/UTC")
+
+    assert DateTime.compare(appointment.start_time, expected) == :eq
+    {:ok, refreshed, _} = open_booking(ctx)
+    select_related(refreshed, ctx.related)
+    refreshed |> element("#patient-selection-next") |> render_click()
+    refreshed |> element("#consultation-#{ctx.a.type}") |> render_click()
+    refreshed |> element("#consultation-next") |> render_click()
+    refreshed |> form("#booking-date-form", %{date: Date.to_iso8601(ctx.date)}) |> render_change()
+    refute has_element?(refreshed, "#slot-0900")
+  end
+
   test "an occupied slot rejects assisted booking without partial identity or relationship",
        ctx do
     {:ok, view, _} = open_booking(ctx)
@@ -237,6 +314,126 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     assert html =~ "No se creó el turno"
     refute has_element?(view, "#booking-result")
     assert patient_count("99999999") == 0
+  end
+
+  test "#320 real absent-DNI journey persists only at confirmation with no personal access",
+       ctx do
+    before = record_counts()
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+    {:ok, view, html} = open_booking(ctx)
+    refute html =~ "Consulta ajena"
+    select_absent(view)
+    assert record_counts() == before
+    assert patient_count("99999999") == 0
+    assert {:ok, patients} = Booking.list_professional_patients(ctx.a.session)
+    refute Enum.any?(patients, &(&1.document_number == "99999999"))
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    assert record_counts() == before
+    view |> element("#cancel-patient-selection") |> render_click()
+    assert_redirect(view, "/profesional/agenda")
+    assert record_counts() == before
+
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "Turno confirmado"
+    refute html =~ "Consulta ajena"
+    refute html =~ "Bruno Integración"
+
+    assert record_counts() == Map.new(before, fn {key, count} -> {key, count + 1} end)
+
+    assert [[profile_id, nil, nil, false]] =
+             Repo.query!(
+               """
+               SELECT pp.id, pp.email, pp.contact_email, pp.phone_verified
+               FROM patient_profiles pp JOIN personas p ON p.id = pp.persona_id
+               WHERE p.document_number = $1
+               """,
+               ["99999999"]
+             ).rows
+
+    assert [[1]] =
+             Repo.query!(
+               """
+               SELECT count(*) FROM professional_patient_relationships
+               WHERE professional_account_id = $1 AND patient_profile_id = $2
+               """,
+               [ctx.a.session.account_id, profile_id]
+             ).rows
+
+    assert [[0]] =
+             Repo.query!(
+               """
+               SELECT count(*) FROM professional_patient_relationships
+               WHERE professional_account_id = $1 AND patient_profile_id = $2
+               """,
+               [ctx.b.session.account_id, profile_id]
+             ).rows
+
+    assert {:ok, %{appointments: [appointment]}} = agenda(ctx.a, ctx.date)
+    assert appointment.status == "confirmed"
+    assert appointment.patient.first_name == "Luz"
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+  end
+
+  test "#320 a weekly window closed after selection rejects without any assisted writes", ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+    before = record_counts()
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+
+    Repo.query!(
+      "UPDATE agenda_settings SET weekly_availability = $1 WHERE owner_account_id = $2",
+      [
+        Map.new(~w(monday tuesday wednesday thursday friday saturday sunday), &{&1, []}),
+        ctx.a.session.account_id
+      ]
+    )
+
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute has_element?(view, "#booking-result")
+    assert record_counts() == before
+    assert patient_count("99999999") == 0
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+    view |> element("button[phx-click='go_booking_step'][phx-value-step='3']") |> render_click()
+    assert has_element?(view, "#slot-next[disabled]")
+    refute has_element?(view, "#slot-0900")
+  end
+
+  test "#320 an active request entered after selection still occupies the slot", ctx do
+    {:ok, view, _} = open_booking(ctx)
+    select_absent(view)
+    advance_to_confirmation(view, ctx.a.type, ctx.date)
+
+    {:ok, pending} =
+      Booking.persist_appointment(%{
+        professional_account_id: ctx.a.session.account_id,
+        patient_profile_id: ctx.related,
+        consultation_type_id: ctx.a.type,
+        start_time: DateTime.new!(ctx.date, ~T[09:00:00], "Etc/UTC"),
+        status: "requested"
+      })
+
+    before = record_counts()
+    {:ok, other_before} = agenda(ctx.b, ctx.date)
+    html = view |> element("#confirm-booking") |> render_click()
+    assert html =~ "No se creó el turno"
+    refute html =~ "Ana Integración"
+    refute html =~ "Consulta ajena"
+    refute has_element?(view, "#booking-result")
+    assert record_counts() == before
+    assert patient_count("99999999") == 0
+    assert {:ok, ^other_before} = agenda(ctx.b, ctx.date)
+
+    assert [["requested"]] =
+             Repo.query!("SELECT status FROM appointments WHERE id = $1", [pending.id]).rows
+
+    view |> element("button[phx-click='go_booking_step'][phx-value-step='3']") |> render_click()
+    assert has_element?(view, "#slot-next[disabled]")
+    refute has_element?(view, "#slot-0900")
   end
 
   test "exact DNI confirmation creates only the actor's relationship and preserves B's activity",
@@ -362,6 +559,16 @@ defmodule OrigenWeb.ProfessionalBookingIntegrationTest do
     Repo.query!("SELECT count(*) FROM personas WHERE document_number = $1", [dni]).rows
     |> hd()
     |> hd()
+  end
+
+  defp record_counts do
+    Map.new(
+      ~w(personas patient_profiles appointments professional_patient_relationships audit_events),
+      fn table ->
+        [[count]] = Repo.query!("SELECT count(*) FROM #{table}").rows
+        {table, count}
+      end
+    )
   end
 
   defp advance_to_confirmation(view, type, date) do

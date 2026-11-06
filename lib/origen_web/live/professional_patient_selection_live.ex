@@ -22,7 +22,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
         step: 1,
         consultations: [],
         consultation: nil,
-        booking_date: Date.to_iso8601(Date.utc_today()),
+        booking_date: Date.to_iso8601(organization_today()),
         slots: [],
         slot: nil,
         result: nil,
@@ -336,7 +336,7 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
 
   defp load_slots(socket) do
     with {:ok, date} <- Date.from_iso8601(socket.assigns.booking_date),
-         true <- Date.compare(date, Date.utc_today()) != :lt,
+         true <- Date.compare(date, organization_today()) != :lt,
          {:ok, slots} <-
            journey_execute(
              socket,
@@ -386,6 +386,12 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
       )
 
   defp real_booking?, do: adapter() == OrigenWeb.ProfessionalPatientSelector
+
+  defp organization_today do
+    Application.fetch_env!(:origen, :organization_timezone)
+    |> DateTime.now!()
+    |> DateTime.to_date()
+  end
 
   defp load_related(socket) do
     case execute(socket, {:related, socket.assigns.current_internal_session}) do

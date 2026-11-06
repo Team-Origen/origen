@@ -116,6 +116,25 @@ defmodule Origen.Appointments.AvailabilityTest do
   end
 
   describe "calculate_slots/4 - lead time and horizon boundaries" do
+    test "uses organization-local same-day lead time instead of UTC wall time" do
+      now = ~U[2026-11-04 17:15:00Z]
+      windows = [{~T[14:00:00], ~T[18:00:00]}]
+
+      slots =
+        Availability.calculate_slots(~D[2026-11-04], windows, [],
+          now: now,
+          timezone: "America/Argentina/Buenos_Aires",
+          agenda_interval_minutes: 30,
+          duration_minutes: 30,
+          min_lead_time_minutes: 30
+        )
+
+      starts = Enum.map(slots, & &1.start_formatted)
+      refute "14:30" in starts
+      assert "15:00" in starts
+      assert "17:30" in starts
+    end
+
     test "enforces minimum lead time for same-day booking" do
       # now is 08:45, min lead time is 30m -> earliest allowed is 09:15
       windows = [{~T[08:00:00], ~T[12:00:00]}]

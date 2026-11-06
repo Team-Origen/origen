@@ -30,7 +30,8 @@ defmodule Origen.Appointments.Availability do
   @spec calculate_slots(Date.t(), [time_interval()], [time_interval()], keyword()) :: [slot()]
   def calculate_slots(date, windows, occupancies, opts \\ []) do
     now = Keyword.get(opts, :now, DateTime.utc_now())
-    today = DateTime.to_date(now)
+    timezone = Keyword.get(opts, :timezone, "Etc/UTC")
+    today = now |> DateTime.shift_zone!(timezone) |> DateTime.to_date()
     horizon_days = Keyword.get(opts, :booking_horizon_days, @default_horizon_days)
 
     cond do
@@ -57,9 +58,9 @@ defmodule Origen.Appointments.Availability do
             interval,
             duration,
             normalized_occupancies,
-            today,
             now,
-            min_lead
+            min_lead,
+            timezone
           )
         end)
         |> Enum.sort_by(& &1.start_time, Time)
@@ -73,9 +74,9 @@ defmodule Origen.Appointments.Availability do
          interval,
          duration,
          occupancies,
-         today,
          now,
-         min_lead
+         min_lead,
+         timezone
        ) do
     step_seconds = interval * 60
     duration_seconds = duration * 60
@@ -84,7 +85,7 @@ defmodule Origen.Appointments.Availability do
     |> Enum.filter(fn {c_start, c_end} ->
       fits_in_window?(c_end, w_end) and
         not overlaps_any?(c_start, c_end, occupancies) and
-        satisfies_lead_time?(date, c_start, today, now, min_lead)
+        satisfies_lead_time?(date, c_start, now, min_lead, timezone)
     end)
     |> Enum.map(fn {c_start, c_end} ->
       build_slot(date, c_start, c_end)
@@ -120,13 +121,10 @@ defmodule Origen.Appointments.Availability do
     end)
   end
 
-  defp satisfies_lead_time?(date, c_start, today, now, min_lead) do
-    if Date.compare(date, today) == :eq do
-      now_time = DateTime.to_time(now)
-      earliest_allowed = Time.add(now_time, min_lead * 60, :second)
-      Time.compare(c_start, earliest_allowed) in [:gt, :eq]
-    else
-      true
+  defp satisfies_lead_time?(date, c_start, now, min_lead, timezone) do
+    case DateTime.new(date, c_start, timezone) do
+      {:ok, start} -> DateTime.compare(start, DateTime.add(now, min_lead, :minute)) != :lt
+      _ambiguous_or_missing_local_time -> false
     end
   end
 

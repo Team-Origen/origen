@@ -23,7 +23,13 @@ defmodule OrigenWeb.ProfessionalPatientSelector do
          %{
            id: Calendar.strftime(slot.start_time, "%H%M"),
            label: Calendar.strftime(slot.start_time, "%H:%M"),
-           start_time: DateTime.new!(date, slot.start_time, "Etc/UTC")
+           start_time:
+             date
+             |> DateTime.new!(
+               slot.start_time,
+               Application.fetch_env!(:origen, :organization_timezone)
+             )
+             |> DateTime.shift_zone!("Etc/UTC")
          }
        end)}
     end
