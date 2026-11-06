@@ -15,8 +15,8 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - T1 [S1,S2,S4] delegated (context backstop): done — contract-safe policy copy, cancellation-policy removal, matching assertions, and observed checks recorded; commit `bfacc29` (106 changed lines).
 - T2 [S1,S2,S4] delegated (context backstop): done — availability/catalog readiness, safe failure and empty states, supporting doubles, and regression tests; commit `1db5584` (191 changed lines).
 - T3 [S1,S2,S4] delegated (context backstop): done — validated professional/type/date/slot selection and navigation with rejection tests; commit `0b668ee` (156 changed lines).
-- T4 [S1,S2,S4] delegated (context backstop): done — validated booking submission, duplicate/in-progress guards, stale-slot conflict handling, and sanitized failures with matching tests; commit pending.
-- T5 [S1–S5] delegated (context backstop): pending — truthful booking outcomes, refreshed new-booking availability, and final historical evidence; commit pending.
+- T4 [S1,S2,S4] delegated (context backstop): done — validated booking submission, duplicate/in-progress guards, stale-slot conflict handling, and sanitized failures with matching tests; commit `5632e24` (291 changed lines).
+- T5 [S1–S5] delegated (context backstop): done — truthful booking outcomes, refreshed new-booking availability, frozen historical surfaces, and final evidence; commit pending.
 
 ## Log
 
@@ -51,3 +51,11 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - L29 T4 GREEN: the same authorized focused command exited 0 with 18/18 passing after adding validated booking selection, duplicate/in-progress guards, stale-slot refresh, and generic failure messaging while retaining the existing confirmed/result template.
 - L30 T4 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
 - L31 T4 measured review load: current diff is 133 view additions/deletions, 145 test additions/deletions, and 13 tracking-document changed lines, for 291 counted changed lines. T5 remains pending.
+- L32 Parent T4 spot-check: 18 passed, exit 0; read-only assess: medium, 3 paths/291 lines, RDD off. Committed as `5632e24`; final branch is `feat/307-05-results`. Remaining original delivery surfaces: 259 changed lines before tracking updates.
+- L33 T5 RED: the first authorized focused run exited 2 with 12/19 passing because the copied working test still used the invalid `phx-value_slot_id` selector spelling; this was a test-shape failure, not valid behavioral RED evidence. The test was reconciled to the frozen final blob before the passing run.
+- L34 T5 GREEN: the reconciled frozen final source/test pair passed the authorized focused command with exit 0 and 19/19 tests; this preserves T1–T4 coverage and adds truthful outcomes, result snapshots/status, and refreshed new-booking availability.
+- L35 T5 format/whitespace/equality: the authorized format check exited 0 and `git diff --check` exited 0. Blob hashes for all five required surfaces match `65af7e6` exactly: view `57de0769`, test `5c3b21c0`, fixture `ea7438f8`, evidence `4e176f0f`, and historical task `0a84f248`.
+- L36 T5 measured review load: source/test/task tracking changes are 122 + 59 + 5 changed lines, and the two frozen historical documents add 78 lines, for 264 changed lines before this final log update. T5 is complete; commit, publication and merge remain parent-owned.
+- L37 Parent retrospective behavioral RED: the exact final 19-test file against the complete T4 LiveView loaded only in an isolated test process passed 17/19 and exited 2. The only failures were the expected confirmed/pending outcome headings; this corrects the invalid initial RED evidence without changing source files or beams.
+- L38 Parent final GREEN: 51 booking seam tests passed, exit 0, seed 307, including calendar, patient self-booking/concurrency, assisted booking and all 19 LiveView tests. Parent independently verified all five frozen blobs match `65af7e6`; no full-suite rerun or agent browser run is claimed.
+- L39 GitHub merge policy readback: develop requires one independent approval, last-push approval and resolved review threads; auto-merge is disabled. The user's merge authorization does not waive these protections. Publish the full chain, then merge only if GitHub requirements are satisfied; never self-approve or use an administrative bypass.

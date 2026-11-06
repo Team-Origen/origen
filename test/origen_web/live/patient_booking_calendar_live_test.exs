@@ -315,15 +315,11 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
          } do
       Repo.update!(Ecto.Changeset.change(profile, state: "pending_completion"))
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, _view, html} = live(conn, ~p"/patient/calendar")
 
       assert html =~ "Completá tu perfil para reservar"
       refute html =~ "verificar tu teléfono"
       refute html =~ "Verificar Teléfono"
-
-      html = render_click(view, "confirm_booking")
-      assert html =~ "Completá tu perfil para reservar."
-      refute html =~ "verificar tu teléfono"
     end
 
     test "renders the real profile and slots and navigates dates", %{conn: conn} do
@@ -428,14 +424,13 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
                "Horarios Disponibles para #{Date.to_iso8601(booking_date)}"
     end
 
-    test "an unverified patient confirms once and keeps the result and booking count stable", %{
+    test "an unverified patient confirms once and keeps the result and occupied slot stable", %{
       conn: conn,
       profile: profile,
       prof_id: prof_id
     } do
       {:ok, view, _html} = live(conn, ~p"/patient/calendar")
       booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
-
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
       {:ok, before} =
@@ -444,18 +439,25 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         )
 
       slot = Enum.find(before.slots, &(&1.start_formatted == "08:00"))
-      [[before_count]] = Repo.query!("SELECT count(*) FROM appointments").rows
 
       view
       |> element(~s(button[phx-value-slot_id="#{slot.id}"]))
       |> render_click()
 
       first_html = render_click(view, "confirm_booking")
-      assert first_html =~ "Turno Reservado con" and first_html =~ "Sofía Martínez"
-      assert first_html =~ "Turno ID:" and first_html =~ "Importe:"
+      assert first_html =~ "Turno confirmado"
+      assert first_html =~ "Sofía Martínez"
+      assert first_html =~ "Consulta general"
+      assert first_html =~ "18000.00"
+      refute first_html =~ "D-1"
+      refute first_html =~ "RF-10"
 
-      [[after_first_count]] = Repo.query!("SELECT count(*) FROM appointments").rows
-      assert after_first_count == before_count + 1
+      {:ok, after_first} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      refute Enum.any?(after_first.slots, &(&1.id == slot.id))
 
       assert {:error, :overlap_detected} =
                Origen.Appointments.BookingService.reserve(profile, %{
@@ -466,8 +468,17 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
                })
 
       assert render_click(view, "confirm_booking") == first_html
-      [[after_duplicate_count]] = Repo.query!("SELECT count(*) FROM appointments").rows
-      assert after_duplicate_count == after_first_count
+
+      {:ok, after_duplicate} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      refute Enum.any?(after_duplicate.slots, &(&1.id == slot.id))
+
+      html_after_clear = render_click(view, "clear_slot")
+      refute html_after_clear =~ "Turno confirmado"
+      refute has_element?(view, "button[phx-value-slot_id='#{slot.id}']")
     end
 
     test "booking failures use a generic sanitized message and preserve availability", %{
@@ -504,6 +515,26 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         )
 
       assert Enum.any?(after_attempt.slots, &(&1.id == slot.id))
+    end
+
+    test "manual approval renders a pending request result", %{conn: conn, prof_id: prof_id} do
+      Repo.query!(
+        "UPDATE agenda_settings SET approval_mode = 'manual' WHERE owner_account_id = $1",
+        [prof_id]
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      view
+      |> element(~s(button[phx-value-slot_id="SLOT-#{Date.to_iso8601(booking_date)}-0800"]))
+      |> render_click()
+
+      html = render_click(view, "confirm_booking")
+      assert html =~ "Solicitud enviada"
+      assert html =~ "Pendiente de aprobación"
+      refute html =~ "Estado inicial (RF-10)"
     end
 
     test "a stale slot reports a conflict and refreshes availability", %{

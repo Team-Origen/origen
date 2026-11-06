@@ -1,0 +1,33 @@
+# Issue #307 — Patient self-booking frontend
+Branch: `feat/307-patient-booking-frontend`; baseline: `3d0a5e7`. OpenSpec: `health-center-beta-core`, Sprint 3 / parent #280 / frontend.
+Delivery: cohesive work-unit commits with tests and evidence; runner: `mix test` with isolated PostgreSQL partition. Scope excludes #308 and human signoff.
+
+## Specs
+
+- S1: “Empecemos con la implementación del frontend de la reserva propia del Paciente. Sería completar la subissue #307 junto con sus criterios de aceptación. Para el desarrollo de esta subissue crea una rama y trabaja de forma prolija.”
+- S2: “Preparar calendario y selección de Profesional, consulta, fecha/hora propia contra el contrato de disponibilidad.”
+- S3: “Mostrar vacío, error, conflicto y resultado sin pedir teléfono verificado ni presentar políticas D-1 incompatibles.”
+- S4: “Probar selección, validaciones y prevención de envíos duplicados con fixtures/dobles; la evidencia de disponibilidad persistente pertenece a Integración.”
+- S5: “Registrar evidencia y aprobación de esta parte; su cierre no equivale a terminar la padre ni autoriza iniciar Integración con hermanas pendientes.”
+- S6: “Leer y respetar el contrato acordado en #305; no redefinir unilateralmente entradas, resultados, permisos o estados.”
+- S7: “No implementar reglas de seguridad sólo en la vista ni usar fixtures como evidencia de producción o de Integración.”
+
+## Tasks
+
+- T1 [S1–S4,S6,S7] delegated (context backstop): done — 19 focused tests pass, format/whitespace pass; additional public availability/duplicate-effect and catalog/schedule error coverage; commit `9d6d71f`.
+- T2 [S2–S4,S6,S7] inline: done — job-3 exit 0, 894 passed/32 skipped/8 excluded; native assessment medium, reviewDue false (under_budget); focused 19/19 and format/whitespace pass; evidence in commit `9d6d71f`.
+- T3 [S1,S5] inline: done — sanitized evidence and ungranted approval recorded in docs/sprints/evidence/307-patient-booking-frontend.md; commit `9d6d71f`.
+- T4 [S1,S5] inline: done — behavior/tests/evidence committed as `9d6d71f`; tracking references saved with this document; no push/PR/issue closure.
+
+## Log
+
+- L1 User request: “Empecemos con la implementación del frontend de la reserva propia del Paciente. Sería completar la subissue #307 junto con sus criterios de aceptación. Para el desarrollo de esta subissue crea una rama y trabaja de forma prolija.”
+- L2 #307 acceptance text copied verbatim into S2–S7. #280 and #305 bodies/comments read via gh; #305 CLOSED, approved contract in docs/sprints/contracts/305-reserva-propia-paciente.md. Required OpenSpec/domain/sprint sources mapped by read-only explorer mw22d2pq-1-ccv1. Current backend branch is clean at 3d0a5e7; new branch created without modifying prior branch.
+- L3 Large/resume rationale: separate frontend delivery and acceptance evidence must remain distinguishable from backend #306, integration #308, and ungranted human approval. Writer route fires on runtime context backstop, not file count. UI implementation extends existing screen; no separate visual design or branding requested. Do not alter service, authentication, shared readiness helpers or adapters. Test doubles are intended to exercise availability/catalog failure paths; persisted fixture setup may support booking result regressions but is not integration approval.
+- L4 Writer mw22hn76-2-xwyk implemented three allowed files; RED exit 2 (7 pass/6 fail), focused GREEN exit 0 (13 tests); touched-file format and whitespace exit 0. Full suite timed out at 30 seconds without final counts. No automatic retry, migration to background or toolchain change was attempted.
+- L5 Parent read source/test diff and fixtures; native assess returned unassessable because untracked files require explicit declaration. No review started. Remaining proof: unused catalog-failure double, absent explicit catalog-empty/daily-schedule failure tests, duplicate output test lacks call/effect count, and no browser check. Evidence records these limitations, not a completed acceptance claim. Needs human decision on a new bounded verification attempt and completing proof before commit. Risk: none under Task Size list; this slice changes only the view/local private helpers, not auth, shared contracts or persistence.
+- L6 User: “Si, autorizo.” Authorization resolves the timeout stop: complete remaining scoped proof, run full suite once in background with `timeout 600s`, then prepare local commits. Not human acceptance of frontend, publishing consent, or issue-close authority. Prior 30-second timeout remains failed/incomplete evidence.
+- L7 Follow-up writer mw23a2nj-3-8ir3 completed T1: baseline 13/13; expanded first run 18 pass/1 fail due test-only unsupported account state `inactive`, corrected to incomplete professional profile; final 19 tests pass exit 0. Added 6 regression cases, strengthened duplicate outcome/availability checks through public Calendar/BookingService, and refresh after explicit new booking. No meaningful RED claimed for already implemented behavior; prior six RED failures remain. Format and whitespace exit 0. Parent launched authorized full suite as job-3 with 600-second bound. Browser-tool lookup found no browser tool in petal; interactive loading verification unavailable.
+- L8 Full suite job-3 exit 0 in 52 seconds; ExUnit 50.1 seconds, seed 444250: 894 passed, 32 skipped, 8 excluded (`postgres_security: true`). Existing OTP regex/deprecated-helper warnings only. Intended files staged; native assess now returns medium, 5 paths/868 diff lines, reviewDue false with reason `under_budget`; plan writerSelfVerification true, independentVerifier false. No native review started and no native approval claimed. Risk: none by Task Size high-risk list; native tier medium governs verification.
+- L9 Honest slicing pass: the existing LiveView's connected state/rendering and tests form one cohesive behavior (794 source/test diff lines). Splitting by file type would sever test evidence from behavior; keep them together with evidence, then a separate bookkeeping commit for task/commit references. No code compression or deleted tests used to reduce size. This is a local commit plan, not permission for an oversized PR or publishing.
+- L10 Final whole-project `mix format --check-formatted`, working/index whitespace checks exit 0 in job-4; behavior/tests/evidence committed as `9d6d71f` (`feat(booking): complete patient self-booking frontend`), 4 paths/839 diff lines. No source changed after focused/full-suite proof. Remaining limitation: no interactive browser loading check. Human acceptance, publishing, merge and issue closure remain separate; close only after merge to develop per existing user preference.
