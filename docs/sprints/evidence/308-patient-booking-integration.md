@@ -9,7 +9,7 @@ The feature covers T1 and S1, S4-S8, and S10 across two local review slices on v
 1. HTTP/session/LiveView: `test/origen_web/live/patient_booking_integration_test.exs` (3 tests).
 2. Self-booking rejection/atomicity follow-up: `test/origen/integration/patient_self_booking_test.exs` (3 tests), plus final tracking.
 
-The checks below were observed on the combined working tree. At the first slice boundary only slice 1 is included; slice 2 is the next local delivery. No publishing or merge is authorized. Combined coverage includes:
+The checks below were observed on the combined working tree. Slice 1 is commit `ece09e6` on local branch `feat/308-01-real-booking` (317 authored lines with evidence); slice 2 is the following rejection/atomicity commit on `feat/308-patient-booking-integration`. No publishing or merge is authorized. Combined coverage includes:
 
 - patient magic-link delivery, the public `GET /access/verify` route, the resulting session, and `PatientBookingCalendarLive`;
 - persisted professional profile, agenda configuration, the production `Origen.ConsultationTypes.DatabaseCatalog`, and `DatabaseCalendar` availability;
@@ -45,4 +45,6 @@ The forged third-party request is now asserted as the exact observed rejection `
 - No production implementation change was required: the existing `PatientBookingCalendarLive`, `DatabaseCatalog`, `DatabaseCalendar`, `BookingService`, and transaction invariants are exercised by the new tests. The earlier custom SQL catalog test double was removed.
 - No interactive browser execution was performed; the HTTP/session/LiveView journey is covered through Phoenix integration tests, not a browser automation claim.
 - Initial runner attempts failed before test execution (connection refused on the default test port, then missing password at the available local port). Using existing repository-local settings recovered the test environment without changing configuration; no timeout or permission denial was retried.
-- The evidence is not approval or closure. Human acceptance of #308/#280 and the final parent tracking/commit record remain pending. No GitHub issue was closed or commented on, no PR was created, and nothing was pushed.
+- The evidence is not approval or closure. Human acceptance of #308/#280 remains pending. The parent tracking document records final local commit boundaries. No GitHub issue was closed or commented on, no PR was created, and nothing was pushed.
+
+Risk: none (Task Size high-risk items). The diff adds tests and evidence only; production authentication, authorization, concurrency, persistence contracts, schemas and configuration are unchanged. Existing production behavior passes the new integrated checks; no production fix is claimed.
