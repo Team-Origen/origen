@@ -3,12 +3,15 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   alias Origen.{Appointments.Calendar, ConsultationTypes, Patients}
 
+  @generic_booking_error "No se pudo completar la reserva. Volvé a intentar más tarde."
+  @stale_slot_error "Ese horario ya no está disponible. Actualizamos la disponibilidad; elegí otro horario."
+
   @impl true
   def mount(_params, session, socket) do
     email = session["patient_email"]
-    profile = if email, do: resolve_profile(email)
+    profile = if(email, do: resolve_profile(email))
     ready? = profile != nil and Patients.ready_for_booking?(profile)
-    {:ok, profs} = Calendar.list_professionals()
+    {profs, professionals_error} = list_professionals()
     default_prof = List.first(profs)
 
     {types, agenda_interval_minutes, catalog_error} =
@@ -22,6 +25,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        profile: profile,
        ready?: ready?,
        professionals: profs,
+       professionals_error: professionals_error,
        prof_id: default_prof && default_prof.id,
        consultation_types: types,
        catalog_error: catalog_error,
@@ -30,40 +34,40 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        agenda_interval_minutes: agenda_interval_minutes,
        date: next_weekday(Date.utc_today()),
        selected_slot: nil,
-       confirmed?: false,
-       booking_result: nil
+       booking_result: nil,
+       booking_in_progress?: false
      )
      |> load_schedule()}
   end
 
   @impl true
-  def handle_event(_event, _params, %{assigns: %{prof_id: nil}} = socket),
-    do: {:noreply, socket}
-
   def handle_event("change_prof", %{"prof_id" => id}, socket) do
-    if Enum.any?(socket.assigns.professionals, &(&1.id == id)) do
-      {types, agenda_interval_minutes, catalog_error} = fetch_catalog(id)
-      type = List.first(types)
+    case Enum.find(socket.assigns.professionals, &same_id?(&1.id, id)) do
+      nil ->
+        {:noreply, socket}
 
-      {:noreply,
-       assign(socket,
-         prof_id: id,
-         consultation_types: types,
-         catalog_error: catalog_error,
-         selected_type_id: type && type.id,
-         selected_type: type,
-         agenda_interval_minutes: agenda_interval_minutes,
-         selected_slot: nil,
-         confirmed?: false
-       )
-       |> load_schedule()}
-    else
-      {:noreply, socket}
+      professional ->
+        {types, agenda_interval_minutes, catalog_error} = fetch_catalog(professional.id)
+        type = List.first(types)
+
+        {:noreply,
+         assign(socket,
+           prof_id: professional.id,
+           consultation_types: types,
+           catalog_error: catalog_error,
+           selected_type_id: type && type.id,
+           selected_type: type,
+           agenda_interval_minutes: agenda_interval_minutes,
+           selected_slot: nil,
+           booking_result: nil,
+           booking_in_progress?: false
+         )
+         |> load_schedule()}
     end
   end
 
   def handle_event("change_type", %{"type_id" => id}, socket) do
-    case Enum.find(socket.assigns.consultation_types, &(&1.id == id)) do
+    case Enum.find(socket.assigns.consultation_types, &same_id?(&1.id, id)) do
       nil ->
         {:noreply, socket}
 
@@ -73,80 +77,131 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            selected_type_id: type.id,
            selected_type: type,
            selected_slot: nil,
-           confirmed?: false
+           booking_result: nil,
+           booking_in_progress?: false
          )
          |> load_schedule()}
     end
   end
 
-  def handle_event("change_date", %{"date" => str}, socket) do
-    case Date.from_iso8601(str) do
-      {:ok, d} ->
+  def handle_event("change_date", %{"date" => value}, socket) do
+    case parse_date(value) do
+      {:ok, date} ->
         {:noreply,
-         assign(socket, date: d, selected_slot: nil, confirmed?: false) |> load_schedule()}
+         assign(socket,
+           date: date,
+           selected_slot: nil,
+           booking_result: nil,
+           booking_in_progress?: false
+         )
+         |> load_schedule()}
 
       _ ->
         {:noreply, socket}
     end
   end
 
-  def handle_event("nav_date", %{"step" => s}, socket),
-    do:
-      {:noreply,
-       assign(socket,
-         date: Date.add(socket.assigns.date, String.to_integer(s)),
-         selected_slot: nil,
-         confirmed?: false
-       )
-       |> load_schedule()}
+  def handle_event("nav_date", %{"step" => step}, socket) do
+    case navigation_step(step) do
+      {:ok, step} ->
+        {:noreply,
+         assign(socket,
+           date: Date.add(socket.assigns.date, step),
+           selected_slot: nil,
+           booking_result: nil,
+           booking_in_progress?: false
+         )
+         |> load_schedule()}
 
-  def handle_event("select_slot", %{"slot_id" => id}, socket),
-    do:
-      {:noreply,
-       assign(
-         socket,
-         :selected_slot,
-         Enum.find(socket.assigns.schedule[:slots] || [], &(&1.id == id))
-       )}
-
-  def handle_event("clear_slot", _params, socket),
-    do: {:noreply, assign(socket, selected_slot: nil)}
-
-  def handle_event("confirm_booking", _params, socket) do
-    if socket.assigns.ready? and not is_nil(socket.assigns.selected_type) and
-         not is_nil(socket.assigns.selected_slot) do
-      params = %{
-        professional_id: socket.assigns.prof_id,
-        consultation_type_id: socket.assigns.selected_type.id,
-        date: socket.assigns.date,
-        slot: socket.assigns.selected_slot
-      }
-
-      case Origen.Appointments.BookingService.reserve(socket.assigns.profile, params) do
-        {:ok, result} ->
-          {:noreply, assign(socket, confirmed?: true, booking_result: result)}
-
-        {:error, :patient_not_ready_for_booking} ->
-          {:noreply,
-           put_flash(
-             socket,
-             :error,
-             "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
-           )}
-
-        {:error, reason} ->
-          {:noreply,
-           put_flash(socket, :error, "No se pudo realizar la reserva: #{inspect(reason)}")}
-      end
-    else
-      {:noreply,
-       put_flash(
-         socket,
-         :error,
-         "DebÃ©s completar tu perfil y verificar tu telÃ©fono antes de reservar."
-       )}
+      :error ->
+        {:noreply, socket}
     end
   end
+
+  def handle_event("select_slot", %{"slot_id" => id}, socket) do
+    case Enum.find(
+           (socket.assigns.schedule && socket.assigns.schedule.slots) || [],
+           &same_id?(&1.id, id)
+         ) do
+      nil ->
+        {:noreply, socket}
+
+      slot ->
+        {:noreply,
+         assign(socket,
+           selected_slot: slot,
+           booking_result: nil,
+           booking_in_progress?: false
+         )}
+    end
+  end
+
+  def handle_event("clear_slot", _params, socket) do
+    refresh_schedule? = not is_nil(socket.assigns.booking_result)
+
+    socket = assign(socket, selected_slot: nil, booking_result: nil, booking_in_progress?: false)
+    socket = if refresh_schedule?, do: load_schedule(socket), else: socket
+
+    {:noreply, socket}
+  end
+
+  def handle_event("confirm_booking", _params, %{assigns: %{booking_result: result}} = socket)
+      when not is_nil(result),
+      do: {:noreply, socket}
+
+  def handle_event(
+        "confirm_booking",
+        _params,
+        %{assigns: %{booking_in_progress?: true}} = socket
+      ),
+      do: {:noreply, socket}
+
+  def handle_event("confirm_booking", _params, socket) do
+    case booking_selection(socket) do
+      {:error, :profile_not_ready} ->
+        {:noreply, put_flash(socket, :error, "Completá tu perfil para reservar.")}
+
+      {:error, :invalid_selection} ->
+        {:noreply, put_flash(socket, :error, "Seleccioná un horario disponible para reservar.")}
+
+      {:ok, params} ->
+        socket = assign(socket, booking_in_progress?: true)
+
+        case Origen.Appointments.BookingService.reserve(socket.assigns.profile, params) do
+          {:ok, result} ->
+            {:noreply,
+             assign(socket,
+               booking_in_progress?: false,
+               booking_result: result_snapshot(socket, result, params)
+             )}
+
+          {:error, :overlap_detected} ->
+            socket = assign(socket, selected_slot: nil, booking_in_progress?: false)
+
+            {:noreply,
+             socket
+             |> load_schedule()
+             |> put_flash(:error, @stale_slot_error)}
+
+          {:error, :patient_not_ready_for_booking} ->
+            {:noreply,
+             socket
+             |> assign(booking_in_progress?: false)
+             |> put_flash(:error, "Completá tu perfil para reservar.")}
+
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> assign(booking_in_progress?: false)
+             |> put_flash(:error, @generic_booking_error)}
+        end
+    end
+  end
+
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  defp load_schedule(%{assigns: %{professionals_error: error}} = socket) when not is_nil(error),
+    do: assign(socket, schedule: nil, error: error)
 
   defp load_schedule(%{assigns: %{prof_id: nil}} = socket),
     do: assign(socket, schedule: nil, error: nil)
@@ -156,26 +211,68 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   defp load_schedule(socket) do
     duration =
-      (socket.assigns[:selected_type] &&
-         socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes) ||
-        30
+      socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes
 
     case Calendar.get_daily_schedule(socket.assigns.prof_id, socket.assigns.date,
            duration_minutes: duration
          ) do
       {:ok, schedule} ->
-        professional = Enum.find(socket.assigns.professionals, &(&1.id == socket.assigns.prof_id))
+        professional =
+          Enum.find(socket.assigns.professionals, &same_id?(&1.id, socket.assigns.prof_id))
 
         schedule =
           Map.merge(schedule, %{
-            professional_name: professional.name,
-            specialty: professional.specialty
+            professional_name: professional && professional.name,
+            specialty: professional && professional.specialty
           })
 
         assign(socket, schedule: schedule, error: nil)
 
-      {:error, r} ->
-        assign(socket, schedule: nil, error: r)
+      {:error, _reason} ->
+        assign(socket, schedule: nil, error: :unavailable)
+    end
+  end
+
+  defp booking_selection(%{assigns: assigns}) do
+    with true <- assigns.ready?,
+         %{} = professional <- Enum.find(assigns.professionals, &same_id?(&1.id, assigns.prof_id)),
+         %{} = type <-
+           Enum.find(assigns.consultation_types, &same_id?(&1.id, assigns.selected_type_id)),
+         %Date{} = date <- assigns.date,
+         %{} = slot <-
+           Enum.find(
+             (assigns.schedule && assigns.schedule.slots) || [],
+             &same_id?(&1.id, assigns.selected_slot && assigns.selected_slot.id)
+           ) do
+      {:ok,
+       %{
+         professional_id: professional.id,
+         consultation_type_id: type.id,
+         date: date,
+         slot: slot
+       }}
+    else
+      false -> {:error, :profile_not_ready}
+      _ -> {:error, :invalid_selection}
+    end
+  end
+
+  defp result_snapshot(socket, result, params) do
+    professional =
+      Enum.find(socket.assigns.professionals, &same_id?(&1.id, params.professional_id))
+
+    Map.merge(result, %{
+      date: params.date,
+      start_formatted: params.slot.start_formatted,
+      end_formatted: params.slot.end_formatted,
+      professional_name: professional && professional.name
+    })
+  end
+
+  defp list_professionals do
+    case Calendar.list_professionals() do
+      {:ok, professionals} -> {professionals, nil}
+      {:error, _reason} -> {[], :unavailable}
     end
   end
 
@@ -197,6 +294,19 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
          _ -> nil
        end)
 
+  defp same_id?(left, right)
+       when (is_integer(left) or is_binary(left)) and (is_integer(right) or is_binary(right)),
+       do: to_string(left) == to_string(right)
+
+  defp same_id?(_left, _right), do: false
+
+  defp parse_date(value) when is_binary(value), do: Date.from_iso8601(value)
+  defp parse_date(_value), do: :error
+
+  defp navigation_step("-1"), do: {:ok, -1}
+  defp navigation_step("1"), do: {:ok, 1}
+  defp navigation_step(_step), do: :error
+
   defp next_weekday(d),
     do:
       (case Date.day_of_week(d) do
@@ -204,6 +314,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
          7 -> Date.add(d, 1)
          _ -> d
        end)
+
+  defp status_label("confirmed"), do: "Confirmado"
+  defp status_label("requested"), do: "Pendiente de aprobación"
+  defp status_label(_status), do: "Procesando"
 
   @impl true
   def render(assigns) do
@@ -236,24 +350,10 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         </div>
 
         <div
-          :if={not @ready?}
-          class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm flex items-start gap-3 border border-amber-200"
+          :if={@profile && not @ready?}
+          class="p-4 rounded-xl bg-amber-50 text-amber-800 text-sm border border-amber-200"
         >
-          <.icon name="hero-exclamation-triangle" class="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-          <div class="flex-1">
-            <p class="font-semibold">Perfil pendiente de verificación</p>
-
-            <p class="mt-0.5">
-              Para confirmar turnos de manera autónoma, tu teléfono debe estar verificado.
-            </p>
-          </div>
-
-          <.link
-            navigate={~p"/patient/phone/verify"}
-            class="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-semibold shrink-0 hover:bg-amber-700"
-          >
-            Verificar Teléfono
-          </.link>
+          Completá tu perfil para reservar de manera autónoma.
         </div>
 
         <div
@@ -269,7 +369,11 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                   class="w-full rounded-lg border-stone-300 bg-white text-stone-900 text-sm font-medium focus:ring-[#0A3847] focus:border-[#0A3847]"
                 >
                   <%= for p <- @professionals do %>
-                    <option value={p.id} selected={p.id == @prof_id} class="bg-white text-stone-900">
+                    <option
+                      value={p.id}
+                      selected={same_id?(p.id, @prof_id)}
+                      class="bg-white text-stone-900"
+                    >
                       {p.name} - {p.specialty}
                     </option>
                   <% end %>
@@ -287,7 +391,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                   <%= for t <- @consultation_types do %>
                     <option
                       value={t.id}
-                      selected={t.id == @selected_type_id}
+                      selected={same_id?(t.id, @selected_type_id)}
                       class="bg-white text-stone-900"
                     >
                       {t.name} ({t.interval_count * @agenda_interval_minutes} min)
@@ -332,6 +436,14 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         </div>
 
         <%= cond do %>
+          <% @professionals_error != nil -> %>
+            <p
+              id="patient-professionals-error"
+              role="alert"
+              class="p-6 bg-white text-red-800 text-center rounded-xl border border-red-200"
+            >
+              No se pudo cargar la lista de profesionales. Volvé a intentar más tarde.
+            </p>
           <% @professionals == [] -> %>
             <p
               role="status"
@@ -355,55 +467,47 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
             >
               No hay tipos de consulta disponibles para este profesional.
             </p>
-          <% @confirmed? and @selected_slot -> %>
+          <% @booking_result != nil -> %>
             <div class="bg-white rounded-xl shadow-sm border border-emerald-200 p-8 text-center space-y-4">
               <div class="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                 <.icon name="hero-check" class="w-6 h-6 stroke-[2.5]" />
               </div>
 
-              <h2 class="text-xl font-bold text-stone-900">Â¡Turno Reservado con Ã‰xito!</h2>
+              <h2 class="text-xl font-bold text-stone-900">
+                {if @booking_result.status == "confirmed",
+                  do: "Turno confirmado",
+                  else: "Solicitud enviada"}
+              </h2>
+
+              <p class="text-sm text-stone-600">
+                {if @booking_result.status == "confirmed",
+                  do: "Tu turno quedó confirmado.",
+                  else: "La solicitud queda pendiente de aprobación profesional."}
+              </p>
 
               <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-sm text-emerald-900 max-w-md mx-auto space-y-1.5 text-left">
+                <p><strong>Turno ID:</strong> #{@booking_result.appointment_id}</p>
+                <p><strong>Profesional:</strong> {@booking_result.professional_name}</p>
+                <p><strong>Tipo de Consulta:</strong> {@booking_result.consultation_type_name}</p>
                 <p>
-                  <strong>Turno ID:</strong>
-                  #{get_in(@booking_result || %{}, [:appointment_id]) || "â€”"}
+                  <strong>Fecha y Horario:</strong> {Date.to_iso8601(@booking_result.date)} de {@booking_result.start_formatted} a {@booking_result.end_formatted} hs
                 </p>
-
-                <p><strong>Profesional:</strong> {@schedule.professional_name}</p>
-
+                <p><strong>Importe:</strong> ${@booking_result.exact_price_ars}</p>
                 <p>
-                  <strong>Tipo de Consulta:</strong> {get_in(@booking_result || %{}, [
-                    :consultation_type_name
-                  ]) || get_in(@selected_type, [:name])}
-                </p>
-
-                <p>
-                  <strong>Fecha y Horario:</strong> {Date.to_iso8601(@date)} de {@selected_slot.start_formatted} a {@selected_slot.end_formatted} hs
-                </p>
-
-                <p>
-                  <strong>Importe:</strong>
-                  ${get_in(@booking_result || %{}, [:exact_price_ars]) ||
-                    @selected_type.exact_price_ars}
-                </p>
-
-                <p>
-                  <strong>Estado inicial (RF-10):</strong>
+                  <strong>Estado:</strong>
                   <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-emerald-200 text-emerald-800">
-                    {String.capitalize(
-                      to_string(get_in(@booking_result || %{}, [:status]) || "reserved")
-                    )}
+                    {status_label(@booking_result.status)}
                   </span>
                 </p>
               </div>
 
               <div class="pt-4">
-                <.link
-                  navigate={~p"/patient/profile/complete"}
+                <button
+                  phx-click="clear_slot"
                   class="px-5 py-2.5 rounded-lg bg-[#0A3847] text-white text-sm font-semibold hover:bg-[#35545A] inline-flex"
                 >
-                  Volver a Mi Perfil
-                </.link>
+                  Reservar otro turno
+                </button>
               </div>
             </div>
           <% @selected_slot -> %>
@@ -420,10 +524,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-stone-50 rounded-lg p-4 text-sm">
                 <div>
                   <span class="text-xs text-stone-500 block">Profesional y Consulta</span>
-                  <span class="font-semibold text-stone-800">{@schedule.professional_name} — {get_in(
-                    @selected_type,
-                    [:name]
-                  ) || "Consulta general"}</span>
+                  <span class="font-semibold text-stone-800">{@schedule.professional_name} — {@selected_type.name}</span>
                 </div>
 
                 <div>
@@ -432,27 +533,19 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                 </div>
               </div>
 
-              <div class="space-y-2 border-t pt-3 text-xs text-[#0A3847]">
-                <h4 class="font-semibold uppercase tracking-wider text-stone-700">
-                  Políticas de Cancelación y Asistencia
-                </h4>
-
-                <p>
-                  <strong>Límite sin cargo:</strong> {@schedule.cancellation_policy.cutoff_description}
-                </p>
-
-                <p>
-                  <strong>Política de multa ({@schedule.cancellation_policy.penalty_percentage}%):</strong> {@schedule.cancellation_policy.penalty_description}
-                </p>
-              </div>
-
               <div class="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   phx-click="confirm_booking"
-                  disabled={not @ready?}
-                  class={"w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm " <> if @ready?, do: "bg-[#0A3847] hover:bg-[#35545A] text-white", else: "bg-stone-300 text-stone-500 cursor-not-allowed"}
+                  phx-disable-with="Reservando…"
+                  disabled={not @ready? or @booking_in_progress?}
+                  aria-busy={@booking_in_progress?}
+                  class={"w-full sm:flex-1 py-2.5 px-4 rounded-lg font-semibold text-sm " <> if @ready? and not @booking_in_progress?, do: "bg-[#0A3847] hover:bg-[#35545A] text-white", else: "bg-stone-300 text-stone-500 cursor-not-allowed"}
                 >
-                  {if @ready?, do: "Confirmar Turno", else: "Verificación de Teléfono Requerida"}
+                  {cond do
+                    @booking_in_progress? -> "Reservando…"
+                    @ready? -> "Confirmar Turno"
+                    true -> "Completá tu perfil para reservar"
+                  end}
                 </button>
 
                 <button
