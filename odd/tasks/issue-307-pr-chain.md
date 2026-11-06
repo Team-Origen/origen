@@ -12,8 +12,8 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 ## Tasks
 
 - T1 [S1,S2,S4] delegated (context backstop): done — contract-safe policy copy, cancellation-policy removal, matching assertions, and observed checks recorded; commit `bfacc29` (106 changed lines).
-- T2 [S1,S2,S4] delegated (context backstop): done — availability/catalog readiness, safe failure and empty states, supporting doubles, and regression tests; commit pending.
-- T3 [S1,S2,S4] delegated (context backstop): pending — validated selection and navigation with rejection tests; commit pending.
+- T2 [S1,S2,S4] delegated (context backstop): done — availability/catalog readiness, safe failure and empty states, supporting doubles, and regression tests; commit `1db5584` (191 changed lines).
+- T3 [S1,S2,S4] delegated (context backstop): done — validated professional/type/date/slot selection and navigation with rejection tests; commit pending.
 - T4 [S1–S4] delegated (context backstop): pending — booking lifecycle, outcomes, refresh, and final historical evidence; commit pending.
 
 ## Log
@@ -36,3 +36,9 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - L16 T2 GREEN: the same authorized focused command exited 0 with 14/14 passing after adding safe professional-list state, schedule error handling, and the six final-source fixture modules/tests; T1 copy/policy behavior remained intact.
 - L17 T2 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
 - L18 T2 measured review load: current diff is 25 source additions/deletions, 69 test additions/deletions, 88 fixture lines, and 9 tracking-document changed lines, for 191 counted changed lines including the new fixture. T3–T4 remain pending.
+- L19 Parent T2 spot-check: 14 passed, exit 0; read-only assess: medium, 4 paths/191 lines, RDD off. Committed as `1db5584`; T3 branch is `feat/307-03-selection`.
+- L20 User: “No gastes tanto tiempo en hacer todo el proceso de crear los PRs. Sólo hazlos sin gastar tanto tiempo. Voy a dejar la PC corriendote, no me preguntes nada. Termina de crear los PRs y pushealos sin mi permiso así yo puedo mergearlos desde otro dispositivo en el repositorio remoto de github.” Complete the authorized chain without further routine questions; do not wait for GitHub CI or merge.
+- L21 T3 RED: the authorized focused command exited 2 with 14/15 passing; the expected failure was malformed navigation crashing on `String.to_integer("not-a-number")`.
+- L22 T3 GREEN: the same authorized focused command exited 0 with 15/15 passing after final-source selection identity, date parsing, navigation-step validation, and safe slot selection were added; T1/T2 behavior remained intact.
+- L23 T3 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
+- L24 T3 measured review load: current diff is 123 view additions/deletions, 23 test additions, and 10 tracking-document changed lines, for 156 counted changed lines. T4 remains pending.

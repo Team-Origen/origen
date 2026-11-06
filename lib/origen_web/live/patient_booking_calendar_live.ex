@@ -38,33 +38,32 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
   end
 
   @impl true
-  def handle_event(_event, _params, %{assigns: %{prof_id: nil}} = socket),
-    do: {:noreply, socket}
-
   def handle_event("change_prof", %{"prof_id" => id}, socket) do
-    if Enum.any?(socket.assigns.professionals, &(&1.id == id)) do
-      {types, agenda_interval_minutes, catalog_error} = fetch_catalog(id)
-      type = List.first(types)
+    case Enum.find(socket.assigns.professionals, &same_id?(&1.id, id)) do
+      nil ->
+        {:noreply, socket}
 
-      {:noreply,
-       assign(socket,
-         prof_id: id,
-         consultation_types: types,
-         catalog_error: catalog_error,
-         selected_type_id: type && type.id,
-         selected_type: type,
-         agenda_interval_minutes: agenda_interval_minutes,
-         selected_slot: nil,
-         confirmed?: false
-       )
-       |> load_schedule()}
-    else
-      {:noreply, socket}
+      professional ->
+        {types, agenda_interval_minutes, catalog_error} = fetch_catalog(professional.id)
+        type = List.first(types)
+
+        {:noreply,
+         assign(socket,
+           prof_id: professional.id,
+           consultation_types: types,
+           catalog_error: catalog_error,
+           selected_type_id: type && type.id,
+           selected_type: type,
+           agenda_interval_minutes: agenda_interval_minutes,
+           selected_slot: nil,
+           confirmed?: false
+         )
+         |> load_schedule()}
     end
   end
 
   def handle_event("change_type", %{"type_id" => id}, socket) do
-    case Enum.find(socket.assigns.consultation_types, &(&1.id == id)) do
+    case Enum.find(socket.assigns.consultation_types, &same_id?(&1.id, id)) do
       nil ->
         {:noreply, socket}
 
@@ -80,35 +79,45 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     end
   end
 
-  def handle_event("change_date", %{"date" => str}, socket) do
-    case Date.from_iso8601(str) do
-      {:ok, d} ->
+  def handle_event("change_date", %{"date" => value}, socket) do
+    case parse_date(value) do
+      {:ok, date} ->
         {:noreply,
-         assign(socket, date: d, selected_slot: nil, confirmed?: false) |> load_schedule()}
+         assign(socket, date: date, selected_slot: nil, confirmed?: false) |> load_schedule()}
 
       _ ->
         {:noreply, socket}
     end
   end
 
-  def handle_event("nav_date", %{"step" => s}, socket),
-    do:
-      {:noreply,
-       assign(socket,
-         date: Date.add(socket.assigns.date, String.to_integer(s)),
-         selected_slot: nil,
-         confirmed?: false
-       )
-       |> load_schedule()}
+  def handle_event("nav_date", %{"step" => step}, socket) do
+    case navigation_step(step) do
+      {:ok, step} ->
+        {:noreply,
+         assign(socket,
+           date: Date.add(socket.assigns.date, step),
+           selected_slot: nil,
+           confirmed?: false
+         )
+         |> load_schedule()}
 
-  def handle_event("select_slot", %{"slot_id" => id}, socket),
-    do:
-      {:noreply,
-       assign(
-         socket,
-         :selected_slot,
-         Enum.find(socket.assigns.schedule[:slots] || [], &(&1.id == id))
-       )}
+      :error ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("select_slot", %{"slot_id" => id}, socket) do
+    case Enum.find(
+           (socket.assigns.schedule && socket.assigns.schedule.slots) || [],
+           &same_id?(&1.id, id)
+         ) do
+      nil ->
+        {:noreply, socket}
+
+      slot ->
+        {:noreply, assign(socket, selected_slot: slot, confirmed?: false)}
+    end
+  end
 
   def handle_event("clear_slot", _params, socket),
     do: {:noreply, assign(socket, selected_slot: nil)}
@@ -139,6 +148,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     end
   end
 
+  def handle_event(_event, _params, socket), do: {:noreply, socket}
+
   defp load_schedule(%{assigns: %{professionals_error: error}} = socket) when not is_nil(error),
     do: assign(socket, schedule: nil, error: error)
 
@@ -156,7 +167,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            duration_minutes: duration
          ) do
       {:ok, schedule} ->
-        professional = Enum.find(socket.assigns.professionals, &(&1.id == socket.assigns.prof_id))
+        professional =
+          Enum.find(socket.assigns.professionals, &same_id?(&1.id, socket.assigns.prof_id))
 
         schedule =
           Map.merge(schedule, %{
@@ -195,6 +207,19 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
          {:ok, p} -> p
          _ -> nil
        end)
+
+  defp same_id?(left, right)
+       when (is_integer(left) or is_binary(left)) and (is_integer(right) or is_binary(right)),
+       do: to_string(left) == to_string(right)
+
+  defp same_id?(_left, _right), do: false
+
+  defp parse_date(value) when is_binary(value), do: Date.from_iso8601(value)
+  defp parse_date(_value), do: :error
+
+  defp navigation_step("-1"), do: {:ok, -1}
+  defp navigation_step("1"), do: {:ok, 1}
+  defp navigation_step(_step), do: :error
 
   defp next_weekday(d),
     do:
@@ -254,7 +279,11 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                   class="w-full rounded-lg border-stone-300 bg-white text-stone-900 text-sm font-medium focus:ring-[#0A3847] focus:border-[#0A3847]"
                 >
                   <%= for p <- @professionals do %>
-                    <option value={p.id} selected={p.id == @prof_id} class="bg-white text-stone-900">
+                    <option
+                      value={p.id}
+                      selected={same_id?(p.id, @prof_id)}
+                      class="bg-white text-stone-900"
+                    >
                       {p.name} - {p.specialty}
                     </option>
                   <% end %>
@@ -272,7 +301,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
                   <%= for t <- @consultation_types do %>
                     <option
                       value={t.id}
-                      selected={t.id == @selected_type_id}
+                      selected={same_id?(t.id, @selected_type_id)}
                       class="bg-white text-stone-900"
                     >
                       {t.name} ({t.interval_count * @agenda_interval_minutes} min)

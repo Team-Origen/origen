@@ -246,6 +246,29 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert Repo.query!("SELECT count(*) FROM appointments").rows == before
     end
 
+    test "rejects forged selections and malformed navigation without changing state", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+      booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      view
+      |> element(~s(button[phx-value-slot_id="SLOT-#{Date.to_iso8601(booking_date)}-0800"]))
+      |> render_click()
+
+      selected = render(view)
+      render_click(view, "select_slot", %{"slot_id" => "forged-slot"})
+      render_change(view, "change_type", %{"type_id" => "forged-type"})
+      render_change(view, "change_prof", %{"prof_id" => "forged-professional"})
+      render_change(view, "change_date", %{"date" => "not-a-date"})
+      render_click(view, "nav_date", %{"step" => "not-a-number"})
+
+      assert render(view) == selected
+      assert has_element?(view, "option[value='#{prof_id}'][selected]")
+    end
+
     test "rejects a forged Professional selection without changing the selected schedule", %{
       conn: conn,
       prof_id: prof_id
