@@ -1,25 +1,28 @@
 # Origen visual design system
 
-Use this foundation for every new Origen interface. PetalComponents v4.16.1 is the only source of visual UI primitives; application code supplies composition, content, and layout utilities.
+The approved product name is **Origen - Gestión de turnos**, independent of the health center using it. Use this foundation for new Origen interfaces only; do not retrofit existing screens as part of this identity update. PetalComponents v4.16.1 remains the source of visual UI primitives; application code supplies composition, content, and layout utilities.
+
+The [final identity decision](https://github.com/Team-Origen/origen/issues/274#issuecomment-6691979001) defines the brand. [Documenting the identity and adding its assets](https://github.com/Team-Origen/origen/issues/411) does not implement their use in the application. URL and navbar work remains separate; this change adds no routes, navigation changes, or screen migrations.
 
 ## Quick implementation path
 
 1. Choose the PetalComponents primitive that matches the interaction.
 2. Use its semantic `color`, `variant`, `size`, and `radius` attributes before adding layout utilities.
-3. Use the tokens in `assets/css/app.css`; do not introduce one-off color, spacing, or radius values.
+3. Reuse the tokens in `assets/css/app.css` where they match the approved identity. The approved white background is not yet mapped to the existing `page` token; do not change shared tokens or existing screens as part of this documentation-and-assets update. Report any token gap in the relevant new-screen implementation rather than silently substituting a legacy color.
 4. Verify keyboard behavior, visible focus, non-color cues, and WCAG 2.2 AA contrast.
 
 ## Color system
 
-The source colors are anchors inside accessible ramps, not interchangeable text colors.
+The approved identity contains four colors. They are not interchangeable text colors.
 
-| Role | Source color | Ramp anchor | Use |
+| Role | Approved color | Current token or ramp anchor | Use |
 | --- | --- | --- | --- |
 | Primary | `#0A3847` | `primary-700` | Headings, primary brand text, strong brand actions |
 | Secondary | `#35545A` | `secondary-700` | Supporting text and secondary brand actions |
 | Accent | `#DDE6DB` | `accent-200` | Quiet highlighted surfaces only |
-| Neutral | `#AFBAB4` | `gray-400` | Borders and non-essential surface treatment only |
-| Background | `#F6F6F4` | `gray-50` / `page` | Page background |
+| Background | `#FFFFFF` | `white` / `surface` | Approved background for new interfaces |
+
+The existing `gray-50` / `page` background remains `#F6F6F4` in the application; it is not the approved white background. Likewise, `#AFBAB4` / `gray-400` remains a supporting neutral token, not a fifth approved brand color. This PR does not change either token or existing screens.
 
 ### Available tokens
 
@@ -49,7 +52,8 @@ Before using a component, inspect its v4.16.1 schema. Component attributes are t
 
 ## Typography
 
-- Use the system sans stack defined by `--font-sans`; no external font is required.
+- Keep the current system sans stack defined by `--font-sans`: `ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"`. No new or external font is adopted.
+- Existing `font-inter` classes do not establish that Inter is loaded; this identity update does not add a font or alter existing typography.
 - Use PetalComponents typography primitives for headings, paragraphs, supporting text, and prose.
 - Preserve semantic heading order; visual size does not determine document rank.
 - Use normal body text at `text-base` with comfortable line height. Use `text-sm` only for supporting information, never to hide complexity.
@@ -81,9 +85,17 @@ Prefer each PetalComponents component's `radius` attribute. Do not override its 
 
 ## Logo
 
-The canonical asset is `priv/static/images/origen-logo.png`, a 1278 × 1231 RGBA PNG with real transparency.
+The approved assets are the two PNG files supplied by the product owner:
 
-- Keep its aspect ratio and transparent background.
+| Variant | Repository path | Dimensions | Selection |
+| --- | --- | --- | --- |
+| Primary | `priv/static/images/origen-logo-primary.png` | 1263 × 1245 | Default; use unless a specific dark-background case requires the alternate version |
+| Dark-background alternative | `priv/static/images/origen-logo-dark.png` | 1263 × 1246 | Specific dark-background cases only, after checking visibility |
+
+Adding these files does not switch any rendered logo. Their visual integration belongs to the later navbar implementation, not this documentation-and-assets PR. It does not justify redesigning existing screens. The previous `priv/static/images/origen-logo.png` is outdated and retained only to avoid breaking existing references; do not use it for new interfaces.
+
+- Keep each asset's original aspect ratio and transparency; the two dimensions differ slightly.
+- Use the primary variant by default. Do not select the alternate merely because it exists; verify the actual background and visibility when integrating it.
 - Provide `alt="Origen"` when the logo identifies the product; use `alt=""` only when adjacent text already names Origen.
 - Give rendered images explicit dimensions to reduce layout shift.
 - Do not recolor, crop, distort, add a background plate, or use the previous Phoenix logo as product branding.
@@ -121,4 +133,4 @@ The canonical asset is `priv/static/images/origen-logo.png`, a 1278 × 1231 RGBA
 - No arbitrary spacing or radius values without extending this standard first.
 - No screen-specific overrides of PetalComponents internals.
 
-Existing generated scaffold styling is not precedent. Migrate it to this standard when that surface enters an approved implementation scope; do not expand the current Part 1 foundation into screen redesign.
+Existing generated scaffold styling is not precedent for new interfaces. This approved identity applies only to new screens; it does not authorize migrating or redesigning existing screens.
