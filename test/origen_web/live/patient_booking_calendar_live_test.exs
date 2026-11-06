@@ -3,6 +3,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
   alias Origen.{Patients, Repo}
   alias Origen.Patients.{PatientProfile, Persona}
+  alias OrigenWeb.PatientBookingCalendarFixtures
 
   @email "ana_cal@example.test"
 
@@ -153,11 +154,77 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
   end
 
   describe "calendar view rendering and navigation" do
+    test "professional list failures render a safe generic error", %{conn: conn} do
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        PatientBookingCalendarFixtures.ErrorCalendar
+      )
+
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+
+      assert html =~ "No se pudo cargar la lista de profesionales"
+      assert has_element?(view, "#patient-professionals-error")
+      refute has_element?(view, "button[phx-click='confirm_booking']")
+    end
+
+    test "catalog failures render an honest error without fabricated slots", %{conn: conn} do
+      Application.put_env(
+        :origen,
+        :consultation_type_catalog_adapter,
+        PatientBookingCalendarFixtures.UnavailableCatalog
+      )
+
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+
+      assert html =~ "No se pudieron cargar los tipos de consulta"
+      assert has_element?(view, "#patient-catalog-error")
+      refute has_element?(view, "button[phx-click='select_slot']")
+    end
+
+    test "empty catalogs render a clear empty state without fabricated slots", %{conn: conn} do
+      Application.put_env(
+        :origen,
+        :consultation_type_catalog_adapter,
+        PatientBookingCalendarFixtures.EmptyCatalog
+      )
+
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+
+      assert html =~ "No hay tipos de consulta disponibles"
+      assert has_element?(view, "#patient-catalog-empty")
+      refute has_element?(view, "button[phx-click='select_slot']")
+    end
+
+    test "daily schedule failures render an honest availability error", %{conn: conn} do
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        PatientBookingCalendarFixtures.ScheduleErrorCalendar
+      )
+
+      Application.put_env(
+        :origen,
+        :consultation_type_catalog_adapter,
+        PatientBookingCalendarFixtures.AvailableCatalog
+      )
+
+      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+
+      assert html =~ "No pudimos cargar la disponibilidad"
+      refute has_element?(view, "button[phx-click='select_slot']")
+    end
+
     test "empty eligible list renders safely and forged events cannot create a booking", %{
       conn: conn,
       prof_id: prof_id
     } do
-      Repo.query!("DELETE FROM professional_profiles WHERE owner_account_id = $1", [prof_id])
+      Application.put_env(
+        :origen,
+        :appointments_calendar_adapter,
+        PatientBookingCalendarFixtures.EmptyCalendar
+      )
+
       before = Repo.query!("SELECT count(*) FROM appointments").rows
       {:ok, view, html} = live(conn, ~p"/patient/calendar")
       assert html =~ "No hay profesionales disponibles"

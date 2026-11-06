@@ -8,7 +8,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     email = session["patient_email"]
     profile = if email, do: resolve_profile(email)
     ready? = profile != nil and Patients.ready_for_booking?(profile)
-    {:ok, profs} = Calendar.list_professionals()
+    {profs, professionals_error} = list_professionals()
     default_prof = List.first(profs)
 
     {types, agenda_interval_minutes, catalog_error} =
@@ -22,6 +22,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        profile: profile,
        ready?: ready?,
        professionals: profs,
+       professionals_error: professionals_error,
        prof_id: default_prof && default_prof.id,
        consultation_types: types,
        catalog_error: catalog_error,
@@ -138,6 +139,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     end
   end
 
+  defp load_schedule(%{assigns: %{professionals_error: error}} = socket) when not is_nil(error),
+    do: assign(socket, schedule: nil, error: error)
+
   defp load_schedule(%{assigns: %{prof_id: nil}} = socket),
     do: assign(socket, schedule: nil, error: nil)
 
@@ -146,9 +150,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   defp load_schedule(socket) do
     duration =
-      (socket.assigns[:selected_type] &&
-         socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes) ||
-        30
+      socket.assigns.selected_type.interval_count * socket.assigns.agenda_interval_minutes
 
     case Calendar.get_daily_schedule(socket.assigns.prof_id, socket.assigns.date,
            duration_minutes: duration
@@ -166,6 +168,13 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
       {:error, r} ->
         assign(socket, schedule: nil, error: r)
+    end
+  end
+
+  defp list_professionals do
+    case Calendar.list_professionals() do
+      {:ok, professionals} -> {professionals, nil}
+      {:error, _reason} -> {[], :unavailable}
     end
   end
 
@@ -308,6 +317,14 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         </div>
 
         <%= cond do %>
+          <% @professionals_error != nil -> %>
+            <p
+              id="patient-professionals-error"
+              role="alert"
+              class="p-6 bg-white text-red-800 text-center rounded-xl border border-red-200"
+            >
+              No se pudo cargar la lista de profesionales. Volvé a intentar más tarde.
+            </p>
           <% @professionals == [] -> %>
             <p
               role="status"

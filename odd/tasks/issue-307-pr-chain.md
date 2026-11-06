@@ -11,8 +11,8 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 
 ## Tasks
 
-- T1 [S1,S2,S4] delegated (context backstop): done — contract-safe policy copy, cancellation-policy removal, matching assertions, and observed checks recorded; commit pending.
-- T2 [S1,S2,S4] delegated (context backstop): pending — availability and catalog readiness, failure states, supporting doubles, and tests; commit pending.
+- T1 [S1,S2,S4] delegated (context backstop): done — contract-safe policy copy, cancellation-policy removal, matching assertions, and observed checks recorded; commit `bfacc29` (106 changed lines).
+- T2 [S1,S2,S4] delegated (context backstop): done — availability/catalog readiness, safe failure and empty states, supporting doubles, and regression tests; commit pending.
 - T3 [S1,S2,S4] delegated (context backstop): pending — validated selection and navigation with rejection tests; commit pending.
 - T4 [S1–S4] delegated (context backstop): pending — booking lifecycle, outcomes, refresh, and final historical evidence; commit pending.
 
@@ -31,3 +31,8 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - L11 T1 GREEN: the same authorized test command exited 0 with 10/10 passing after applying only the final-source copy changes; no booking, readiness, selection, loading or error-flow behavior was repackaged.
 - L12 T1 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
 - L13 T1 measured review load: source/test diff is 27 additions plus 46 deletions (73 changed lines); this tracking document is 33 lines after this log, for 106 counted lines including the new document. T2–T4 remain pending.
+- L14 Parent re-ran the T1 focused command: 10 passed, exit 0. T1 was committed as `bfacc29` (60 additions, 46 deletions); the next local branch is `feat/307-02-availability`. No remote branch or PR has been created.
+- L15 T2 RED: the authorized focused command exited 2 with 13/14 passing; the only failure was the expected professional-list adapter error still crashing mount with a `MatchError`.
+- L16 T2 GREEN: the same authorized focused command exited 0 with 14/14 passing after adding safe professional-list state, schedule error handling, and the six final-source fixture modules/tests; T1 copy/policy behavior remained intact.
+- L17 T2 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
+- L18 T2 measured review load: current diff is 25 source additions/deletions, 69 test additions/deletions, 88 fixture lines, and 9 tracking-document changed lines, for 191 counted changed lines including the new fixture. T3–T4 remain pending.
