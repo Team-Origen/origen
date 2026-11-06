@@ -8,13 +8,15 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - S2: “Autorizo. Te consulto si respetaste el límite de líneas de código por PR.”
 - S3: “Si, autorizo. Ten en cuenta que el CI de Github tarda mucho, así q no te quedes esperando a q termine (y gastando tokens del modelo de forma innecesaria). Cuando esté hecho el PR yo lo mergeo a develop y te aviso cuando lo haya mergeado. No olvides de colocar que Closes # para que la issue se cierre.”
 - S4: “Empecemos con la implementación del frontend de la reserva propia del Paciente. Sería completar la subissue #307 junto con sus criterios de aceptación. Para el desarrollo de esta subissue crea una rama y trabaja de forma prolija.”
+- S5: “Dejo en cola este mensaje por si ocurre algo. Si ya terminaste de crear los PRs y los pusheaste, haz el merge de los PRs a develop sin preguntarme. Realiza los merges de como de forma ordenada y correcta. No te olvides de colocar en el summary "Closes #" para que la issue se cierre de forma correcta. Necesito que lo hagas solo por no voy a estar pendiente de la computadora.”
 
 ## Tasks
 
 - T1 [S1,S2,S4] delegated (context backstop): done — contract-safe policy copy, cancellation-policy removal, matching assertions, and observed checks recorded; commit `bfacc29` (106 changed lines).
 - T2 [S1,S2,S4] delegated (context backstop): done — availability/catalog readiness, safe failure and empty states, supporting doubles, and regression tests; commit `1db5584` (191 changed lines).
-- T3 [S1,S2,S4] delegated (context backstop): done — validated professional/type/date/slot selection and navigation with rejection tests; commit pending.
-- T4 [S1–S4] delegated (context backstop): pending — booking lifecycle, outcomes, refresh, and final historical evidence; commit pending.
+- T3 [S1,S2,S4] delegated (context backstop): done — validated professional/type/date/slot selection and navigation with rejection tests; commit `0b668ee` (156 changed lines).
+- T4 [S1,S2,S4] delegated (context backstop): done — validated booking submission, duplicate/in-progress guards, stale-slot conflict handling, and sanitized failures with matching tests; commit pending.
+- T5 [S1–S5] delegated (context backstop): pending — truthful booking outcomes, refreshed new-booking availability, and final historical evidence; commit pending.
 
 ## Log
 
@@ -42,3 +44,10 @@ Preserve the original branch. Repackage behavior with its tests and docs; do not
 - L22 T3 GREEN: the same authorized focused command exited 0 with 15/15 passing after final-source selection identity, date parsing, navigation-step validation, and safe slot selection were added; T1/T2 behavior remained intact.
 - L23 T3 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
 - L24 T3 measured review load: current diff is 123 view additions/deletions, 23 test additions, and 10 tracking-document changed lines, for 156 counted changed lines. T4 remains pending.
+- L25 Parent T3 spot-check: 15 passed, exit 0; read-only assess: medium, 3 paths/156 lines, RDD off. Committed as `0b668ee`.
+- L26 User: “Dejo en cola este mensaje por si ocurre algo. Si ya terminaste de crear los PRs y los pusheaste, haz el merge de los PRs a develop sin preguntarme. Realiza los merges de como de forma ordenada y correcta. No te olvides de colocar en el summary "Closes #" para que la issue se cierre de forma correcta. Necesito que lo hagas solo por no voy a estar pendiente de la computadora.” This supersedes earlier user-owned merge instructions: integrate in order only after required checks pass, using external background waits rather than model polling.
+- L27 During the single construction pass, the remaining source/tests/historical docs measured 495 changed lines before tracking updates. The final lifecycle boundary therefore separates submission safety (T4) from truthful outcomes/refresh (T5), each with its own tests; no code compression, coverage deletion or file-type-only slice is permitted.
+- L28 T4 RED: the authorized focused command exited 2 with 14/18 passing; the four expected failures covered missing-selection validation, duplicate confirmation, stale-slot conflict handling, and sanitized booking failures.
+- L29 T4 GREEN: the same authorized focused command exited 0 with 18/18 passing after adding validated booking selection, duplicate/in-progress guards, stale-slot refresh, and generic failure messaging while retaining the existing confirmed/result template.
+- L30 T4 format/whitespace: the authorized format check exited 0 and `git diff --check` exited 0; no normalization was needed.
+- L31 T4 measured review load: current diff is 133 view additions/deletions, 145 test additions/deletions, and 13 tracking-document changed lines, for 291 counted changed lines. T5 remains pending.

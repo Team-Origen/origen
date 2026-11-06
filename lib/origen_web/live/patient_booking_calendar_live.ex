@@ -3,6 +3,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   alias Origen.{Appointments.Calendar, ConsultationTypes, Patients}
 
+  @generic_booking_error "No se pudo completar la reserva. Volvé a intentar más tarde."
+  @stale_slot_error "Ese horario ya no está disponible. Actualizamos la disponibilidad; elegí otro horario."
+
   @impl true
   def mount(_params, session, socket) do
     email = session["patient_email"]
@@ -32,7 +35,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        date: next_weekday(Date.utc_today()),
        selected_slot: nil,
        confirmed?: false,
-       booking_result: nil
+       booking_result: nil,
+       booking_in_progress?: false
      )
      |> load_schedule()}
   end
@@ -56,7 +60,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            selected_type: type,
            agenda_interval_minutes: agenda_interval_minutes,
            selected_slot: nil,
-           confirmed?: false
+           confirmed?: false,
+           booking_result: nil,
+           booking_in_progress?: false
          )
          |> load_schedule()}
     end
@@ -73,7 +79,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            selected_type_id: type.id,
            selected_type: type,
            selected_slot: nil,
-           confirmed?: false
+           confirmed?: false,
+           booking_result: nil,
+           booking_in_progress?: false
          )
          |> load_schedule()}
     end
@@ -83,7 +91,15 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
     case parse_date(value) do
       {:ok, date} ->
         {:noreply,
-         assign(socket, date: date, selected_slot: nil, confirmed?: false) |> load_schedule()}
+         assign(
+           socket,
+           date: date,
+           selected_slot: nil,
+           confirmed?: false,
+           booking_result: nil,
+           booking_in_progress?: false
+         )
+         |> load_schedule()}
 
       _ ->
         {:noreply, socket}
@@ -97,7 +113,9 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
          assign(socket,
            date: Date.add(socket.assigns.date, step),
            selected_slot: nil,
-           confirmed?: false
+           confirmed?: false,
+           booking_result: nil,
+           booking_in_progress?: false
          )
          |> load_schedule()}
 
@@ -115,36 +133,70 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
         {:noreply, socket}
 
       slot ->
-        {:noreply, assign(socket, selected_slot: slot, confirmed?: false)}
+        {:noreply,
+         assign(socket,
+           selected_slot: slot,
+           confirmed?: false,
+           booking_result: nil,
+           booking_in_progress?: false
+         )}
     end
   end
 
   def handle_event("clear_slot", _params, socket),
     do: {:noreply, assign(socket, selected_slot: nil)}
 
+  def handle_event("confirm_booking", _params, %{assigns: %{booking_result: result}} = socket)
+      when not is_nil(result),
+      do: {:noreply, socket}
+
+  def handle_event(
+        "confirm_booking",
+        _params,
+        %{assigns: %{booking_in_progress?: true}} = socket
+      ),
+      do: {:noreply, socket}
+
   def handle_event("confirm_booking", _params, socket) do
-    if socket.assigns.ready? and not is_nil(socket.assigns.selected_type) and
-         not is_nil(socket.assigns.selected_slot) do
-      params = %{
-        professional_id: socket.assigns.prof_id,
-        consultation_type_id: socket.assigns.selected_type.id,
-        date: socket.assigns.date,
-        slot: socket.assigns.selected_slot
-      }
+    case booking_selection(socket) do
+      {:error, :profile_not_ready} ->
+        {:noreply, put_flash(socket, :error, "Completá tu perfil para reservar.")}
 
-      case Origen.Appointments.BookingService.reserve(socket.assigns.profile, params) do
-        {:ok, result} ->
-          {:noreply, assign(socket, confirmed?: true, booking_result: result)}
+      {:error, :invalid_selection} ->
+        {:noreply, put_flash(socket, :error, "Seleccioná un horario disponible para reservar.")}
 
-        {:error, :patient_not_ready_for_booking} ->
-          {:noreply, put_flash(socket, :error, "Completá tu perfil para reservar.")}
+      {:ok, params} ->
+        socket = assign(socket, booking_in_progress?: true)
 
-        {:error, reason} ->
-          {:noreply,
-           put_flash(socket, :error, "No se pudo realizar la reserva: #{inspect(reason)}")}
-      end
-    else
-      {:noreply, put_flash(socket, :error, "Completá tu perfil para reservar.")}
+        case Origen.Appointments.BookingService.reserve(socket.assigns.profile, params) do
+          {:ok, result} ->
+            {:noreply,
+             assign(socket,
+               confirmed?: true,
+               booking_in_progress?: false,
+               booking_result: result
+             )}
+
+          {:error, :overlap_detected} ->
+            socket = assign(socket, selected_slot: nil, booking_in_progress?: false)
+
+            {:noreply,
+             socket
+             |> load_schedule()
+             |> put_flash(:error, @stale_slot_error)}
+
+          {:error, :patient_not_ready_for_booking} ->
+            {:noreply,
+             socket
+             |> assign(booking_in_progress?: false)
+             |> put_flash(:error, "Completá tu perfil para reservar.")}
+
+          {:error, _reason} ->
+            {:noreply,
+             socket
+             |> assign(booking_in_progress?: false)
+             |> put_flash(:error, @generic_booking_error)}
+        end
     end
   end
 
@@ -180,6 +232,31 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
       {:error, r} ->
         assign(socket, schedule: nil, error: r)
+    end
+  end
+
+  defp booking_selection(%{assigns: assigns}) do
+    with true <- assigns.ready?,
+         %{} = professional <-
+           Enum.find(assigns.professionals, &same_id?(&1.id, assigns.prof_id)),
+         %{} = type <-
+           Enum.find(assigns.consultation_types, &same_id?(&1.id, assigns.selected_type_id)),
+         %Date{} = date <- assigns.date,
+         %{} = slot <-
+           Enum.find(
+             (assigns.schedule && assigns.schedule.slots) || [],
+             &same_id?(&1.id, assigns.selected_slot && assigns.selected_slot.id)
+           ) do
+      {:ok,
+       %{
+         professional_id: professional.id,
+         consultation_type_id: type.id,
+         date: date,
+         slot: slot
+       }}
+    else
+      false -> {:error, :profile_not_ready}
+      _ -> {:error, :invalid_selection}
     end
   end
 

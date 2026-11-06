@@ -283,6 +283,31 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert has_element?(view, "button[phx-click='select_slot']")
     end
 
+    test "confirming without a selected slot is rejected without changing availability", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      {:ok, before} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      html = render_click(view, "confirm_booking")
+      assert html =~ "Seleccioná un horario disponible para reservar"
+      refute html =~ "No se pudo realizar la reserva:"
+
+      {:ok, after_attempt} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      assert Enum.map(after_attempt.slots, & &1.id) == Enum.map(before.slots, & &1.id)
+    end
+
     test "an incomplete profile receives a completion reminder without phone verification copy",
          %{
            conn: conn,
@@ -403,19 +428,131 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
                "Horarios Disponibles para #{Date.to_iso8601(booking_date)}"
     end
 
-    test "an unverified patient confirms successfully", %{conn: conn} do
+    test "an unverified patient confirms once and keeps the result and booking count stable", %{
+      conn: conn,
+      profile: profile,
+      prof_id: prof_id
+    } do
       {:ok, view, _html} = live(conn, ~p"/patient/calendar")
       booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
 
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
+      {:ok, before} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      slot = Enum.find(before.slots, &(&1.start_formatted == "08:00"))
+      [[before_count]] = Repo.query!("SELECT count(*) FROM appointments").rows
+
       view
-      |> element(~s(button[phx-value-slot_id="SLOT-#{Date.to_iso8601(booking_date)}-0800"]))
+      |> element(~s(button[phx-value-slot_id="#{slot.id}"]))
       |> render_click()
 
+      first_html = render_click(view, "confirm_booking")
+      assert first_html =~ "Turno Reservado con" and first_html =~ "Sofía Martínez"
+      assert first_html =~ "Turno ID:" and first_html =~ "Importe:"
+
+      [[after_first_count]] = Repo.query!("SELECT count(*) FROM appointments").rows
+      assert after_first_count == before_count + 1
+
+      assert {:error, :overlap_detected} =
+               Origen.Appointments.BookingService.reserve(profile, %{
+                 professional_id: prof_id,
+                 consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+                 date: booking_date,
+                 slot: slot
+               })
+
+      assert render_click(view, "confirm_booking") == first_html
+      [[after_duplicate_count]] = Repo.query!("SELECT count(*) FROM appointments").rows
+      assert after_duplicate_count == after_first_count
+    end
+
+    test "booking failures use a generic sanitized message and preserve availability", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      {:ok, before} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      slot = Enum.find(before.slots, &(&1.start_formatted == "08:00"))
+
+      view
+      |> element(~s(button[phx-value-slot_id="#{slot.id}"]))
+      |> render_click()
+
+      Repo.query!("UPDATE professional_profiles SET specialty = '' WHERE owner_account_id = $1", [
+        prof_id
+      ])
+
       html = render_click(view, "confirm_booking")
-      assert html =~ "Turno Reservado con" and html =~ "Sofía Martínez"
-      assert html =~ "Turno ID:" and html =~ "Importe:"
+      assert html =~ "No se pudo completar la reserva"
+      refute html =~ "professional_not_eligible"
+      refute html =~ "No se pudo realizar la reserva:"
+
+      {:ok, after_attempt} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      assert Enum.any?(after_attempt.slots, &(&1.id == slot.id))
+    end
+
+    test "a stale slot reports a conflict and refreshes availability", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      booking_date = next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      slot =
+        %{id: slot_id, start_formatted: start_formatted} =
+        view
+        |> render()
+        |> then(fn _ ->
+          {:ok, schedule} =
+            Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+              duration_minutes: 60
+            )
+
+          Enum.find(schedule.slots, &(&1.start_formatted == "08:00"))
+        end)
+
+      view |> element(~s(button[phx-value-slot_id="#{slot_id}"])) |> render_click()
+
+      other_email = "stale_other@example.test"
+
+      {:ok, %{profile: other}} =
+        Patients.complete_profile(other_email, %{
+          first_name: "Otro",
+          last_name: "Paciente",
+          document_type: "dni",
+          document_number: "38123457",
+          birthdate: ~D[1994-05-20],
+          phone: "+5491133445567"
+        })
+
+      assert {:ok, _} =
+               Origen.Appointments.BookingService.reserve(other, %{
+                 professional_id: prof_id,
+                 consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+                 date: booking_date,
+                 slot: Map.put(slot, :start_time, Time.from_iso8601!(start_formatted <> ":00"))
+               })
+
+      html = render_click(view, "confirm_booking")
+      assert html =~ "Ese horario ya no está disponible"
+      refute has_element?(view, "button[phx-value-slot_id='#{slot_id}']")
+      refute html =~ "No se pudo realizar la reserva:"
     end
 
     test "changing consultation type recalculates slot availability", %{
