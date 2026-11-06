@@ -1,6 +1,6 @@
 # Contrato de aceptación de entrega beta
 
-> **Estado:** borrador; aprobación humana del contrato pendiente en #325.
+> **Estado:** contrato aprobado en [#325](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891) para la versión `c59cf6b`; entrega y ejecución pendientes.
 > **Alcance:** definir evidencia de entrega, no implementar ni certificar la aplicación.
 > **Ejecución de aceptación:** no ejecutada por esta tarea. Ningún resultado está aprobado.
 
@@ -10,15 +10,15 @@ Escribir este contrato no produce el manual completo, datos persistidos, desplie
 
 ## Recorrido de aprobación
 
-1. Revisar criterios, fuentes, diferencias históricas y pendientes de este borrador.
-2. Registrar acuerdo humano explícito sobre la versión del contrato en #325.
+1. Revisar criterios, fuentes, diferencias históricas y pendientes de este contrato.
+2. Registrar acuerdo humano explícito sobre la versión del contrato en #325 (hecho para `c59cf6b`; la publicación no equivale a aceptación final).
 3. Realizar la verificación documental de #326 cuando sus dependencias estén aprobadas.
 4. Producir y ejecutar las evidencias de entrega en el seguimiento autorizado correspondiente.
 5. Resolver faltantes y registrar por separado la aceptación final de la beta.
 
 La verificación documental de #326 y el cierre eventual de #290 no certifican la entrega final.
 No se asignan aquí nuevos responsables, fechas, infraestructura ni autoridades de aprobación.
-No se autoriza publicación, PR, despliegue o cierre de issues por la existencia de este archivo.
+La aprobación de #325 autoriza el contrato, no despliegue, cierre de #290 ni aceptación final; la publicación documental se decidió por separado.
 
 ## Fuentes y trazabilidad
 
@@ -26,7 +26,7 @@ No se autoriza publicación, PR, despliegue o cierre de issues por la existencia
 | --- | --- |
 | [#266 — Wayfinder](https://github.com/Team-Origen/origen/issues/266) | Alcance aprobado; el orden de implementación no excluye capacidades. |
 | [#290 — Artefacto de aceptación](https://github.com/Team-Origen/origen/issues/290) | Padre del contrato y de su verificación documental. |
-| [#325 — Reglas y contrato](https://github.com/Team-Origen/origen/issues/325) | Acuerdo explícito sobre estos criterios; pendiente. |
+| [#325 — Reglas y contrato](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891) | Acuerdo explícito sobre estos criterios para `c59cf6b`; publicación pendiente. |
 | [#326 — Verificación documental](https://github.com/Team-Origen/origen/issues/326) | Etapa posterior; no ejecutada en esta tarea. |
 | [#274 — Identidad visual](https://github.com/Team-Origen/origen/issues/274) | Decisión abierta, sin nombre, logo, paleta ni tipografía elegidos aquí. |
 | [#275 — Hosting y condiciones](https://github.com/Team-Origen/origen/issues/275) | Decisión abierta sobre proveedor, presupuesto y condiciones docentes. |
@@ -58,7 +58,7 @@ Si divergen requisitos vigentes, se registra la pregunta antes de implementar o 
 
 «Cumple» no equivale a aprobación humana. No se usa «no aplica» para retirar alcance aprobado.
 Un criterio sin evidencia queda pendiente; una captura aislada no demuestra persistencia ni permisos de backend.
-Las condiciones propuestas abajo forman parte del borrador hasta que se acuerde el contrato.
+Los criterios de este contrato están acordados en #325; su ejecución y la aceptación de la beta siguen pendientes.
 
 ## Resultado 1 — Manual de usuario
 
@@ -217,10 +217,10 @@ Revisión acotada de fuentes locales para el contrato; no es una auditoría exha
 | Tipo de observación | Fuente leída | Conclusión y uso permitido |
 | --- | --- | --- |
 | Código encontrado | [BookingService](../../lib/origen/appointments/booking_service.ex), `reserve/2`, `establish_relationship!/1` | Hay validación de elegibilidad profesional, persistencia y creación de relación también para `requested`; base para futuros casos, no éxito ejecutado. |
-| Código encontrado | Mismo archivo, `determine_initial_status/2` | El camino automático conserva `reserved` para fechas lejanas y `confirmed` en D/D-1; incompatible con confirmación automática beta independiente de proximidad. |
-| Código encontrado | [Patients](../../lib/origen/patients.ex), `ready_for_booking?/1` | Exige perfil completo y `phone_verified: true`; debe reconciliarse con reserva sin verificación telefónica obligatoria. |
-| Pruebas leídas | [BookingServiceTest](../../test/origen/appointments/booking_service_test.exs) | Contiene casos de elegibilidad, snapshots, solicitud manual con relación, anónimo e identificador inválido; candidatos a reutilizar/adaptar. |
-| Pruebas leídas | Mismo archivo | También espera rechazo por teléfono no verificado y estados `reserved`/D-1; esos éxitos históricos no serían aceptación beta. Usa preparación directa de datos, no demuestra carga por producto. |
+| Código encontrado | Mismo archivo, `reserve/2`, `initial_status/1` y `determine_initial_status/2` | La reserva automática usa `confirmed` y la manual `requested` sin regla D/D-1. `determine_initial_status/2` conserva `reserved` sólo como helper obsoleto de compatibilidad; no participa en `reserve/2`. |
+| Código encontrado | [Patients](../../lib/origen/patients.ex), `ready_for_booking?/1` | Exige perfil completo sin requerir verificación telefónica para reservar. |
+| Pruebas leídas | [BookingServiceTest](../../test/origen/appointments/booking_service_test.exs) | Incluye elegibilidad, snapshots, solicitud manual con relación, anónimo, identificador inválido, teléfono no verificado permitido y confirmación automática independiente de D/D-1. |
+| Pruebas leídas | Mismo archivo | Conserva expectativas `reserved`/D-1 sólo para el helper legado. Usa preparación directa de datos: no demuestra carga por el producto ni aceptación integrada. |
 | Documento histórico | [Runbook integrado](../demo/RUNBOOK_DEMO_INTEGRADA.md) | Reutilizar estructura de pasos, negativos y evidencia sanitizada; su aprobación, entorno local y resultados pertenecen al alcance histórico. |
 | Documento histórico | [QA #93](qa-93-patient-autonomous-booking.md) | Reutilizar formato de escenario; retirar del guion beta la exigencia telefónica y expectativas `reserved`/D-1. |
 | Documento a reconciliar | [Matriz de autorización](../security/AUTHORIZATION_MATRIX.md) | Conserva condiciones históricas y alcance incremental; revisar filas/pruebas beta sin inferir permisos por ausencia. |
@@ -237,7 +237,7 @@ La ambigüedad histórica de `Confirmed` no se arrastra: en beta significa turno
 
 | Pendiente | Qué impide afirmar | Próxima evidencia necesaria |
 | --- | --- | --- |
-| Acuerdo de #325 | Contrato aprobado | Confirmación humana de esta versión y alcance. |
+| Publicación de #325 | Contrato aprobado disponible en `develop` | PR documental autorizado para este contrato, controles del head e integración posterior. |
 | Verificación #326 | Artefacto documental verificado en su etapa posterior | Revisión tras aprobación de dependencias; no ejecutada aquí. |
 | #274 abierta | Identidad visual final aceptada | Decisión explícita y contraste posterior en #291/manual. |
 | #275 abierta | Hosting, presupuesto y condiciones docentes acordados | Resolución explícita y evidencia posterior de #292 y Resultados 4–5. |
@@ -245,8 +245,8 @@ La ambigüedad histórica de `Confirmed` no se arrastra: en beta significa turno
 | Resultado 6 sin ejecución | Estabilización completada | Ventana acordada y seguimiento observado de dos semanas. |
 | Aceptación final | Beta entregada y aprobada | Evaluación conjunta de resultados con evidencia y aprobación explícita. |
 
-- **Aprobación del contrato #325:** pendiente; sin fecha, confirmante ni enlace de aprobación.
+- **Aprobación del contrato #325:** Saidqr aprobó la versión `c59cf6b` en el [comentario de #325](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891); no certifica ejecución.
 - **Verificación documental #326:** pendiente; no realizada por este documento.
 - **Aprobación final de entrega:** pendiente; no se deduce de la aprobación contractual.
 
-Siguiente paso: solicitar acuerdo explícito sobre el contrato y registrar la decisión sin anticipar entrega ni cierre.
+Siguiente paso: entregar el contrato aprobado con sus controles documentales y verificar #326 por separado, sin anticipar la entrega final.
