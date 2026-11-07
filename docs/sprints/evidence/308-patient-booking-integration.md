@@ -1,6 +1,6 @@
 # Evidence: patient booking integration (#308)
 
-Status: technical integration verified and explicitly accepted by the user on 2026-11-07. Delivery and GitHub closure remain pending; no push is authorized.
+Status: human acceptance recorded on 2026-11-07; CI verification reopened after the reported failures. Calendar fixture correction is locally verified, but full local suites have additional varying failures. Updated GitHub CI is pending; not merge-ready.
 
 ## Scope and criterion mapping
 
@@ -34,6 +34,21 @@ The secure runner loaded repository-local database settings without printing cre
 
 The forged third-party request is now asserted as the exact observed rejection `{:error, :rollback}`. The test also verifies unchanged public agenda and relationship projections and confirms that the requested free slot remains available. This satisfies the contract's permitted reject-or-force-self behavior without an unnecessary production change.
 
+## Incident L10-L11: CI date-dependent fixture correction
+
+The original CI runs failed on both published candidates: PR #418 reported 906/915 passed with 9 failures, and PR #419 reported 909/918 passed with 9 failures. The validation and secret-scan checks passed; only the test job failed. New CI is still pending, so no merge-readiness is claimed.
+
+The reproduced cause was a test fixture date assumption, not adapter leakage or product behavior. On CI's Saturday date, 2026-11-07, `next_weekday(Date.utc_today(), Date.day_of_week(Date.utc_today()))` selected Saturday 2026-11-14, while the fixture's persisted weekly availability intentionally has Saturday and Sunday empty. The public `PatientBookingCalendarLive` therefore rendered `No hay turnos disponibles para este día`, proving why the expected `09:00` slot and subsequent public selectors were absent. The existing Saturday assertion remains unchanged.
+
+- Local RED: secure `MIX_TEST_PARTITION=_308_ci mix test test/origen_web/live/patient_booking_calendar_live_test.exs` reproduced exit 2, 10/19 passed, and the same 9 tests failed.
+- Correction: the test-only `next_booking_weekday/1` fixture helper skips weekend candidates while preserving the existing `next_weekday/2` behavior and public calendar assertions; the new regression exercises reference dates at offsets 0 through 6 through public `render_change/3`, covering all seven weekdays. No production code, adapter, clock, timeout, or expectation weakening changed.
+- Local GREEN: the same calendar command passed 20 tests; related integration/self-booking passed 6 tests; booking service/database calendar passed 20 tests with only pre-existing deprecation warnings.
+- Correction commits: `d98d936` on the cumulative branch; `ca5b778` on the first-slice branch; normal ancestry propagation into the cumulative branch, no force push. The first slice remains 362 authored diff lines; final slice stays below 400.
+- Full local suite job-14: exit 2, seed `639458`, **918/919 passed, 32 skipped, 8 excluded**; the original nine failures were absent. One different failure occurred in the professional booking wall-time test during session-authorized patient lookup; it passed isolated (1 passed, 17 excluded).
+- Same-seed diagnostic job-15: exit 2, **918/919 passed, 32 skipped, 8 excluded**, but a different availability LiveView token initialization failed with `{:error, :invalid}`; the prior professional booking failure did not recur. No production root cause was established, and no unrelated authorization/token behavior was changed.
+- Isolated first-slice full suite job-16: exit 2, seed `902208`, **914/916 passed, 32 skipped, 8 excluded**; two other failures involved internal login (422 instead of 302) and restoring professional profile completeness. Original nine calendar failures were absent here too.
+- These failing full-suite results remain failures, not green proof. The previous 918-pass run is historical evidence and is not substituted for the new candidate. Updated GitHub CI on each corrected head is required before merge-readiness; no more local full-suite reruns are planned for this correction.
+
 ## Test coverage added
 
 `test/origen_web/live/patient_booking_integration_test.exs` enters through a real captured local magic-link email and HTTP verification route, mounts the patient calendar with the production `DatabaseCatalog` and `DatabaseCalendar` adapters, selects a persisted professional/type/date/slot, and confirms both automatic and manual outcomes. It also reserves a selected slot through a second patient before confirmation and verifies the real LiveView stale-slot rejection without a partial first booking.
@@ -45,7 +60,7 @@ The forged third-party request is now asserted as the exact observed rejection `
 - No production implementation change was required: the existing `PatientBookingCalendarLive`, `DatabaseCatalog`, `DatabaseCalendar`, `BookingService`, and transaction invariants are exercised by the new tests. The earlier custom SQL catalog test double was removed.
 - No interactive browser execution was performed; the HTTP/session/LiveView journey is covered through Phoenix integration tests, not a browser automation claim.
 - Initial runner attempts failed before test execution (connection refused on the default test port, then missing password at the available local port). Using existing repository-local settings recovered the test environment without changing configuration; no timeout or permission denial was retried.
-- The user explicitly accepted the verified integration on 2026-11-07 (see below). Acceptance is not publishing, merge, or GitHub closure. The parent tracking document records local commit boundaries. No GitHub issue was closed or commented on, no PR was created, and nothing was pushed.
+- The user explicitly accepted the verified integration on 2026-11-07 (see below). Acceptance is not publishing, merge, or GitHub closure. The parent tracking document records local commit boundaries. No GitHub issue was closed or commented on, no PR was created, and publication subsequently proceeded only after explicit user authorization. PR #418 and PR #419 exist; the user is responsible for merge.
 
 ## Human acceptance
 
