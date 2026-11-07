@@ -1,6 +1,6 @@
 # Evidence: patient booking integration (#308)
 
-Status: implementation evidence prepared; human acceptance and parent closure remain outstanding.
+Status: technical integration verified and explicitly accepted by the user on 2026-11-07. Delivery and GitHub closure remain pending; no push is authorized.
 
 ## Scope and criterion mapping
 
@@ -45,6 +45,12 @@ The forged third-party request is now asserted as the exact observed rejection `
 - No production implementation change was required: the existing `PatientBookingCalendarLive`, `DatabaseCatalog`, `DatabaseCalendar`, `BookingService`, and transaction invariants are exercised by the new tests. The earlier custom SQL catalog test double was removed.
 - No interactive browser execution was performed; the HTTP/session/LiveView journey is covered through Phoenix integration tests, not a browser automation claim.
 - Initial runner attempts failed before test execution (connection refused on the default test port, then missing password at the available local port). Using existing repository-local settings recovered the test environment without changing configuration; no timeout or permission denial was retried.
-- The evidence is not approval or closure. Human acceptance of #308/#280 remains pending. The parent tracking document records final local commit boundaries. No GitHub issue was closed or commented on, no PR was created, and nothing was pushed.
+- The user explicitly accepted the verified integration on 2026-11-07 (see below). Acceptance is not publishing, merge, or GitHub closure. The parent tracking document records local commit boundaries. No GitHub issue was closed or commented on, no PR was created, and nothing was pushed.
+
+## Human acceptance
+
+User statement, verbatim: "Ok, apruebo la integración si es que vos ya determinaste que la implementación técnica quedó verificada."
+
+The condition is satisfied by the observed focused, affected-suite and full-suite results above. This records explicit acceptance of integration #308 and its parent #280 acceptance scope, with the documented skipped/excluded tests and absence of interactive browser execution unchanged. No new test run or independent/native approval is implied. The implementation is accepted locally; publishing, integration into `develop`, and recording the corresponding GitHub issue closures remain delivery steps, not completed actions.
 
 Risk: none (Task Size high-risk items). The diff adds tests and evidence only; production authentication, authorization, concurrency, persistence contracts, schemas and configuration are unchanged. Existing production behavior passes the new integrated checks; no production fix is claimed.
