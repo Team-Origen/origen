@@ -165,3 +165,20 @@ autorización explícita, las rutas absolutas de PostgreSQL y una base aislada
 UTF-8; debe incluir el diagnóstico diferencial contra `5284df1` sin deshabilitar
 el worker. No se ejecutaron comprobaciones visuales en navegador ni integración
 en nube. La aprobación de #378 y el cierre de #285 no se declaran.
+
+### Segundo intento independiente autorizado
+
+El usuario autorizó «Autorizo un nuevo intento.». El servidor PostgreSQL aislado
+respondió correctamente y `template1` tenía UTF-8, pero la preparación volvió a
+fallar: el verificador usó `README.md` en vez del archivo seguido `readme.md`
+al crear el archivo de baseline y el `HOME` aislado dejó inutilizable el shim
+de `mix` de asdf. **Cero tests y cero probes de aplicación ejecutados**; no se
+creó ni migró una base de prueba nueva. No se repitió el intento ni se modificó
+la aplicación para sortearlo.
+
+Se observó igualdad del código de `ExpiryWorker` entre `5284df1` y el frontend
+actual (SHA-256 `8c6c28c14cc541973b446041e84871cbf1e19b021a7769e3a23d57d5b6cb421c`).
+Esto no reemplaza el diagnóstico de comportamiento pendiente. Se identificaron
+los binarios reales de Elixir y Erlang, evitando depender de shims bajo un
+`HOME` aislado; cualquier intento posterior necesita autorización explícita.
+T4 sigue bloqueada y los resultados fallidos anteriores se conservan.
