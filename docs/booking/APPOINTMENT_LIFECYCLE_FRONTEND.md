@@ -182,3 +182,33 @@ Esto no reemplaza el diagnóstico de comportamiento pendiente. Se identificaron
 los binarios reales de Elixir y Erlang, evitando depender de shims bajo un
 `HOME` aislado; cualquier intento posterior necesita autorización explícita.
 T4 sigue bloqueada y los resultados fallidos anteriores se conservan.
+
+### Tercer intento independiente: pruebas ejecutadas
+
+Autorización del usuario: «Autorizo otro intento independiente con el archivo
+correcto.». La preparación con `readme.md`, PATH real de Elixir/Erlang y archivos
+de runtime de Hex funcionó. En una copia aislada y dos bases UTF-8 nuevas
+(`origen_test378verify3` y `origen_test378verify3base`), el verificador ejecutó
+una sola vez las once suites focalizadas de interfaz y dominio:
+**107/110 passed, tres fallos, exit 2, seed 232781**.
+
+- `professional_agenda_lifecycle_live_test.exs:63` y `:92`: no aparecieron los
+  controles `cancel-appointment-ID`; los turnos estaban en historial pero no
+  en la agenda diaria. Falta diagnosticar si la causa está en las fechas de
+  fixtures o en el comportamiento de la pantalla; no se afirma una causa.
+- `patient_appointments_live_test.exs:66`: falló la búsqueda del identificador
+  ajeno como substring del HTML completo. La aserción es frágil y no demuestra
+  por sí misma una filtración; debe comprobarse la identidad exacta de la
+  tarjeta de turno mediante el DOM y la consulta pública autorizada.
+
+El diagnóstico de baseline `5284df1` se ejecutó: con sandbox manual, enviar
+`:sweep` al worker monitorizado produjo `DOWN` con `DBConnection.OwnershipError`
+en `expiry_worker.ex:23`. Esa condición ya existe antes del frontend. Esto no
+certifica que los 101 fallos anteriores tengan una única causa ni convierte la
+suite completa en satisfactoria. El verificador no informó el exit code exacto
+del comando baseline; no se inventa ese dato.
+
+No hubo correcciones ni reintentos automáticos. La verificación usa fixtures
+sintéticos y PostgreSQL real, no navegador ni nube. T4 permanece bloqueada por
+los tres fallos y la prueba integral incompleta; una corrección acotada requiere
+una decisión explícita. No se declara aceptación de #378 ni cierre de #285.
