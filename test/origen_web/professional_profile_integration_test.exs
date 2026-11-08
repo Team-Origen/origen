@@ -102,6 +102,14 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     editor = open_editor(conn)
     editor |> form("#profile-form", profile: @profile) |> render_submit()
     assert has_element?(editor, "#profile-status", "Perfil completo")
+
+    assert has_element?(
+             editor,
+             "#navigation-account-menu button[data-pc-dropdown-trigger]",
+             "Sofía Martínez"
+           )
+
+    assert has_element?(editor, "#navigation-professional-avatar", "SM")
     assert {:ok, profile} = ProfessionalProfiles.get_own_profile(principal)
     assert profile.complete?
     refute Map.has_key?(profile, :photo)

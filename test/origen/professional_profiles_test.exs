@@ -22,6 +22,27 @@ defmodule Origen.ProfessionalProfilesTest do
     assert {:ok, ^profile} = ProfessionalProfiles.get_own_profile(new_session!(owner.account_id))
   end
 
+  test "navigation identity exposes only the revalidated owner's saved name and email" do
+    owner = principal!()
+    other = principal!()
+    assert {:ok, identity_without_profile} = ProfessionalProfiles.get_own_identity(owner)
+    assert Map.keys(identity_without_profile) == [:email]
+    assert is_binary(identity_without_profile.email)
+    assert {:ok, _} = ProfessionalProfiles.save_own_profile(owner, @complete)
+    assert {:ok, _} = ProfessionalProfiles.save_own_profile(other, %{first_name: "Other"})
+    assert {:ok, identity} = ProfessionalProfiles.get_own_identity(owner)
+
+    assert identity == %{
+             first_name: "Ana",
+             last_name: "Pérez",
+             email: identity_without_profile.email
+           }
+
+    assert {:ok, other_identity} = ProfessionalProfiles.get_own_identity(other)
+    assert other_identity.first_name == "Other"
+    refute other_identity.email == identity.email
+  end
+
   test "five declared text fields complete the profile without photo or credential verification" do
     owner = principal!()
     assert {:ok, profile} = ProfessionalProfiles.save_own_profile(owner, @complete)
@@ -101,6 +122,7 @@ defmodule Origen.ProfessionalProfilesTest do
           %{owner | account_id: other.account_id},
           %{other | account_id: owner.account_id}
         ] do
+      assert {:error, :unauthorized} = ProfessionalProfiles.get_own_identity(denied)
       assert {:error, :unauthorized} = ProfessionalProfiles.get_own_profile(denied)
       assert {:error, :unauthorized} = ProfessionalProfiles.save_own_profile(denied, @complete)
       assert {:ok, ^before} = ProfessionalProfiles.get_own_profile(owner)
@@ -153,8 +175,8 @@ defmodule Origen.ProfessionalProfilesTest do
   defp principal!(role \\ :professional) do
     [[id]] =
       Repo.query!(
-        "INSERT INTO internal_accounts (role, state, password_hash, totp_secret, activated_at) VALUES ($1, 'active', 'hash', decode('0102','hex'), NOW()) RETURNING id",
-        [Atom.to_string(role)]
+        "INSERT INTO internal_accounts (role, state, password_hash, totp_secret, activated_at, email) VALUES ($1, 'active', 'hash', decode('0102','hex'), NOW(), $2) RETURNING id",
+        [Atom.to_string(role), "profile-#{System.unique_integer([:positive])}@example.test"]
       ).rows
 
     new_session!(id)

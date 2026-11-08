@@ -6,7 +6,7 @@ defmodule OrigenWeb.InternalAuthLive do
   import Phoenix.Component, only: [assign: 3]
   import Phoenix.LiveView, only: [redirect: 2]
 
-  alias Origen.Sessions
+  alias Origen.{ProfessionalProfiles, Sessions}
 
   def on_mount(:ensure_authenticated, _params, session, socket) do
     case authenticate(session, socket) do
@@ -18,7 +18,15 @@ defmodule OrigenWeb.InternalAuthLive do
   def on_mount(:ensure_professional, _params, session, socket) do
     case authenticate(session, socket) do
       {:ok, %{assigns: %{current_role: :professional}} = authenticated_socket} ->
-        {:cont, authenticated_socket}
+        identity =
+          case ProfessionalProfiles.get_own_identity(
+                 authenticated_socket.assigns.current_internal_session
+               ) do
+            {:ok, identity} -> identity
+            {:error, _} -> nil
+          end
+
+        {:cont, assign(authenticated_socket, :current_professional_identity, identity)}
 
       {:ok, authenticated_socket} ->
         deny(authenticated_socket)

@@ -17,7 +17,7 @@ La [convención de URLs](URL_CONVENTIONS.md) sigue siendo la referencia canónic
 
 ## Pantallas iniciales aprobadas
 
-Estos son destinos predeterminados después del ingreso. No reemplazan una navegación directa a otra URL autorizada ni significan que las redirecciones ya estén implementadas.
+Estos son los destinos predeterminados acordados después del ingreso. En la integración de #371 se implementan los destinos existentes y las alternativas transitorias de esta tabla. No reemplazan una navegación directa a otra URL autorizada.
 
 | Rol | Pantalla inicial objetivo | URL prevista | Alternativa transitoria mientras no exista |
 | --- | --- | --- | --- |
@@ -89,7 +89,26 @@ El destino del logo se dejó sin definir en esta etapa porque el usuario indicó
 
 ## Integración productiva de la navbar (#371)
 
+La implementación conecta únicamente las pantallas ya existentes; no traslada las vistas ficticias del prototipo al producto ni implementa funcionalidades pendientes. La navbar permanece visible en el borde superior durante el desplazamiento, en el flujo del documento para no superponer el contenido.
+
+| Rol | Enlaces reales | Botones con aviso «Próximo en implementar» |
+| --- | --- | --- |
+| Paciente | Reservar turno → `/paciente/turnos/reservar` | Mis turnos |
+| Profesional | Agenda → `/profesional/agenda`; Ajustes → `/profesional/ajustes` | Solicitudes; Resumen económico |
+| Secretaría | Pacientes → `/secretaria/pacientes` | Agenda; Resumen económico |
+| Administrador | Cuentas → `/administrador/cuentas` | Ninguno |
+
+Los botones pendientes muestran solamente un aviso descartable, sin navegación, datos simulados ni rutas nuevas. Crear turno conserva Agenda como sección activa y Mi perfil conserva Ajustes. La verificación telefónica del Paciente también incluye la navbar, sin introducir un requisito de reserva ni una sección principal adicional.
+
+El logo aprobado para fondos oscuros se integra sobre azul petróleo usando `priv/static/images/origen-logo-dark.png`, ya entregado en #274/#411 mediante el PR #416. La marca permanece sin enlace: no se inventa un destino mientras siga sin acordarse. Esto no declara resuelto el criterio pendiente del destino del logo.
+
+«Cerrar sesión» se presenta en el menú «Mi cuenta» para usuarios internos y envía el formulario existente a `POST /logout` con CSRF. La discrepancia preexistente que permite a Secretaría abrir Cuentas no se corrige ni se convierte en un enlace de su menú; en esa pantalla se conserva la navegación de Secretaría.
+
 La aclaración posterior del usuario para #371 incorpora el menú del Paciente con nombre, apellido y correo, sin DNI ni teléfono. Su acción «Cerrar sesión» utiliza `POST /paciente/cerrar-sesion`, protegido por CSRF, elimina sólo su autenticación del navegador y vuelve a `/paciente/acceso`; no termina una sesión interna coexistente. No agrega revocación global de cookies ni desconexión de otras pestañas ya conectadas. Al ingresar mediante magic link se abre la pantalla real `/paciente/turnos/reservar`, mientras Mis turnos continúa pendiente. Estas decisiones productivas posteriores sustituyen la ausencia de definición del flujo del Paciente en el mock; no implementan pantallas ficticias ni cambian permisos.
+
+El menú del Profesional utiliza su nombre y apellido reales, avatar de iniciales y etiqueta «Profesional», siguiendo la composición del borrador #369. El desplegable muestra el correo de su propia cuenta y conserva el cierre de sesión interno. Los datos se obtienen con la sesión del Profesional revalidada, nunca desde un identificador enviado por el cliente; no se muestra la matrícula. Si aún no guardó su nombre, la etiqueta es «Profesional», sin datos ficticios. Al guardar Mi perfil, el nombre de la navbar se actualiza de inmediato. Mi perfil continúa dentro de Ajustes, sin convertirse en una sección principal adicional.
+
+El acceso a Agenda se conserva en la navbar compartida; se elimina el antiguo botón deshabilitado «Volver a Agenda» del contenido de Ajustes para no duplicar esa navegación.
 
 Después del login interno exitoso, el rol de la sesión autenticada determina el destino: Profesional → `/profesional/agenda`; Secretaría → `/secretaria/pacientes` (su Agenda sigue pendiente); Administrador → `/administrador/cuentas`. No se toman el rol ni el destino desde parámetros del formulario. La portada `/` y el acceso directo a URLs autorizadas permanecen disponibles sin cambios; no se crean pantallas de inicio ni destinos ficticios. El ingreso del Paciente por magic link conserva la alternativa real `/paciente/turnos/reservar` mientras Mis turnos esté pendiente.
 

@@ -12,8 +12,8 @@ Base: develop@5284df1; strategy: feature-branch-chain; runner: isolated MIX_TEST
 ## Tasks
 
 - T1 [S1-S4] inline; done; tracker and 28-file approved snapshot preserved; commit: 7d7c260.
-- T2 [S1-S3] inline; in_progress; slice 1: internal login landings and Patient logout/magic-link destinations; commit: pending.
-- T3 [S1-S3] inline; pending; slice 2: shared navbar and Professional adoption, own identity and tests; commit: pending.
+- T2 [S1-S3] inline; done; slice 1: internal login landings and Patient logout/magic-link destinations; commit: 5ec07da; 29 tests passed, compile/format/diff passed.
+- T3 [S1-S3] inline; in_progress; slice 2: shared navbar and Professional adoption, own identity and tests; commit: pending.
 - T4 [S1-S3] inline; pending; slice 3: Secretary own-account identity and Secretary/Administrator adoption; commit: pending.
 - T5 [S1-S3] inline; pending; slice 4: Patient navigation and own profile identity; commit: pending.
 - T6 [S1-S3] inline plus independent verifier; pending; verify final preservation, publish branches/PRs, observe CI; commit: slice 4 closure.
@@ -28,4 +28,5 @@ Base: develop@5284df1; strategy: feature-branch-chain; runner: isolated MIX_TEST
 - L6: One bounded slicing pass selected four cohesive slices. Approximate implementation workload: 869 additions+deletions, including untracked component and tests. Slice 2 can exceed advisory 400 because shared component and its first production integration/tests form one review unit. Repository CI has no size gate; do not invent an exception requirement or omit tests.
 - L7: Branch order: feat/371-navigation-tracker (draft toward develop) <- feat/371-01-role-landings <- feat/371-02-professional-navbar <- feat/371-03-secretary-navbar <- feat/371-04-patient-navbar. Each child targets its immediate predecessor. Tracker is no-merge until children are reviewed and integrated; final integration is not authorized here.
 - L8: Preserve the exact approved final source/docs/tests, stage navigation test blocks incrementally, and verify each slice independently. Splitting completed behavior has no meaningful new RED; implementation RED/GREEN was already observed and recorded. No extra product behavior is authorized.
+- L10: Tracker published as draft #438 (7d7c260); slice 1 is 161 changed lines including delivery record. Initial isolated test setup failed before tests because ignored test.local.exs was absent; restored the existing test-only configuration, then 29 tests passed. Original failure preserved. No development DB touched.
 - L9: Dependency correction before source staging: the shared component's verified Patient logout route must exist before component compilation. Include Patient logout/magic-link controller, route and existing tests in slice 1 alongside internal role landings; slice 4 retains Patient UI/profile adoption. Same four-slice chain, no code changes or size-driven reslicing.
