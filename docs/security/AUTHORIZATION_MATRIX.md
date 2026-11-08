@@ -2,7 +2,7 @@
 
 > **Estado:** Draft — pending independent review
 >
-> **Versión del documento:** `0.7-draft`
+> **Versión del documento:** `0.8-draft`
 >
 > **Base histórica aprobada:** versión `0.4`, validada por el equipo el 2026-08-24; esa aprobación no se extiende a los cambios de `0.5-draft` ni `0.6-draft`.
 >
@@ -57,6 +57,8 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | S4-04 | Consultar historial operativo propio | Denegar | Denegar | Denegar | Condicional/alcance — `LIFE-04` | No aplica | #377 / E6, E13 |
 | S4-05 | Consultar historial operativo de la agenda propia | Denegar | Condicional/alcance — `LIFE-05` | Denegar | Denegar | No aplica | #377 / E10, E13 |
 | S4-06 | Consultar historial operativo del centro | Denegar | Denegar | Condicional/alcance — `LIFE-06` | Denegar | No aplica | #377 / E8, E13 |
+| S4-07 | Registrar asistencia o ausencia en un turno confirmado de la agenda propia | Denegar | Condicional/alcance — `LIFE-07` | Denegar | Denegar | No aplica | #377 / E11–E12 |
+| S4-08 | Registrar asistencia o ausencia en un turno confirmado de cualquier agenda | Denegar | Denegar | Condicional/alcance — `LIFE-08` | Denegar | No aplica | #377 / E11–E12 |
 
 ### Condiciones y alcances
 
@@ -89,6 +91,8 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | `LIFE-04` | Paciente autenticado; la consulta aplica `WHERE patient_profile_id = perfil_revalidado` y devuelve turnos propios, incluidos `expired` y `cancelled`, sin revelar agendas ajenas. |
 | `LIFE-05` | Profesional autenticado; la consulta aplica `WHERE professional_account_id = cuenta_revalidada`, incluso cuando comparte Paciente con otra agenda. |
 | `LIFE-06` | Secretaría autenticada; la consulta conserva el alcance operativo del centro. Administrador no obtiene acceso implícito a ninguna de estas operaciones. |
+| `LIFE-07` | Profesional autenticado mediante `Origen.Sessions.revalidate_principal/2`; el backend deriva su cuenta, limita la operación a su agenda y solo permite transformar un turno `confirmed` en `attended` o `no_show`. No se fija una ventana temporal ni un flujo de corrección terminal. |
+| `LIFE-08` | Secretaría autenticada mediante `Origen.Sessions.revalidate_principal/2`; puede transformar un turno `confirmed` de cualquier agenda en `attended` o `no_show`. No concede acceso a otras operaciones de #284 ni permisos implícitos al Administrador. |
 
 ## Pruebas mínimas de autorización
 
@@ -138,7 +142,7 @@ Quedan fuera de esta versión la representación de Pacientes, ausencias y feria
 
 La versión histórica `0.4` cerró los gaps de autorización de su alcance: `S1-05` quedó resuelta como un canal público condicionado por demostración de posesión del número, sin permiso derivado de rol y bajo default deny fuera de `TEL-02`. El equipo aprobó y validó integralmente esa versión el 2026-08-24; esa aprobación documental no acredita implementación ni ejecución de pruebas.
 
-La versión actual `0.7-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda, reservas y ciclo operativo, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
+La versión actual `0.8-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda, reservas y ciclo operativo, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
 
 ## Cambio, versionado y revisión
 
@@ -153,6 +157,7 @@ La versión actual `0.7-draft`, incluidas las condiciones agregadas para acceso,
 
 | Versión | Fecha | Estado | Cambio |
 | --- | --- | --- | --- |
+| `0.8-draft` | 2026-11-08 | Draft — pending independent review | Agrega el registro autenticado de asistencia/ausencia de #377: Profesional sólo en su agenda y Secretaría en todas, únicamente sobre turnos `confirmed`; conserva default deny para Paciente y Administrador y explicita que no fija ventana temporal ni corrección terminal. No acredita implementación ni ejecución de pruebas. |
 | `0.7-draft` | 2026-10-24 | Draft — pending independent review | Agrega cancelación autenticada e historial operativo SQL-acotado de #377 para Paciente, Profesional y Secretaría; exige motivo no blanco al personal, conserva default deny para Administrador y registra pruebas de alcance. No acredita implementación ni ejecución de pruebas. |
 | `0.6-draft` | 2026-09-02 | Draft — pending independent review | Amplía el alcance de demo con acceso y perfil propio de Paciente, verificación telefónica propia, tipo y disponibilidad propios del Profesional, primera reserva autónoma o asistida, reserva relacionada del Profesional y agenda propia. Define que solo la persistencia atómica exitosa crea la relación y agrega pruebas mínimas positivas y negativas. No acredita implementación ni pruebas ejecutadas. |
 | `0.5-draft` | 2026-09-02 | Draft — pending independent review | Agrega `APP-01` como autoridad de aprobación distinta, explicita el límite transaccional acotado y registra que la aceptación de staging está preparada/no ejecutada. No acredita correo, credenciales, despliegue ni bootstrap real. |

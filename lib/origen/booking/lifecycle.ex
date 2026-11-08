@@ -18,11 +18,12 @@ defmodule Origen.Booking.Lifecycle do
 
   @cancellable_statuses ~w(requested confirmed)
   @staff_roles [:professional, :secretary]
+  @attendance_outcomes [:attended, :no_show]
 
   @audit_insert """
   INSERT INTO public.audit_events
     (actor_kind, actor_ref, event, entity_kind, entity_ref, result)
-  VALUES ($1, $2, 'appointment_cancelled', 'appointment', $3, 'succeeded')
+  VALUES ($1, $2, $3, 'appointment', $4, 'succeeded')
   """
 
   @doc """
@@ -58,6 +59,39 @@ defmodule Origen.Booking.Lifecycle do
   @doc "Alias with the public domain verb used by the Booking context."
   def cancel_appointment(principal, appointment_id, attrs \\ []),
     do: cancel(principal, appointment_id, attrs)
+
+  @doc """
+  Records attendance or no-show for a confirmed appointment.
+
+  Professionals are limited to their own agenda and secretaries may operate on
+  any centre agenda. The appointment row is locked and the active session is
+  revalidated before the transition. No product time window or terminal
+  correction workflow is applied.
+  """
+  @spec record_attendance(
+          map() | InternalSession.t(),
+          integer(),
+          :attended | :no_show | String.t(),
+          keyword()
+        ) :: {:ok, Appointment.t()} | {:error, term()}
+  def record_attendance(principal, appointment_id, outcome, opts \\ [])
+
+  def record_attendance(principal, appointment_id, outcome, opts)
+      when is_integer(appointment_id) do
+    with {:ok, options} <- normalize_options(opts),
+         {:ok, normalized_outcome} <- normalize_attendance_outcome(outcome),
+         {:ok, actor} <- resolve_principal(principal),
+         true <- Policy.lifecycle_allowed?(actor.role, :record_attendance) do
+      do_record_attendance(actor, appointment_id, normalized_outcome, options)
+    else
+      false -> {:error, :unauthorized}
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :unauthorized}
+    end
+  end
+
+  def record_attendance(_principal, _appointment_id, _outcome, _opts),
+    do: {:error, :unauthorized}
 
   @doc """
   Returns non-clinical operational history filtered in SQL by the revalidated actor.
@@ -109,10 +143,30 @@ defmodule Origen.Booking.Lifecycle do
             {:error, changeset} -> Repo.rollback({:validation_error, changeset})
           end
 
-        append_audit!(actor, updated, options)
+        append_audit!(actor, updated, "appointment_cancelled", options)
         updated
       end)
     end
+  end
+
+  defp do_record_attendance(actor, appointment_id, outcome, options) do
+    Repo.transaction(fn ->
+      appointment = lock_appointment!(appointment_id)
+      authorize_scope!(actor, appointment)
+      ensure_attendance_allowed!(appointment)
+
+      updated =
+        appointment
+        |> Appointment.changeset(%{status: Atom.to_string(outcome)})
+        |> Repo.update()
+        |> case do
+          {:ok, value} -> value
+          {:error, changeset} -> Repo.rollback({:validation_error, changeset})
+        end
+
+      append_audit!(actor, updated, attendance_audit_event(outcome), options)
+      updated
+    end)
   end
 
   defp cancellation_reason(%{role: role}, _options) when role == :patient, do: :ok
@@ -174,12 +228,36 @@ defmodule Origen.Booking.Lifecycle do
 
   defp ensure_patient_time!(_actor, _appointment, _now), do: :ok
 
-  defp append_audit!(actor, appointment, options) do
+  defp normalize_attendance_outcome(outcome) when outcome in @attendance_outcomes,
+    do: {:ok, outcome}
+
+  defp normalize_attendance_outcome(outcome) when is_binary(outcome) do
+    case outcome do
+      "attended" -> {:ok, :attended}
+      "no_show" -> {:ok, :no_show}
+      _ -> {:error, :invalid_attendance_outcome}
+    end
+  end
+
+  defp normalize_attendance_outcome(_outcome), do: {:error, :invalid_attendance_outcome}
+
+  defp ensure_attendance_allowed!(%Appointment{status: "confirmed"}), do: :ok
+  defp ensure_attendance_allowed!(_appointment), do: Repo.rollback(:invalid_status_transition)
+
+  defp attendance_audit_event(:attended), do: "appointment_attended"
+  defp attendance_audit_event(:no_show), do: "appointment_no_show"
+
+  defp append_audit!(actor, appointment, event, options) do
     if option(options, :fail_at) == :audit_event do
       Repo.rollback(:audit_unavailable)
     end
 
-    values = [audit_actor_kind(actor), audit_actor_ref(actor), "appointment:#{appointment.id}"]
+    values = [
+      audit_actor_kind(actor),
+      audit_actor_ref(actor),
+      event,
+      "appointment:#{appointment.id}"
+    ]
 
     case Ecto.Adapters.SQL.query(Repo, @audit_insert, values) do
       {:ok, _result} -> :ok
