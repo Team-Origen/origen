@@ -461,7 +461,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert original_relationship.first_appointment_id == first_appointment.id
 
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
       view
