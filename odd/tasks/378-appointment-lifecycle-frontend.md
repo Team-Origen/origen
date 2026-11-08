@@ -70,8 +70,8 @@ Pruebas de interfaz con resultados observados y evidencia visual/funcional aplic
 
 ## Tasks
 
-- T1 [S1,S2] Patient persistent appointments/history, navigation and own cancellation; route: gentle-ai-worker (context backstop); status: in_progress; commit: pending; checks: RED/GREEN LiveView and regressions.
-- T2 [S1,S2] Professional own-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: pending; commit: pending; checks: RED/GREEN LiveView and request-resolution regression.
+- T1 [S1,S2] Patient persistent appointments/history, navigation and own cancellation; route: gentle-ai-worker (context backstop); status: done; commit: 491e29b; checks: 9 focused tests passed, format/whitespace passed; independent feature verification pending T4.
+- T2 [S1,S2] Professional own-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: in_progress; commit: pending; checks: RED/GREEN LiveView and request-resolution regression.
 - T3 [S1,S2] Secretary center-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: pending; commit: pending; checks: RED/GREEN LiveView and authorization regressions.
 - T4 [S1,S2] Integrated regression, independent privacy/security verification, evidence and approval status; route: parent + gentle-ai-verify; status: pending; commit: pending; Risk: item 2 (private history, server authorization boundaries).
 
@@ -81,4 +81,8 @@ L1: Tengo que iniciar con la subissue #378 (el frontend del ciclo operativo del 
 
 L2: User selected “Cadena sobre develop” (`stacked-to-main`). Default branch verified as develop. All code remains local until separate publication authorization. Branch created from fetched origin/develop 5284df1, clean baseline. No approval of #378 or closure of #285 is inferred.
 
-L3: Read-only explorer mw8cy7df-1-vokg mapped approved #376 contract, backend Origen.Booking lifecycle APIs, missing patient appointments screen and staff surfaces. JSON evidence now in tmp/issue-378. #376 approved and closed; #285 open. Mandatory sources must be read by each implementing worker. Generated code follows project Spanish UI conventions; docs follow existing language. Parent context backstop requires bounded workers; background-subagents off, so sequential foreground handoffs. Test-first and all required functional checks remain mandatory. No source changes yet.
+L3: Read-only explorer mw8cy7df-1-vokg mapped approved #376 contract, backend Origen.Booking lifecycle APIs, missing patient appointments screen and staff surfaces. JSON evidence now in tmp/issue-378. #376 approved and closed; #285 open. Mandatory sources must be read by each implementing worker. Generated code follows project Spanish UI conventions; docs follow existing language. Parent context backstop requires bounded workers; background-subagents off, so sequential foreground handoffs. Test-first and all required functional checks remain mandatory. No source changes at initial planning.
+
+L4: T1 implemented and self-verified: required focused patient/navigation/booking command passed 9 tests on isolated PostgreSQL 127.0.0.1:55438/origen_378_test. Initial attempts failed setup at default port 5433 and then database creation (zero tests); observed behavioral RED 6 failures, corrected to GREEN. Compile, format and whitespace passed. Uses real backend with synthetic DB fixtures, not browser/cloud integration. Exact-at-start enforcement relies on #377 deterministic backend tests; forged foreign cancellation and patient attendance events preserve public history.
+
+L5: Slice 1 = 491e29b (674 authored lines including feature tracking; coherent patient route/navigation/history/cancel behavior with tests and docs exceeds advisory 400-line target). Delivery auto-chain / stacked-to-main retains this as first future review slice; slice 2 starts after 491e29b for professional workflow. No PR/publication. Risk: item 2 (private patient history, session principal). Independent verification planned at T4 before delivery.

@@ -43,3 +43,48 @@ inicio o después.
 La prueba de integración existente conserva el recorrido real de reserva de
 Paciente contra `DatabaseCalendar` y `DatabaseCatalog`. La verificación final
 depende de una base de pruebas aislada disponible según `config/test.exs`.
+
+## Recorrido del Profesional
+
+La Agenda del Profesional conserva la ruta `/profesional/agenda` y el filtro
+existente `?date=AAAA-MM-DD`. Cada ingreso reutiliza la sesión interna vigente y
+carga la agenda propia mediante `Origen.Booking.get_professional_agenda/2`; el
+historial operativo se consulta por separado con
+`Origen.Booking.list_appointment_history/2`, que vuelve a validar la sesión y
+aplica el alcance de la agenda en el servidor.
+
+- Las solicitudes `requested` y los turnos `confirmed` de la agenda muestran
+  cancelación con motivo obligatorio. El motivo se valida en el formulario y
+  nuevamente en `Origen.Booking.cancel_appointment/3`; una denegación conserva
+  estado, ocupación e historial.
+- Sólo los turnos `confirmed` muestran controles para marcar `attended` o
+  `no_show`. La operación real es `Origen.Booking.record_attendance/4`, por lo
+  que un intento forjado sobre una solicitud, un vencido o una agenda ajena no
+  cambia datos ni revela historia.
+- El historial propio permanece visible después de cancelar o registrar un
+  resultado. Expone estado, fecha, tipo, origen y motivo de cancelación cuando
+  corresponden, sin notas clínicas, notificaciones automáticas, multas ni
+  reprogramación directa.
+- `expired` se presenta como vencido y no como ausencia. Cambiar fecha, hora o
+  tipo exige cancelar el original y crear otro turno por el flujo autorizado.
+- La interfaz mantiene acciones con botones y formularios navegables por
+  teclado, foco visible, etiquetas asociadas, mensajes `role="alert"`/`status`
+  y composición adaptable a pantallas angostas. No se agrega una ruta ni un
+  filtro nuevo para estas acciones.
+
+## Verificación del alcance Profesional
+
+Las pruebas LiveView de `test/origen_web/live/professional_agenda_lifecycle_live_test.exs`
+usan PostgreSQL real y `AppointmentLifecycleFixtures`; no usan mocks para
+historial, cancelación ni asistencia. Cubren historial persistente al
+reingresar, motivo obligatorio sin mutación, cancelación de solicitudes y
+confirmados, ambos resultados de asistencia, rechazo de estados no confirmados
+o vencidos y rechazo de un identificador de otra agenda sin fuga de historial.
+Las pruebas existentes de `professional_agenda_live_test.exs` conservan
+aceptación/rechazo #284 y el parámetro de fecha. La prueba de dominio
+`request_resolution_test.exs` permanece incluida como regresión del recorrido
+anterior.
+
+La evidencia de este slice es funcional sobre la base desechable indicada por
+la tarea; no certifica la suite completa ni la verificación independiente de
+privacidad/seguridad, que pertenecen al T4.

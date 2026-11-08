@@ -12,6 +12,9 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   alias Origen.Booking
   alias Origen.PatientAccess
   alias Origen.Patients
+  alias OrigenWeb.Components.AppointmentLifecycle
+
+  @lifecycle_statuses ~w(requested confirmed)
 
   @impl true
   def mount(_params, _session, socket) do
@@ -31,9 +34,16 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
        access_patient_id: nil,
        access_form: nil,
        access_error: nil,
-       access_feedback: nil
+       access_feedback: nil,
+       history: [],
+       history_error: nil,
+       cancellation_appointment_id: nil,
+       cancellation_reason: "",
+       organization_timezone: Application.fetch_env!(:origen, :organization_timezone),
+       lifecycle_statuses: @lifecycle_statuses
      )
-     |> load_agenda(date)}
+     |> load_agenda(date)
+     |> load_history()}
   end
 
   @impl true
@@ -180,7 +190,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
             {:noreply,
              socket
              |> put_flash(:info, "Solicitud aceptada y turno confirmado.")
-             |> load_agenda(socket.assigns.date)}
+             |> load_agenda(socket.assigns.date)
+             |> load_history()}
 
           {:error, reason} ->
             {:noreply,
@@ -208,7 +219,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
             {:noreply,
              socket
              |> put_flash(:info, "Solicitud rechazada y horario liberado.")
-             |> load_agenda(socket.assigns.date)}
+             |> load_agenda(socket.assigns.date)
+             |> load_history()}
 
           {:error, reason} ->
             {:noreply,
@@ -222,6 +234,92 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
          socket
          |> put_flash(:error, "El identificador del turno no es válido.")
          |> load_agenda(socket.assigns.date)}
+    end
+  end
+
+  @impl true
+  def handle_event("open_cancellation", %{"appointment_id" => id_str}, socket) do
+    case parse_appointment_id(id_str) do
+      {:ok, appointment_id} ->
+        {:noreply,
+         assign(socket,
+           cancellation_appointment_id: appointment_id,
+           cancellation_reason: ""
+         )}
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "El identificador del turno no es válido.")}
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_cancellation", _params, socket) do
+    {:noreply,
+     assign(socket,
+       cancellation_appointment_id: nil,
+       cancellation_reason: ""
+     )}
+  end
+
+  @impl true
+  def handle_event(
+        "submit_cancellation",
+        %{"appointment_id" => id_str, "cancellation" => %{"reason" => reason}},
+        socket
+      ) do
+    with {:ok, appointment_id} <- parse_appointment_id(id_str),
+         {:ok, _appointment} <-
+           Booking.cancel_appointment(
+             socket.assigns.current_internal_session,
+             appointment_id,
+             %{reason: reason}
+           ) do
+      {:noreply,
+       socket
+       |> assign(
+         cancellation_appointment_id: nil,
+         cancellation_reason: ""
+       )
+       |> put_flash(:info, "Turno cancelado y conservado en el historial.")
+       |> load_agenda(socket.assigns.date)
+       |> load_history()}
+    else
+      :error ->
+        {:noreply, put_flash(socket, :error, "El identificador del turno no es válido.")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, lifecycle_error_message(reason))}
+    end
+  end
+
+  @impl true
+  def handle_event(
+        "record_attendance",
+        %{"appointment_id" => id_str, "outcome" => outcome},
+        socket
+      ) do
+    case parse_appointment_id(id_str) do
+      {:ok, appointment_id} ->
+        case Booking.record_attendance(
+               socket.assigns.current_internal_session,
+               appointment_id,
+               outcome
+             ) do
+          {:ok, _appointment} ->
+            label = if outcome == "attended", do: "asistencia", else: "ausencia"
+
+            {:noreply,
+             socket
+             |> put_flash(:info, "Se registró la #{label} del turno.")
+             |> load_agenda(socket.assigns.date)
+             |> load_history()}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, lifecycle_error_message(reason))}
+        end
+
+      :error ->
+        {:noreply, put_flash(socket, :error, "El identificador del turno no es válido.")}
     end
   end
 
@@ -298,6 +396,31 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
   defp resolution_error_message(_other),
     do: "No se pudo procesar la solicitud."
+
+  defp load_history(socket) do
+    case Booking.list_appointment_history(socket.assigns.current_internal_session) do
+      {:ok, history} -> assign(socket, history: history, history_error: nil)
+      {:error, _reason} -> assign(socket, history: [], history_error: :unavailable)
+    end
+  end
+
+  defp lifecycle_error_message(:cancellation_reason_required),
+    do: "Indicá un motivo para cancelar el turno."
+
+  defp lifecycle_error_message(:unauthorized),
+    do: "No tenés permiso para operar este turno."
+
+  defp lifecycle_error_message(:invalid_status_transition),
+    do: "El estado actual no permite esta operación."
+
+  defp lifecycle_error_message(:appointment_not_found),
+    do: "El turno solicitado no fue encontrado."
+
+  defp lifecycle_error_message(:invalid_attendance_outcome),
+    do: "El resultado de asistencia no es válido."
+
+  defp lifecycle_error_message(_reason),
+    do: "No se pudo actualizar el ciclo del turno."
 
   defp load_agenda(socket, date) do
     principal = socket.assigns.current_internal_session
@@ -638,6 +761,86 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       Rechazar
                     </button>
                   </div>
+
+                  <div
+                    :if={to_string(appt.status) in @lifecycle_statuses}
+                    id={"lifecycle-actions-#{appt.id}"}
+                    class="pt-2 flex flex-wrap items-center gap-2"
+                  >
+                    <button
+                      type="button"
+                      id={"cancel-appointment-#{appt.id}"}
+                      phx-click="open_cancellation"
+                      phx-value-appointment_id={appt.id}
+                      class="rounded-md border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      Cancelar con motivo
+                    </button>
+                    <button
+                      :if={to_string(appt.status) == "confirmed"}
+                      type="button"
+                      phx-click="record_attendance"
+                      phx-value-appointment_id={appt.id}
+                      phx-value-outcome="attended"
+                      class="rounded-md border border-emerald-300 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      Marcar asistencia
+                    </button>
+                    <button
+                      :if={to_string(appt.status) == "confirmed"}
+                      type="button"
+                      phx-click="record_attendance"
+                      phx-value-appointment_id={appt.id}
+                      phx-value-outcome="no_show"
+                      class="rounded-md border border-amber-300 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      Marcar ausencia
+                    </button>
+                  </div>
+
+                  <%= if @cancellation_appointment_id == appt.id do %>
+                    <.form
+                      for={%{}}
+                      as={:cancellation}
+                      id={"appointment-cancellation-form-#{appt.id}"}
+                      phx-submit="submit_cancellation"
+                      class="mt-3 space-y-2 rounded-lg border border-rose-100 bg-rose-50 p-3"
+                    >
+                      <input type="hidden" name="appointment_id" value={appt.id} />
+                      <label
+                        for={"cancellation-reason-#{appt.id}"}
+                        class="block text-xs font-semibold text-rose-900"
+                      >
+                        Motivo de la cancelación (obligatorio)
+                      </label>
+                      <textarea
+                        id={"cancellation-reason-#{appt.id}"}
+                        name="cancellation[reason]"
+                        rows="2"
+                        required
+                        aria-describedby={"cancellation-help-#{appt.id}"}
+                        class="w-full rounded-md border-rose-200 text-sm focus:border-rose-500 focus:ring-rose-500"
+                      >{@cancellation_reason}</textarea>
+                      <p id={"cancellation-help-#{appt.id}"} class="text-xs text-rose-800">
+                        El motivo queda visible en el historial autorizado del turno.
+                      </p>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          type="submit"
+                          class="rounded-md bg-rose-700 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-800 focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          Confirmar cancelación
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="cancel_cancellation"
+                          class="rounded-md border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2"
+                        >
+                          Volver
+                        </button>
+                      </div>
+                    </.form>
+                  <% end %>
                 </div>
 
                 <!-- Datos no clínicos del Paciente -->
@@ -771,6 +974,51 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
             <% end %>
           </div>
         <% end %>
+
+        <section id="professional-appointment-history" aria-labelledby="history-heading">
+          <div class="mb-3 flex items-center justify-between">
+            <div>
+              <h2 id="history-heading" class="text-lg font-semibold text-[#0A3847]">
+                Historial operativo
+              </h2>
+              <p class="mt-1 text-sm text-stone-600">
+                Consultá los estados y resultados de los turnos de tu propia agenda.
+              </p>
+            </div>
+            <span :if={is_nil(@history_error)} class="text-xs text-stone-500">
+              {length(@history)} registros
+            </span>
+          </div>
+
+          <div
+            :if={@history_error}
+            id="professional-history-error"
+            role="alert"
+            class="rounded-xl border border-red-200 bg-white p-6 text-sm text-red-800"
+          >
+            No se pudo cargar el historial operativo. Volvé a intentar más tarde.
+          </div>
+
+          <div
+            :if={is_nil(@history_error) and @history == []}
+            id="professional-history-empty"
+            class="rounded-xl border border-dashed border-stone-300 bg-white p-8 text-center text-sm text-stone-600"
+          >
+            Todavía no hay registros en el historial de tu agenda.
+          </div>
+
+          <div
+            :if={is_nil(@history_error) and @history != []}
+            id="professional-history-list"
+            class="space-y-3"
+          >
+            <AppointmentLifecycle.history
+              :for={appointment <- @history}
+              appointment={appointment}
+              timezone={@organization_timezone}
+            />
+          </div>
+        </section>
       </div>
     </div>
     """
@@ -843,6 +1091,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
       "reserved" -> {"Reservado", "bg-sky-50 text-sky-700 border-sky-200"}
       "confirmed" -> {"Confirmado", "bg-emerald-50 text-emerald-700 border-emerald-200"}
       "attended" -> {"Atendido", "bg-stone-100 text-stone-700 border-stone-300"}
+      "expired" -> {"Vencido", "bg-stone-100 text-stone-700 border-stone-300"}
       "cancelled" -> {"Cancelado", "bg-rose-50 text-rose-700 border-rose-200"}
       "no_show" -> {"Ausente", "bg-amber-50 text-amber-700 border-amber-200"}
       "requested" -> {"Solicitado", "bg-indigo-50 text-indigo-700 border-indigo-200"}
