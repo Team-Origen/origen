@@ -88,3 +88,30 @@ anterior.
 La evidencia de este slice es funcional sobre la base desechable indicada por
 la tarea; no certifica la suite completa ni la verificación independiente de
 privacidad/seguridad, que pertenecen al T4.
+
+## Recorrido de Secretaría
+
+La ruta canónica `/secretaria/agenda` ofrece a Secretaría la operación de todas
+las agendas del centro. Reutiliza la sesión interna revalidada y consulta
+`Booking.list_appointment_history/1`; la lista segura de profesionales sólo
+identifica la agenda en la presentación.
+
+- Presenta `requested`, `confirmed`, `expired`, `cancelled`, `attended` y
+  `no_show`, junto con fecha, tipo, origen y motivo cuando corresponden.
+- Permite cancelar solicitudes y confirmados con motivo obligatorio mediante
+  `Booking.cancel_appointment/3`, y registrar asistencia o ausencia únicamente
+  sobre confirmados mediante `Booking.record_attendance/3`.
+- No ofrece aceptar/rechazar solicitudes, reprogramación, notificaciones,
+  multas ni otras operaciones fuera del contrato. Los identificadores inválidos,
+  sesiones vencidas y denegaciones del servidor se manejan sin mutar la vista.
+
+La navegación de Secretaría conserva el enlace funcional a `/secretaria/pacientes`
+y agrega la entrada a `/secretaria/agenda`, de acuerdo con
+`docs/navigation/URL_CONVENTIONS.md`. La prueba
+`test/origen_web/live/secretary_agenda_live_test.exs` usa PostgreSQL real y
+fixtures persistentes para verificar autorización, los seis estados, cancelación
+en múltiples agendas, motivo en blanco sin mutación, asistencia/ausencia,
+identificadores forjados y visibilidad del origen Secretaría en la historia
+pública del Paciente. Es evidencia de LiveView y dominio real, no una prueba de
+navegador, despliegue o integración final de #285; la verificación independiente
+queda a cargo de T4.
