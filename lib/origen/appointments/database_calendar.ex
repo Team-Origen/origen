@@ -21,11 +21,9 @@ defmodule Origen.Appointments.DatabaseCalendar do
   }
 
   @default_policy %{
-    cutoff_description:
-      "Podés cancelar sin costo hasta las 18:00 del día anterior a la cita (D-1).",
-    penalty_percentage: 50,
-    penalty_description:
-      "Cancelaciones posteriores a las 18:00 de D-1 o inasistencias aplican una política de multa del 50% según RF-16."
+    cutoff_description: "Podés cancelar estrictamente antes del inicio de la cita.",
+    penalty_percentage: 0,
+    penalty_description: "No se aplica penalización automática por cancelación ni inasistencia."
   }
 
   @impl true
