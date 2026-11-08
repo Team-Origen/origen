@@ -85,7 +85,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     def primary_action(assigns) do
       ~H"""
       <.button>Activate administrator</.button>
-      <.button to="/admin/activate" link_type="a">Return to activation</.button>
+      <.button to="/administrador/activar" link_type="a">Return to activation</.button>
       """
     end
 
@@ -102,12 +102,14 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     password = "sentinel-password-must-never-render"
     totp_code = "sentinel-totp-must-never-render"
     invitation = issue_invitation()
-    enrollment_conn = exchange(conn, invitation) |> recycle() |> get(https(~p"/admin/activate"))
+
+    enrollment_conn =
+      exchange(conn, invitation) |> recycle() |> get(https(~p"/administrador/activar"))
 
     body =
       enrollment_conn
       |> recycle()
-      |> post(https(~p"/admin/activate"), %{
+      |> post(https(~p"/administrador/activar"), %{
         "password" => password,
         "password_confirmation" => password,
         "totp_code" => totp_code
@@ -157,7 +159,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
 
     assert html =~ "<button"
     assert html =~ "Activate administrator"
-    assert html =~ ~s(href="/admin/activate")
+    assert html =~ ~s(href="/administrador/activar")
     assert html =~ "Return to activation"
   end
 
@@ -177,7 +179,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
 
   defp exchange(conn, invitation) do
     conn
-    |> post(https(~p"/admin/activate/exchange"), %{
+    |> post(https(~p"/administrador/activar/intercambiar"), %{
       "invitation_id" => to_string(invitation.invitation_id),
       "token" => invitation.token
     })

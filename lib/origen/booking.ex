@@ -21,6 +21,8 @@ defmodule Origen.Booking do
   alias Origen.Booking.ProfessionalBooking
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Booking.ProfessionalPatientSelection
+  alias Origen.Booking.Expiry
+  alias Origen.Booking.Lifecycle
   alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
@@ -68,14 +70,20 @@ defmodule Origen.Booking do
   `{:error, :patient_schedule_conflict}`.
   """
   @spec validate_no_overlap(map()) :: {:ok, :no_conflict} | {:error, atom()}
-  defdelegate validate_no_overlap(attrs), to: Overlap
+  def validate_no_overlap(attrs), do: Overlap.validate_no_overlap(attrs)
+
+  @spec validate_no_overlap(map(), keyword()) :: {:ok, :no_conflict} | {:error, atom()}
+  def validate_no_overlap(attrs, opts), do: Overlap.validate_no_overlap(attrs, opts)
 
   @doc """
   Alias de `validate_no_overlap/1` expuesto como verbo descriptivo de la
   consulta de conflictos de agenda (Issue #65).
   """
   @spec check_overlaps(map()) :: {:ok, :no_conflict} | {:error, atom()}
-  defdelegate check_overlaps(attrs), to: Overlap
+  def check_overlaps(attrs), do: Overlap.check_overlaps(attrs)
+
+  @spec check_overlaps(map(), keyword()) :: {:ok, :no_conflict} | {:error, atom()}
+  def check_overlaps(attrs, opts), do: Overlap.check_overlaps(attrs, opts)
 
   @doc """
   Consulta la agenda diaria de turnos propios del Profesional autenticado
@@ -159,12 +167,24 @@ defmodule Origen.Booking do
   @doc """
   Acepta una solicitud de turno pendiente (Issue #284 / #322). Exclusivo del profesional dueño.
   """
-  defdelegate accept_request(actor_account_id, appointment_id), to: RequestResolution
+  defdelegate accept_request(actor_account_id, appointment_id, opts \\ []), to: RequestResolution
 
   @doc """
   Rechaza una solicitud de turno pendiente (Issue #284 / #322), liberando el horario. Exclusivo del profesional dueño.
   """
-  defdelegate reject_request(actor_account_id, appointment_id), to: RequestResolution
+  defdelegate reject_request(actor_account_id, appointment_id, opts \\ []), to: RequestResolution
+
+  @doc "Expires due requested appointments and keeps their rows as history."
+  defdelegate expire_due_requested(opts \\ []), to: Expiry
+
+  @doc "Cancels an appointment through a revalidated patient or internal principal."
+  defdelegate cancel_appointment(principal, appointment_id, attrs \\ []), to: Lifecycle
+
+  @doc "Returns operational history scoped in SQL to the revalidated principal."
+  defdelegate list_appointment_history(principal, opts \\ %{}), to: Lifecycle, as: :history
+
+  @doc "Records attended or no_show for a confirmed appointment within the actor's scope."
+  defdelegate record_attendance(principal, appointment_id, outcome, opts \\ []), to: Lifecycle
 
   @doc """
   Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).
@@ -199,7 +219,7 @@ defmodule Origen.Booking do
   def persist_appointment(attrs, snapshot_override \\ nil) do
     try do
       Repo.transaction(fn ->
-        case build_appointment(attrs, snapshot_override) do
+        case build_appointment(attrs, snapshot_override, []) do
           {:ok, appointment} -> appointment
           {:error, reason} -> Repo.rollback(reason)
         end
@@ -297,7 +317,7 @@ defmodule Origen.Booking do
   # retorna `{:ok, appointment}` o `{:error, reason}` para que ambos llamadores
   # decidan la semántica de reversión.
 
-  defp build_appointment(attrs, snapshot_override) do
+  defp build_appointment(attrs, snapshot_override, opts) do
     patient_id =
       attrs[:patient_profile_id] || attrs["patient_profile_id"] || attrs[:patient_id] ||
         attrs["patient_id"]
@@ -337,7 +357,7 @@ defmodule Origen.Booking do
               snapshot_exact_price_ars: price
             }
 
-            case Overlap.validate_no_overlap(appointment_params) do
+            case Overlap.validate_no_overlap(appointment_params, now: reservation_now(opts)) do
               {:ok, :no_conflict} ->
                 %Appointment{}
                 |> Appointment.changeset(appointment_params)
@@ -451,7 +471,7 @@ defmodule Origen.Booking do
 
     multi =
       Multi.new()
-      |> Multi.run(:appointment, fn _repo, _changes -> build_appointment(attrs, nil) end)
+      |> Multi.run(:appointment, fn _repo, _changes -> build_appointment(attrs, nil, opts) end)
       |> Multi.run(:relationship, fn _repo, %{appointment: appointment} ->
         establish_relationship(appointment, status, opts)
       end)

@@ -96,7 +96,7 @@ La traducción de activación no permite cambiar su autenticación, tokens ni pr
 
 - Actualizar rutas, enlaces, formularios y redirecciones afectados de manera conjunta.
 - Para páginas GET ordinarias renombradas, mantener la URL anterior como entrada compatible que redirige al destino acordado, preservando los parámetros existentes que use el recorrido. No crear pantallas duplicadas.
-- En magic links y activaciones, mantener la aceptación de enlaces e invitaciones anteriores mediante el manejo existente. No redirigir indiscriminadamente credenciales ni solicitudes POST. El mecanismo concreto de compatibilidad se resolverá en #370 antes de modificar estos endpoints.
+- En magic links y activaciones, mantener la aceptación de enlaces e invitaciones anteriores mediante el manejo existente. No redirigir indiscriminadamente credenciales ni solicitudes POST. El mecanismo implementado en #370 se detalla en «Implementación de la migración»: los endpoints anteriores conservan handlers directos.
 - Conservar sin cambio las rutas ya consistentes y el parámetro `date` de Agenda.
 - No agregar filtros a la URL cuando actualmente viven en el estado de la pantalla; no cambiar cómo funcionan al recargar o usar Atrás/Adelante. Para rutas migradas, preservar el comportamiento existente de acceso directo y navegación del navegador.
 - Conservar la denegación de la antigua ruta de autoedición de perfil del Paciente; no convertirla en una pantalla accesible.
@@ -111,9 +111,29 @@ Pendientes explícitos:
 
 - Lugar de la verificación telefónica existente en el recorrido beta; no resolverlo imponiendo requisitos históricos.
 - Diseño de las pantallas nuevas, filtros que realmente necesiten y acceso a la creación asistida desde Agenda de Secretaría.
-- Mecanismo de compatibilidad de magic links y activación antes de implementar sus cambios.
+- Compatibilidad de magic links y activación: resuelta en la implementación de #370 mediante handlers directos para los endpoints anteriores (ver sección siguiente).
 - La pantalla actual `/admin/internal` contempla Secretaría en `allowed_roles_for`, mientras la beta asigna gestión de cuentas al Administrador. Registrar esta discrepancia no autoriza corregir permisos en la migración ni reproducirla como permiso aprobado.
 - Navbars: entradas, orden, sección activa, destinos de logo/nombre y ubicación de cierre de sesión se definirán en la siguiente sección de planificación. No están acordados por este inventario.
+
+## Implementación de la migración (#370)
+
+Las rutas existentes del inventario cuentan con sus destinos canónicos en español. La verificación telefónica conserva su recorrido actual en `/paciente/telefono/verificar`, sin incorporarse como requisito nuevo de reserva. Los destinos sin pantalla actual siguen siendo planificación.
+
+- Las entradas GET antiguas de acceso, reserva, teléfono, cuentas y ajustes redirigen al destino canónico conservando la cadena de consulta. Ajustes conserva sus controles de sesión y rol antes de la redirección.
+- `/access/verify` sigue consumiendo directamente el magic link mediante el mismo controlador que `/paciente/acceso/verificar`: no hay redirección intermedia del token. Los correos nuevos usan el destino canónico.
+- Las rutas anteriores de activación conservan sus handlers GET y POST, incluidos los intercambios. Los formularios y pasos siguientes utilizan `/activar` y `/administrador/activar`, con sus respectivos endpoints `/intercambiar`. No se redirigen cuerpos POST ni se cambia el mecanismo de credenciales en fragmentos.
+- La configuración de origen de la invitación inicial admite tanto el path anterior exacto como el nuevo, con las mismas restricciones de host, entorno y HTTPS. Normaliza la emisión de invitaciones nuevas a `/administrador/activar`; no exige cambiar de inmediato una configuración existente.
+- `/patient/profile/complete` permanece denegada. Login, logout, Agenda, `date`, Secretaría y endpoints técnicos no cambian.
+
+Las decisiones visuales e inicios por rol registrados en `NAVIGATION_DECISIONS.md` siguen separados de esta migración y no se implementan aquí.
+
+### Verificación
+
+- RED inicial: las ocho pruebas nuevas de migración fallaron antes de modificar las rutas.
+- Suite completa sobre una base de pruebas aislada (`MIX_TEST_PARTITION=_issue370_verify`): 929 pruebas aprobadas, 32 omitidas y 8 excluidas; salida 0.
+- Verificación independiente: controles de sesión/rol, preservación exacta de consultas, handlers de compatibilidad y validadores de origen aprobados.
+- La base local preexistente produjo errores de preparación por la FK `agenda_settings_owner_account_id_fkey`; no se borraron ni corrigieron sus datos para hacer pasar las pruebas.
+- Acceso directo, guards de LiveView y recarga de activación se comprobaron mediante pruebas automatizadas. Atrás/Adelante y recarga en navegador real no se verificaron; no se presentan como evidencia completada.
 
 ## Fuentes y trazabilidad
 

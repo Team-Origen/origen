@@ -10,7 +10,7 @@ defmodule Origen.BootstrapAdmin.DeliverySecurityTest do
       "token-canary-01",
       "private-address@example.test",
       "message-body-canary",
-      "https://approved-host/admin/activate#invitation_id=inv-1&token=token-canary-01"
+      "https://approved-host/administrador/activar#invitation_id=inv-1&token=token-canary-01"
     ]
 
     email =

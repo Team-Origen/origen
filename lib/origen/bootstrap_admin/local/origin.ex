@@ -10,10 +10,13 @@ defmodule Origen.BootstrapAdmin.Local.Origin do
   @spec validate(term(), term()) :: {:ok, t()} | {:error, safe_reason()}
   def validate(value, endpoint) when is_binary(value) do
     with {:ok, port} <- endpoint_port(endpoint),
-         expected = "https://127.0.0.1:#{port}/admin/activate",
-         true <- value == expected,
+         true <-
+           value in [
+             "https://127.0.0.1:#{port}/administrador/activar",
+             "https://127.0.0.1:#{port}/admin/activate"
+           ],
          {:ok, uri} <- exact_uri(value, port) do
-      {:ok, %__MODULE__{uri: uri}}
+      {:ok, %__MODULE__{uri: %{uri | path: "/administrador/activar"}}}
     else
       _ -> {:error, :unsafe_origin}
     end
@@ -34,7 +37,8 @@ defmodule Origen.BootstrapAdmin.Local.Origin do
     uri = URI.parse(value)
 
     if uri.scheme == "https" and uri.host == "127.0.0.1" and uri.port == port and
-         uri.path == "/admin/activate" and is_nil(uri.userinfo) and is_nil(uri.query) and
+         uri.path in ["/administrador/activar", "/admin/activate"] and is_nil(uri.userinfo) and
+         is_nil(uri.query) and
          is_nil(uri.fragment) and String.valid?(value),
        do: {:ok, uri},
        else: :error

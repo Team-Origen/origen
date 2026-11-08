@@ -44,29 +44,29 @@ defmodule OrigenWeb.InternalActivationControllerTest do
        %{
          conn: conn
        } do
-    body = conn |> get(https(~p"/activate")) |> html_response(200)
+    body = conn |> get(https(~p"/activar")) |> html_response(200)
 
     assert body =~ "window.location.hash"
     assert body =~ "history.replaceState"
-    assert body =~ ~s(action="/activate/exchange")
+    assert body =~ ~s(action="/activar/intercambiar")
     refute body =~ ~s(type="password")
 
     {replace_index, _} = :binary.match(body, "history.replaceState")
     {submit_index, _} = :binary.match(body, "form.submit")
     assert replace_index < submit_index
 
-    admin_body = build_conn() |> get(https(~p"/admin/activate")) |> html_response(200)
+    admin_body = build_conn() |> get(https(~p"/administrador/activar")) |> html_response(200)
     assert admin_body =~ "Administrator activation"
-    refute admin_body =~ ~s(action="/activate/exchange")
+    refute admin_body =~ ~s(action="/activar/intercambiar")
   end
 
   test "fails closed over non-TLS transport and for invalid exchanges", %{conn: conn} do
     invitation = issue_staff_invitation(:professional)
 
-    assert response(get(conn, ~p"/activate"), 404) == "Activation unavailable"
+    assert response(get(conn, ~p"/activar"), 404) == "Activation unavailable"
 
     assert response(
-             post(build_conn(), ~p"/activate/exchange", %{
+             post(build_conn(), ~p"/activar/intercambiar", %{
                "invitation_id" => to_string(invitation.invitation_id),
                "token" => invitation.token
              }),
@@ -74,7 +74,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
            ) == "Activation unavailable"
 
     conn =
-      post(build_conn(), https(~p"/activate/exchange"), %{
+      post(build_conn(), https(~p"/activar/intercambiar"), %{
         "invitation_id" => to_string(invitation.invitation_id),
         "token" => "invalid-token"
       })
@@ -90,10 +90,10 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     invitation = issue_staff_invitation(:secretary)
     exchange_conn = exchange(conn, invitation)
 
-    assert redirected_to(exchange_conn) == ~p"/activate"
+    assert redirected_to(exchange_conn) == ~p"/activar"
     refute redirected_to(exchange_conn) =~ invitation.token
 
-    page_conn = exchange_conn |> recycle() |> get(https(~p"/activate"))
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/activar"))
     body = html_response(page_conn, 200)
     seed = totp_seed_from_page(body)
 
@@ -104,7 +104,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     success_conn =
       page_conn
       |> recycle()
-      |> post(https(~p"/activate"), %{
+      |> post(https(~p"/activar"), %{
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password",
         "totp_code" => NimbleTOTP.verification_code(seed)
@@ -128,13 +128,13 @@ defmodule OrigenWeb.InternalActivationControllerTest do
   } do
     invitation = issue_staff_invitation(:professional)
     exchange_conn = exchange(conn, invitation)
-    page_conn = exchange_conn |> recycle() |> get(https(~p"/activate"))
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/activar"))
     seed = page_conn |> html_response(200) |> totp_seed_from_page()
 
     conn =
       page_conn
       |> recycle()
-      |> post(https(~p"/activate"), %{
+      |> post(https(~p"/activar"), %{
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password",
         "totp_code" => wrong_totp_code(seed)
@@ -157,7 +157,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
   test "returns unavailable when totp_keyring is not configured or invalid", %{conn: conn} do
     invitation = issue_staff_invitation(:secretary)
     exchange_conn = exchange(conn, invitation)
-    page_conn = exchange_conn |> recycle() |> get(https(~p"/activate"))
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/activar"))
     seed = page_conn |> html_response(200) |> totp_seed_from_page()
 
     previous_keyring = Application.get_env(:origen, :totp_keyring)
@@ -167,7 +167,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
       conn =
         page_conn
         |> recycle()
-        |> post(https(~p"/activate"), %{
+        |> post(https(~p"/activar"), %{
           "password" => "a-secure-password",
           "password_confirmation" => "a-secure-password",
           "totp_code" => NimbleTOTP.verification_code(seed)
@@ -187,11 +187,11 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     exchange_conn = exchange(conn, invitation)
 
     # First GET
-    page_conn1 = exchange_conn |> recycle() |> get(https(~p"/activate"))
+    page_conn1 = exchange_conn |> recycle() |> get(https(~p"/activar"))
     assert html_response(page_conn1, 200) =~ "Secure internal account"
 
     # Second GET (reload / F5)
-    page_conn2 = page_conn1 |> recycle() |> get(https(~p"/activate"))
+    page_conn2 = page_conn1 |> recycle() |> get(https(~p"/activar"))
     body = html_response(page_conn2, 200)
     assert body =~ "Secure internal account"
     seed = totp_seed_from_page(body)
@@ -200,7 +200,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     success_conn =
       page_conn2
       |> recycle()
-      |> post(https(~p"/activate"), %{
+      |> post(https(~p"/activar"), %{
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password",
         "totp_code" => NimbleTOTP.verification_code(seed)
@@ -244,7 +244,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
 
   defp exchange(conn, invitation) do
     conn
-    |> post(https(~p"/activate/exchange"), %{
+    |> post(https(~p"/activar/intercambiar"), %{
       "invitation_id" => to_string(invitation.invitation_id),
       "token" => invitation.token
     })

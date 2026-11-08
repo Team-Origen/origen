@@ -705,9 +705,9 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     end
 
     test "C12: al hacer clic en Aceptar, confirma la solicitud reactivamente", ctx do
-      today = Date.utc_today()
-      start_1 = DateTime.new!(today, ~T[11:00:00], "Etc/UTC")
-      end_1 = DateTime.new!(today, ~T[11:30:00], "Etc/UTC")
+      appointment_date = Date.add(Date.utc_today(), 1)
+      start_1 = DateTime.new!(appointment_date, ~T[11:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(appointment_date, ~T[11:30:00], "Etc/UTC")
 
       insert_appointment!(
         ctx.professional_id,
@@ -718,7 +718,9 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       )
 
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      {:ok, view, _html} =
+        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(appointment_date)}")
 
       view
       |> element("button[phx-click='accept_request']", "Aceptar")
@@ -729,9 +731,9 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     end
 
     test "C12: al hacer clic en Rechazar, cancela la solicitud y libera el slot", ctx do
-      today = Date.utc_today()
-      start_1 = DateTime.new!(today, ~T[14:00:00], "Etc/UTC")
-      end_1 = DateTime.new!(today, ~T[14:30:00], "Etc/UTC")
+      appointment_date = Date.add(Date.utc_today(), 1)
+      start_1 = DateTime.new!(appointment_date, ~T[14:00:00], "Etc/UTC")
+      end_1 = DateTime.new!(appointment_date, ~T[14:30:00], "Etc/UTC")
 
       insert_appointment!(
         ctx.professional_id,
@@ -742,7 +744,9 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       )
 
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+
+      {:ok, view, _html} =
+        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(appointment_date)}")
 
       view
       |> element("button[phx-click='reject_request']", "Rechazar")

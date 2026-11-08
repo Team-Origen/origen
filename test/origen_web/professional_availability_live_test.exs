@@ -3,7 +3,7 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
 
   import Phoenix.LiveViewTest
 
-  @path "/configuracion/profesional"
+  @path "/profesional/ajustes"
 
   defmodule UnavailableAvailability do
     def get_own_configuration(_principal), do: {:error, :unavailable}

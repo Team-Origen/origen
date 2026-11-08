@@ -78,6 +78,6 @@ defmodule Origen.BootstrapAdmin.ProviderTest do
     Swoosh.Email.new()
     |> Swoosh.Email.to("private-address@example.test")
     |> Swoosh.Email.from("from@example.test")
-    |> Swoosh.Email.text_body("https://approved-host/admin/activate#token=token-canary")
+    |> Swoosh.Email.text_body("https://approved-host/administrador/activar#token=token-canary")
   end
 end

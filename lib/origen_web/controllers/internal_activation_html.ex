@@ -8,7 +8,7 @@ defmodule OrigenWeb.InternalActivationHTML do
 
       <p id="activation-status" class="mt-4">Checking invitation…</p>
       <meta name="_csrf_token" content={@csrf_token} />
-      <form id="fragment-exchange" action={~p"/activate/exchange"} method="post" hidden>
+      <form id="fragment-exchange" action={~p"/activar/intercambiar"} method="post" hidden>
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
         <input id="invitation-id" type="hidden" name="invitation_id" />
         <input id="invitation-token" type="hidden" name="token" />
@@ -71,7 +71,7 @@ defmodule OrigenWeb.InternalActivationHTML do
         </code>
       </section>
 
-      <form action={~p"/activate"} method="post" class="mt-6 space-y-4">
+      <form action={~p"/activar"} method="post" class="mt-6 space-y-4">
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
         <.input
           name="password"

@@ -7,6 +7,7 @@ defmodule Origen.Appointments.DatabaseCalendar do
   @behaviour Origen.Appointments.Calendar
 
   alias Origen.Appointments.Availability
+  alias Origen.Booking.Expiry
   alias Origen.Repo
 
   @weekday_map %{
@@ -20,11 +21,9 @@ defmodule Origen.Appointments.DatabaseCalendar do
   }
 
   @default_policy %{
-    cutoff_description:
-      "Podés cancelar sin costo hasta las 18:00 del día anterior a la cita (D-1).",
-    penalty_percentage: 50,
-    penalty_description:
-      "Cancelaciones posteriores a las 18:00 de D-1 o inasistencias aplican una política de multa del 50% según RF-16."
+    cutoff_description: "Podés cancelar estrictamente antes del inicio de la cita.",
+    penalty_percentage: 0,
+    penalty_description: "No se aplica penalización automática por cancelación ni inasistencia."
   }
 
   @impl true
@@ -140,30 +139,34 @@ defmodule Origen.Appointments.DatabaseCalendar do
   end
 
   defp fetch_occupancies(owner_id, date, opts) do
-    case Keyword.fetch(opts, :occupancies) do
-      {:ok, occupancies} ->
-        {:ok, occupancies}
+    with {:ok, _result} <- Expiry.expire_due_requested(now: Keyword.get(opts, :now)) do
+      case Keyword.fetch(opts, :occupancies) do
+        {:ok, occupancies} ->
+          {:ok, occupancies}
 
-      :error ->
-        start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-        end_day = DateTime.add(start_day, 1, :day)
+        :error ->
+          start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+          end_day = DateTime.add(start_day, 1, :day)
 
-        query = """
-        SELECT start_time, end_time
-        FROM appointments
-        WHERE professional_account_id = $1
-          AND status NOT IN ('cancelled', 'rejected')
-          AND start_time < $2 AND end_time > $3
-        ORDER BY start_time
-        """
+          query = """
+          SELECT start_time, end_time
+          FROM appointments
+          WHERE professional_account_id = $1
+            AND status NOT IN ('cancelled', 'rejected', 'expired')
+            AND start_time < $2 AND end_time > $3
+          ORDER BY start_time
+          """
 
-        case Repo.query(query, [owner_id, end_day, start_day]) do
-          {:ok, %{rows: rows}} ->
-            {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day))}
+          case Repo.query(query, [owner_id, end_day, start_day]) do
+            {:ok, %{rows: rows}} ->
+              {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day))}
 
-          _error ->
-            {:error, :unavailable}
-        end
+            _error ->
+              {:error, :unavailable}
+          end
+      end
+    else
+      {:error, reason} -> {:error, {:expiry_failed, reason}}
     end
   end
 

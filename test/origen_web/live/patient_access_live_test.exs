@@ -6,7 +6,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
 
   describe "mount/3 and initial rendering" do
     test "renders the access form with email input and submit button", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/access")
+      {:ok, _view, html} = live(conn, ~p"/paciente/acceso")
 
       assert html =~ "Acceso para Pacientes"
       assert html =~ "Correo electrónico"
@@ -17,7 +17,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
 
   describe "real-time validation (phx-change)" do
     test "shows validation error when email is blank", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       html =
         view
@@ -28,7 +28,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
     end
 
     test "shows validation error when email format is invalid", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       html =
         view
@@ -39,7 +39,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
     end
 
     test "shows validation error when email contains whitespace", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       html =
         view
@@ -50,7 +50,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
     end
 
     test "clears validation error when valid email is provided", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       # First trigger invalid
       view
@@ -69,7 +69,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
 
   describe "form submission (phx-submit)" do
     test "does not submit when email is invalid", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       html =
         view
@@ -81,7 +81,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
     end
 
     test "shows non-enumerating confirmation message on valid submission", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       html =
         view
@@ -97,7 +97,7 @@ defmodule OrigenWeb.PatientAccessLiveTest do
     end
 
     test "allows returning to the form to enter another email", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/access")
+      {:ok, view, _html} = live(conn, ~p"/paciente/acceso")
 
       # Submit valid email
       view

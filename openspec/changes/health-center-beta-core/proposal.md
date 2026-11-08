@@ -93,9 +93,10 @@ All items below belong to Sprint 3 (milestone 5). Integration is gated by every 
 - Parent [#284](https://github.com/Team-Origen/origen/issues/284): [Contract #321](https://github.com/Team-Origen/origen/issues/321); [Backend #322](https://github.com/Team-Origen/origen/issues/322); [Frontend #323](https://github.com/Team-Origen/origen/issues/323); [Integration and verification #324](https://github.com/Team-Origen/origen/issues/324).
 - Parent [#290](https://github.com/Team-Origen/origen/issues/290): [Contract #325](https://github.com/Team-Origen/origen/issues/325); [Integration and verification #326](https://github.com/Team-Origen/origen/issues/326).
 
-### Sprint 4 contract preparation
+### Sprint 4 operational lifecycle
 
 - Parent [#285](https://github.com/Team-Origen/origen/issues/285): [Contract #376](https://github.com/Team-Origen/origen/issues/376), implementation slice 10 of 17 / contract. [Operational lifecycle contract](../../../docs/sprints/sprint-4/contrato-285-ciclo-operativo-turno.md): documentation only; explicitly approved by the user, not implementation or integration evidence.
+- Parent [#285](https://github.com/Team-Origen/origen/issues/285): [Backend #377](https://github.com/Team-Origen/origen/issues/377), implementation slice 10 of 17 / backend. [Domain operations and verification evidence](../../../docs/booking/APPOINTMENT_LIFECYCLE.md) cover expiry, scoped cancellation, attendance and private operational history. Human implementation approval and complete parent integration remain separate.
 
 ## Success criteria
 

@@ -80,12 +80,12 @@ verifier_key = Application.fetch_env!(:origen, :bootstrap_admin_verifier_key)
 En la misma consola, ejecutá:
 
 ```elixir
-"http://localhost:4000/activate#invitation_id=#{professional.invitation_id}&token=#{professional.token}"
+"http://localhost:4000/activar#invitation_id=#{professional.invitation_id}&token=#{professional.token}"
 
-"http://localhost:4000/activate#invitation_id=#{secretary.invitation_id}&token=#{secretary.token}"
+"http://localhost:4000/activar#invitation_id=#{secretary.invitation_id}&token=#{secretary.token}"
 ```
 
-Abrí la **URL completa** que imprime cada expresión, incluyendo `#invitation_id=...&token=...`. Abrir solamente `http://localhost:4000/activate` no alcanza y mostrará `Activation unavailable`, porque no identifica ninguna invitación.
+Abrí la **URL completa** que imprime cada expresión, incluyendo `#invitation_id=...&token=...`. Abrir solamente `http://localhost:4000/activar` no alcanza y mostrará `Activation unavailable`, porque no identifica ninguna invitación.
 
 No publiques, subas ni pegues estos enlaces en tickets, PRs o chats: contienen un token de invitación.
 
@@ -120,7 +120,7 @@ Una invitación vence a las 24 horas y se usa una sola vez. Si todavía está pe
     verifier_key: verifier_key
   )
 
-"http://localhost:4000/activate#invitation_id=#{replacement.invitation_id}&token=#{replacement.token}"
+"http://localhost:4000/activar#invitation_id=#{replacement.invitation_id}&token=#{replacement.token}"
 ```
 
 La invitación anterior queda invalidada automáticamente.
