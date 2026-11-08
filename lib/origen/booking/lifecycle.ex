@@ -50,7 +50,6 @@ defmodule Origen.Booking.Lifecycle do
     else
       false -> {:error, :unauthorized}
       {:error, reason} -> {:error, reason}
-      _ -> {:error, :unauthorized}
     end
   end
 
