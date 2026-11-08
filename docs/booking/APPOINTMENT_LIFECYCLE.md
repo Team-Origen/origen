@@ -1,5 +1,12 @@
 # Appointment operational lifecycle
 
+Backend #377 implements expiry, authenticated cancellation, attendance outcomes
+and private operational history. Technical verification passed, including the
+final 950-test suite; human approval and complete parent integration are separate.
+See the verification record below for excluded checks and preserved failures.
+
+## T1 expiry
+
 T1 adds the `expired` operational state for unresolved `requested` appointments.
 
 A requested appointment expires when its `start_time` is reached. Expiry keeps
@@ -48,6 +55,13 @@ maps are not authorization evidence.
 - Every accepted cancellation stores `cancellation_origin` and
   `cancellation_reason` (patient reasons are `NULL`) and appends one minimized
   `appointment_cancelled` audit event in the same transaction.
+
+The public `DatabaseCalendar.get_daily_schedule/3` response keeps its existing
+`cancellation_policy` map keys (`cutoff_description`, `penalty_percentage`, and
+`penalty_description`). Its beta policy says that a patient may cancel strictly
+before the appointment starts, reports a zero penalty percentage, and does not
+promise an automatic penalty for cancellation or absence. It does not expose a
+historical D-1 cutoff or fine warning.
 
 Rejected authorization, timing, status, or reason checks do not invoke expiry,
 change occupancy, or write appointment metadata or audit rows.
@@ -105,6 +119,15 @@ Observed on the isolated `origen_test_377_lifecycle` database:
 | Changed-file formatting and `git diff --check` | Passed for each implementation unit |
 | Independent verification attempt 1 | Setup failed: scratch `mix` shim unresolved; zero tests/probes |
 | Independently authorized attempt 2 | Setup failed: credential helper and isolated executable resolution; zero tests/probes |
+| Independently authorized attempt 3 | 62 focused tests, 5 public probes and 2 concurrency probes passed; DB constraints/triggers inspected |
+| Public calendar policy correction | RED reproduced D-1/fine response; GREEN one new public regression and 62 existing lifecycle tests passed |
+| Initial expanded differential after policy correction | Both probes exit 0, but comparator failed and original payload was incorrect; superseded, not accepted as proof |
+| Limited comparator continuation | Exact payloads verified, but probe compilation failed before assertions; failure preserved |
+| Explicitly authorized scratch-preparation repair | One of two allowed adjustments used; true `3054fef`/current probes each exit 0 with 1 passed; deterministic comparison passed |
+| Independent policy-only recheck | Exit 0, 1 passed; prior D-1/fine finding fixed without repeating the broad review |
+| First complete suite after policy adjustment | Exit 2: 948/950 passed, 32 skipped, 8 excluded; two existing agenda fixtures used today's already-due times |
+| Final complete `mix test --seed 906340` after fixture correction | Exit 0: 950 passed, 32 skipped, 8 excluded |
+| Final changed-code format, whitespace and local Tracking links | Passed |
 
 The eight exclusions follow the existing `postgres_security` test configuration;
 they are not claimed as executed. Existing OTP 28 and deprecated legacy helper
@@ -112,11 +135,59 @@ warnings remain. No failed test is hidden by the successful full-suite result:
 the setup failures and corrected test-fixture failures are recorded in
 `odd/tasks/377-appointment-lifecycle-backend.md`.
 
-Independent runtime verification, the baseline/current differential comparison,
-and concurrency/migration probes remain **unverified** because verifier setup
-failed before execution. The implementation is not ready for approval or delivery
-on that evidence alone. A new attempt requires explicit human authorization;
-prior failures and correction limits remain recorded.
+The third independent attempt covered E1–E14, including exact expiry boundaries,
+rejection invariance, scope/privacy, immutable appointments and concurrent
+transitions. Its scratch probes initially had incorrect expectations/overlapping
+fixtures; those probes were corrected without changing application source, then
+passed. The earlier two preparation failures remain recorded with zero probes.
+Migration constraints and triggers were inspected; destructive rollback was not
+executed. Dropping populated cancellation metadata during an explicit rollback
+remains an advisory, not an executed operation or a new feature requirement.
+
+The public calendar policy contradiction was reproduced and corrected, then
+independently rechecked through its public regression (1 passed). The initial
+expanded differential comparator exhausted its local bound and used an incorrect
+original payload; those outputs were rejected as proof. A subsequent explicitly
+authorized continuation used correct payloads but failed compilation before
+executing assertions. Neither failure was silently retried or counted as a pass.
+
+After a further explicit human decision, the same worker repaired only temporary
+syntax and fixtures, using one of the two authorized preparation adjustments.
+Separate `git archive` payloads were checked against their commit source blobs:
+base `3054fefe3787b9161546db2994a78282bd94dfc9` had no expiry module, while current
+contained it and the corrected policy. Copied project build artifacts were
+cleaned to avoid loading current code into the baseline process. Both probes
+exited 0 and emitted deterministic JSON; the comparison passed.
+
+Unchanged public behavior covered future request acceptance/rejection,
+foreign-agenda and invalid-state errors, professional/patient occupancy for
+confirmed/reserved/cancelled appointments, approval configuration, valid and
+malformed reservation validation, and calendar slots/date/identity/specialty.
+Malformed validation contained the same complete errors with ordering differences
+only. The only intended differences were due requested appointments expiring
+rather than confirming/occupying, and the corrected public cancellation policy.
+Generated identifiers were projected to stable tokens; matching OTP warnings and
+all subprocess exit codes were retained.
+
+The first complete suite after the policy adjustment exposed two existing agenda
+accept/reject fixtures that used today's fixed UTC times. Those fixtures ceased
+to be future requests during later executions, so expiry correctly prevented
+confirmation/cancellation. Only those two existing test dates and agenda query
+dates were changed to tomorrow; production code, scenarios and assertions were
+not altered. A first focused recheck found a Date URI encoding error in that test
+adjustment; the same dates are now encoded with `Date.to_iso8601/1`.
+
+The final run repeated the original failing seed (`906340`) and passed all 950
+active tests. Its preceding location-filtered focused command selected one test
+(1 passed, 30 excluded); both corrected C12 scenarios were included in the full
+passing suite. Changed-code formatting, whitespace, and local OpenSpec Tracking
+links also passed. Previous failures and authorizations remain in the feature
+log; later successful evidence does not erase them.
+
+Backend implementation and technical verification for this slice are complete.
+No required technical check remains pending. The metadata rollback advisory is
+unchanged: do not treat a rollback that removes populated metadata columns as
+history-preserving. No such rollback was executed or authorized here.
 
 Human approval of this backend slice is **pending**. The approved #376 contract
 is not approval of the implementation. Domain tests do not certify the UI or
