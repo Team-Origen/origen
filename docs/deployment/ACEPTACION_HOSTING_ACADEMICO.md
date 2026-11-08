@@ -1,0 +1,78 @@
+# Preparación y aceptación del hosting académico — Origen
+
+**Estado: procedimiento preparado; despliegue y aceptación no ejecutados.** Este documento corresponde a la preparación de #397, hija de #292. Las comprobaciones reales, el despliegue y el registro de resultados pertenecen a #398; #275 es la única dependencia externa obligatoria indicada para #292. La primera entrega académica está prevista para **miércoles 11 de noviembre**; no se infiere el año. Es una entrega evaluable, **no** el despliegue definitivo de una empresa. La resolución de #275 prioriza alternativas gratuitas, pero deja la tecnología y los detalles técnicos a #292; no selecciona proveedor ni presupuesto. #290, #289, #291 y la finalización de las URL no son bloqueos del despliegue; cualquier funcionalidad no disponible se declara como límite, no se da por aprobada. Referencia de alcance: issues #397 y #292, y resolución comentada en #275.
+
+## Lectura rápida para revisión
+
+1. Resolver los datos **A definir** y obtener autorización humana para destino, operación y credenciales antes de acceder a un entorno remoto. Si faltan decisiones, conservar estado **bloqueado**.
+2. En #398, si se autoriza el entorno académico, preparar infraestructura y controles, desplegar la revisión identificada y ejecutar los casos de aceptación que sean realmente soportados. No sustituirlos por pruebas locales.
+3. Registrar evidencia sanitizada, incidencias, decisión de continuar o revertir y aprobación humana. Este texto no autoriza una puesta en producción ni habilita el bootstrap del primer Administrador en una release compilada para `:prod`.
+
+**Fuente de límites:** `config/runtime.exs`, `config/prod.exs`, `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`, `docs/PLAN_DE_SPRINTS.md`.
+
+## Límite de alcance verificable
+
+| Área | Qué puede exigirse en la primera entrega | Qué queda condicionado o diferido | Fuente |
+| --- | --- | --- | --- |
+| Acceso web | Comprobar llegada al origen HTTPS autorizado y carga de `/` después del despliegue real. | No afirmar disponibilidad de portal completo por el solo hecho de servir `/`. | `lib/origen_web/router.ex`; `config/runtime.exs`; `config/prod.exs` |
+| Identidad y permisos | Verificar los controles implementados con cuentas de prueba y rutas efectivamente publicadas. | No presentar como existentes un login web interno, un portal de Paciente o pantallas de agenda que no aparecen en el router actual. | `lib/origen_web/router.ex`; `lib/origen/sessions.ex`; `lib/origen_web/plugs/authenticate_internal_session.ex`; `lib/origen_web/plugs/require_internal_role.ex` |
+| Reserva autónoma | No es requisito de aceptación de hosting si todavía no está implementada. | Calendario, reserva por Paciente y aprobación manual corresponden al Sprint 5; no simularlos con escritura directa en base de datos. | `docs/PLAN_DE_SPRINTS.md` (Sprint 5) |
+| Primer Administrador | Documentar únicamente prerrequisitos y bloqueo; ninguna operación real en #397. | La aceptación de bootstrap en staging figura **preparada/no ejecutada**; el perfil local no valida staging ni producción. | `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`; `docs/deployment/TEAM_LOCAL_ACCOUNT_ACCEPTANCE.md`; `config/runtime.exs` |
+
+## Secuencia condicionada para #398
+
+### 1. Preparación: detenerse si falta un control
+
+- Identificar revisión de código, responsables de operación, seguridad y revisión independiente; registrar la autorización humana del **destino exacto**, el entorno, la operación y el canal autorizado de credenciales sin copiar valores protegidos. Confirmar si será una release `:prod` o un staging genuino; no usar `MIX_ENV=dev` como atajo para publicar una instancia. Fuente: `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`; `config/runtime.exs`.
+- Aprobar proveedor/plan y límites del servicio, origen y host HTTPS, terminación TLS y proxy, persistencia de PostgreSQL, copia de seguridad y prueba de restauración, redacción de logs/APM, observabilidad, acceso mínimo y procedimiento de reversión. No asumir que la configuración actual proporciona TLS directamente: el endpoint usa HTTP y `force_ssl` en producción interpreta `x-forwarded-proto`; verificar el proxy de confianza y el HTTPS externo antes de aceptar. Fuente: `config/runtime.exs`; `config/prod.exs`; `docs/PLAN_DE_SPRINTS.md` (alcance y gates de preproducción).
+- Planificar por separado roles de propietario, migrador, runtime y verificador. El script de provisión requiere variables protegidas y privilegios apropiados; concede al runtime inserción acotada en auditoría, no escritura indiscriminada, y la migración usa `SET ROLE` con `ORIGEN_OWNER_ROLE`. No ejecutar el script sin un plan de base y aprobación. Fuente: `priv/repo/security/provision_roles.sql`; `lib/origen/migration_repo.ex`; `mix.exs` (`ecto.security.migrate`).
+- Verificar cómo se suministrarán de forma protegida `DATABASE_URL`, `SECRET_KEY_BASE`, `PHX_HOST`, y, si corresponde, `ORIGEN_MIGRATION_DATABASE_URL` y `ORIGEN_OWNER_ROLE`. El host por defecto `example.com` no constituye una URL aprobada. `PHX_SERVER` habilita el servidor en release; `config/prod.exs` requiere el manifiesto de activos digeridos. Evitar `mix setup`/`ecto.reset` como receta de despliegue: incluyen operaciones de creación, seeds o borrado que no deben inferirse como seguras para datos persistentes. Fuente: `config/runtime.exs`; `config/prod.exs`; `mix.exs`.
+
+**Punto de control:** si alguno de los requisitos anteriores no tiene responsable, evidencia y reversión, no avanzar a despliegue ni registrar un `pass`.
+
+### 2. Despliegue inicial, solo tras autorización
+
+1. Preparar base persistente aislada, roles y permisos aprobados; tomar constancia de estado inicial y respaldo recuperable. Validar que migraciones se aplican con el rol migrador y que la aplicación opera con el rol runtime, sin compartir privilegios de propietario. Fuente: `priv/repo/security/provision_roles.sql`; `lib/origen/migration_repo.ex`; `config/runtime.exs`.
+2. Construir activos y release de la revisión aprobada mediante un procedimiento que el operador defina y ensaye en el entorno elegido; comprobar que el manifiesto requerido esté incluido. Definir arranque, proxy, verificación de salud y estrategia de reversión **antes** de ejecutar. No hay aquí un comando universal seguro para el proveedor aún no elegido. Fuente: `mix.exs` (`assets.deploy`, `releases`); `config/prod.exs`; `config/runtime.exs`; `rel/overlays/bin/origen_bootstrap_admin`.
+3. Comprobar por HTTPS host/origen correctos, ausencia de exposición del mailbox y dashboard de desarrollo, y que las rutas esperadas coinciden con el router de esa revisión. Conservar solo referencias sanitizadas a evidencias, nunca cabeceras de autorización, cookies o enlaces de activación. Fuente: `lib/origen_web/router.ex`; `config/prod.exs`; `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`.
+4. Ejecutar la matriz siguiente; marcar `bloqueado` o `no aplicable` con motivo verificable cuando falte un flujo de interfaz. El resultado `pass` exige observación real en el entorno autorizado, no solo lectura del código.
+
+### 3. Actualización o reversión, solo si hay despliegue previo
+
+1. Registrar versión actual y versión destino, compatibilidad de esquema, respaldo y procedimiento de restauración ensayado; aprobar ventana y responsables. Aplicar migraciones compatibles antes de cambiar tráfico solo si el plan específico lo permite. Nunca borrar datos/auditoría para «volver al estado anterior». Fuente: `mix.exs`; `priv/repo/security/provision_roles.sql`; `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md` (rollback no destructivo).
+2. Cambiar a la nueva versión según el mecanismo elegido y repetir accesibilidad, autenticación/permisos y persistencia; si una comprobación crítica falla, retirar exposición y seguir la reversión aprobada. No prometer reversión automática de migraciones ni restaurar sobre datos recientes sin decisión explícita. Fuente: `docs/PLAN_DE_SPRINTS.md` (Definition of Done); `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`.
+
+## Casos de aceptación para la ejecución real (#398)
+
+Registrar para cada caso: revisión, entorno autorizado, fecha/hora, responsable, referencia no sensible de evidencia, resultado `pass`/`fail`/`bloqueado`/`no aplicable`, motivo y decisión. Usar datos sintéticos; no guardar identificadores personales, credenciales, tokens, URL completas de activación ni capturas con datos protegidos. Fuente: `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md` (worksheet); `config/config.exs` (parámetros filtrados).
+
+| Caso | Acción condicionada | Resultado esperado / criterio de bloqueo | Fuente |
+| --- | --- | --- | --- |
+| A1 — acceso | Abrir `/` en el origen HTTPS aprobado y comprobar certificado, host, redirección y respuesta. Probar HTTP solo según el plan de ingress autorizado. | Inicio accesible por HTTPS sin destino incorrecto; si no hay TLS/proxy validado, `bloqueado`. Cargar `/` no demuestra autenticación ni reservas. | `lib/origen_web/router.ex`; `config/runtime.exs`; `config/prod.exs` |
+| A2 — superficies | Intentar acceder a `/dev/mailbox` y `/dev/dashboard` desde el exterior y comprobar solo las rutas realmente publicadas en esa compilación. | Superficies de desarrollo no expuestas; si aparecen, `fail` y retirar exposición. | `lib/origen_web/router.ex` (`dev_routes`); `config/prod.exs` |
+| I1 — cuenta interna | Si existe entrada de autenticación en la revisión desplegada, intentar acceder con cuenta interna de prueba pendiente/inactiva y luego activa mediante el flujo autorizado. | Pendiente/inactiva no obtiene sesión; activa solo tras autenticación válida. En el router leído no existe pantalla de login: sin flujo real verificable, `bloqueado`, no `pass`. | `lib/origen/sessions.ex`; `lib/origen_web/router.ex`; `docs/CONTEXT.md` |
+| I2 — sesión | Si se expone un recurso interno protegido, probar sesión ausente, inválida, revocada y caducada; comprobar cierre e inactividad con métodos autorizados. | Denegación sin datos protegidos; sesión válida activa conserva únicamente permisos de su rol. Si no hay recurso publicado para el ensayo, `bloqueado`. | `lib/origen/sessions.ex`; `lib/origen_web/plugs/authenticate_internal_session.ex` |
+| P1 — permisos | En una ruta de prueba realmente disponible, probar acceso del rol autorizado, de otro rol y sin sesión; incluir acceso por URL directa, no solo navegación de UI. | El rol no autorizado no modifica ni ve datos; denegación en backend. La ruta demo `/configuracion/profesional` está condicionada a compilación no productiva y bandera de demo: no usarla para declarar permisos productivos aprobados. | `lib/origen_web/router.ex`; `lib/origen_web/plugs/require_internal_role.ex`; `docs/PLAN_DE_SPRINTS.md` (DoD) |
+| D1 — persistencia | Con flujo soportado y datos sintéticos, crear un registro autorizado, reiniciar/actualizar según el plan y volver a leerlo con el rol permitido; contrastar el respaldo/restauración de forma aislada. | El dato persiste, la auditoría aplicable se conserva y un rol sin permiso no lo altera. Si no existe operación segura soportada o prueba de restauración, `bloqueado`; no insertar a mano para simular funcionalidad. | `lib/origen/repo.ex`; `priv/repo/security/provision_roles.sql`; `docs/PLAN_DE_SPRINTS.md` (DoD) |
+
+## Primer Administrador: requisitos, no instrucción para producción
+
+El comando de release `bin/origen_bootstrap_admin` invoca la misma operación de bootstrap, pero su existencia **no** autoriza su uso: `config/runtime.exs` deshabilita el bootstrap en `:prod` y deja la entrega de invitaciones deshabilitada por defecto. El recorrido local de `docs/deployment/TEAM_LOCAL_ACCOUNT_ACCEPTANCE.md` utiliza `:dev`, mailbox y base aislada; no prueba entrega real ni debe copiarse a hosting. Fuente: `rel/overlays/bin/origen_bootstrap_admin`; `lib/origen/bootstrap_admin/gate.ex`; `config/runtime.exs`; ambas guías citadas.
+
+Si #398 requiere bootstrap en staging no productivo, detenerse hasta contar con: autorización específica y confirmador distinto del solicitante para destino/entorno exactos; origen HTTPS aprobado; proveedor con cola cifrada, TTL y accesos auditados; entradas de activación/callback protegidas; antifraude de repetición multinodo con afinidad o almacenamiento compartido y política de poda; prueba canario sin secretos, responsable de revocación, desactivación y revisión independiente. Entrega fallida exige revocar y emitir invitación nueva tras aprobación nueva; nunca reutilizar ni reintentar ambiguamente un token. La guía actual declara aceptación staging **preparada/no ejecutada** y replay node-local sin poda: no convertir esta lista en un `pass` por omisión. Fuente: `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`; `openspec/changes/secure-bootstrap-invitation-delivery/proposal.md`.
+
+## A definir antes de decidir una ejecución
+
+- A definir: en #292, proveedor y plan viable, restricciones del servicio, costo residual y responsable; para #398, autorización explícita del destino, la operación y el canal de credenciales. #275 confirmó la fecha, no estas decisiones.
+- A definir: revisión a desplegar, modalidad del entorno (release `:prod` frente a staging separado), nombre de dominio/origen, TLS/proxy, política de ingreso, disponibilidad y monitoreo.
+- A definir: base de datos y roles autorizados, persistencia y respaldo/restauración, migraciones, mecanismo de despliegue/actualización y reversión ensayada.
+- A definir: flujos disponibles en la revisión de #398 y cuentas sintéticas autorizadas para I1/I2/P1/D1; evidencia de correo real solo si se aprueba un proveedor y se satisfacen los controles de staging. #290, #289, #291 y las URL pendientes no bloquean el despliegue.
+- A definir: cómo contrastar con la versión vigente los archivos solicitados pero **ausentes en esta rama**: `openspec/changes/health-center-beta-core/proposal.md`, `design.md`, `specs/beta-boundaries/spec.md`; `docs/sprints/GUIA_TRABAJO_BETA.md`; `docs/deployment/TEAM_STAFF_INVITATION.md`. No atribuirles criterios que no se pudieron leer.
+
+## Riesgos y límites de la preparación
+
+- Un `pass` de compilación o de acceso a `/` no demuestra autenticación, permisos, durabilidad ni aceptación académica. El router leído solo publica inicio, activación y callback de proveedor, más rutas de desarrollo condicionadas; validar funciones agregadas en la revisión final. Fuente: `lib/origen_web/router.ex`.
+- `PHX_HOST` tiene valor de ejemplo; el servidor HTTP y la confianza en `x-forwarded-proto` requieren revisión de infraestructura. El mailer base es local y la configuración de entrega de bootstrap está deshabilitada: no declarar correo transaccional listo. Fuente: `config/runtime.exs`; `config/prod.exs`; `config/config.exs`.
+- Exponer activación, proveedor o logs sin los controles del runbook puede filtrar enlaces o permitir replay. Ante evidencia incompleta, negar el paso, preservar auditoría y escalar; nunca activar bootstrap productivo ni compartir secretos para «desbloquear» la entrega. Fuente: `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`.
+
+## Aprobación
