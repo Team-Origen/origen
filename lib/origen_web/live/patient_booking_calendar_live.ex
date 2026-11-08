@@ -322,6 +322,11 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:patient}
+      active="book"
+      patient_profile={@current_patient_profile}
+    />
     <div class="min-h-screen bg-[#F6F6F4] py-8 px-4 sm:px-6 lg:px-8">
       <div class="max-w-4xl mx-auto space-y-6">
         <div class="bg-white rounded-xl shadow-sm border border-stone-200 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">

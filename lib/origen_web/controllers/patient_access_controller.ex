@@ -22,7 +22,7 @@ defmodule OrigenWeb.PatientAccessController do
         |> put_session(@session_key, email)
         |> put_session(:patient_authenticated_at, DateTime.to_iso8601(DateTime.utc_now()))
         |> put_flash(:info, "Acceso verificado exitosamente.")
-        |> redirect(to: ~p"/")
+        |> redirect(to: ~p"/paciente/turnos/reservar")
 
       {:error, :invalid_or_expired} ->
         conn
@@ -34,6 +34,19 @@ defmodule OrigenWeb.PatientAccessController do
   def verify(conn, _params) do
     conn
     |> put_flash(:error, "Enlace de acceso no provisto.")
+    |> redirect(to: ~p"/paciente/acceso")
+  end
+
+  @doc """
+  Signs out the current browser's patient session without terminating any
+  coexisting internal session. Patient sessions use signed cookies; this does
+  not revoke copied cookies or patient sessions on other devices.
+  """
+  def delete(conn, _params) do
+    conn
+    |> delete_session(:patient_email)
+    |> delete_session(:patient_authenticated_at)
+    |> configure_session(renew: true)
     |> redirect(to: ~p"/paciente/acceso")
   end
 end

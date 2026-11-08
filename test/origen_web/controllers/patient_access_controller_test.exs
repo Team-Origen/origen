@@ -1,6 +1,8 @@
 defmodule OrigenWeb.PatientAccessControllerTest do
   use OrigenWeb.ConnCase
 
+  import Phoenix.LiveViewTest
+
   alias Origen.PatientAccess
   alias Origen.PatientAccess.MagicLink
   alias Origen.Patients
@@ -13,8 +15,75 @@ defmodule OrigenWeb.PatientAccessControllerTest do
     :ok
   end
 
+  describe "POST /paciente/cerrar-sesion" do
+    test "clears patient authentication, preserves internal session and denies subsequent patient access",
+         %{conn: conn} do
+      %{rows: [[id]]} =
+        Repo.query!("""
+        INSERT INTO internal_accounts (email, role, state, password_hash, totp_secret, activated_at)
+        VALUES ('patient-logout-staff@example.test', 'professional', 'active', 'hash', decode('0102030405', 'hex'), clock_timestamp())
+        RETURNING id
+        """)
+
+      {:ok, %{token: token}} = Origen.Sessions.create_session(id)
+
+      conn =
+        init_test_session(conn, %{
+          patient_email: @valid_email,
+          patient_authenticated_at: DateTime.to_iso8601(DateTime.utc_now()),
+          internal_session_token: token,
+          unrelated: "preserved"
+        })
+
+      conn = post(conn, "/paciente/cerrar-sesion")
+
+      assert redirected_to(conn) == "/paciente/acceso"
+      assert get_session(conn, :patient_email) == nil
+      assert get_session(conn, :patient_authenticated_at) == nil
+      assert get_session(conn, :internal_session_token) == token
+      assert get_session(conn, :unrelated) == "preserved"
+      assert {:ok, %{account_id: ^id}} = Origen.Sessions.fetch_session(token)
+
+      for path <- ["/paciente/turnos/reservar", "/paciente/telefono/verificar"] do
+        assert {:error, {:redirect, %{to: "/paciente/acceso"}}} =
+                 live(recycle(conn), path)
+      end
+
+      assert html_response(get(recycle(conn), "/profesional/ajustes"), 200)
+    end
+
+    test "logout is idempotent when no patient session exists", %{conn: conn} do
+      conn =
+        conn |> init_test_session(%{unrelated: "preserved"}) |> post("/paciente/cerrar-sesion")
+
+      assert redirected_to(conn) == "/paciente/acceso"
+      assert get_session(conn, :patient_email) == nil
+      assert get_session(conn, :patient_authenticated_at) == nil
+      assert get_session(conn, :unrelated) == "preserved"
+    end
+
+    test "logout rejects POST without CSRF and cannot be invoked by GET", %{conn: conn} do
+      protected =
+        conn
+        |> init_test_session(%{patient_email: @valid_email})
+        |> put_private(:plug_skip_csrf_protection, false)
+
+      assert_raise Plug.CSRFProtection.InvalidCSRFTokenError, fn ->
+        post(protected, "/paciente/cerrar-sesion")
+      end
+
+      rejected_get =
+        conn
+        |> init_test_session(%{patient_email: @valid_email})
+        |> get("/paciente/cerrar-sesion")
+
+      assert response(rejected_get, 404)
+      assert get_session(rejected_get, :patient_email) == @valid_email
+    end
+  end
+
   describe "GET /paciente/acceso/verificar" do
-    test "authenticates session and redirects to / on valid token", %{conn: conn} do
+    test "authenticates session and redirects to reservation on valid token", %{conn: conn} do
       assert {:ok, :delivered} = PatientAccess.request_magic_link(@valid_email)
 
       raw_token =
@@ -28,7 +97,7 @@ defmodule OrigenWeb.PatientAccessControllerTest do
 
       conn = get(conn, ~p"/paciente/acceso/verificar?token=#{raw_token}")
 
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/paciente/turnos/reservar"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Acceso verificado exitosamente"
       assert get_session(conn, :patient_email) == @valid_email
 

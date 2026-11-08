@@ -45,7 +45,10 @@ defmodule OrigenWeb.InternalSessionControllerTest do
         "totp_code" => code
       })
 
-    assert redirected_to(conn) == "/"
+    assert redirected_to(conn) == "/profesional/agenda"
+    assert get_resp_header(conn, "cache-control") == ["no-store"]
+    assert get_resp_header(conn, "referrer-policy") == ["no-referrer"]
+    assert html_response(get(recycle(conn), redirected_to(conn)), 200)
     token = get_session(conn, @session_key)
     assert is_binary(token)
     assert get_session(conn, :session_fixation_marker) == nil
@@ -54,6 +57,37 @@ defmodule OrigenWeb.InternalSessionControllerTest do
 
     protected_conn = conn |> recycle() |> get("/profesional/ajustes")
     assert html_response(protected_conn, 200)
+  end
+
+  for {role, destination} <- [
+        secretary: "/secretaria/pacientes",
+        administrator: "/administrador/cuentas"
+      ] do
+    test "POST /login sends #{role} directly to its implemented landing screen", %{conn: conn} do
+      account = create_activated_account(unquote(role))
+
+      conn =
+        conn
+        |> init_test_session(%{session_fixation_marker: "discard-me"})
+        |> post(https("/login"), %{
+          "identifier" => account.email,
+          "password" => account.password,
+          "totp_code" => NimbleTOTP.verification_code(account.seed),
+          "role" => "professional",
+          "return_to" => "/profesional/agenda"
+        })
+
+      assert redirected_to(conn) == unquote(destination)
+      assert get_session(conn, :session_fixation_marker) == nil
+
+      assert {:ok, %{account_id: id, role: role}} =
+               Sessions.fetch_session(get_session(conn, @session_key))
+
+      assert id == account.id
+      assert role == unquote(role)
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
+      assert html_response(get(recycle(conn), unquote(destination)), 200)
+    end
   end
 
   test "POST /login fails opaquely without creating or storing a session", %{conn: conn} do

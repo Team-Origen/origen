@@ -63,7 +63,7 @@ defmodule OrigenWeb.UrlMigrationTest do
       end
 
     response = get(conn, "/access/verify?" <> URI.encode_query(%{"token" => token}))
-    assert redirected_to(response) == "/"
+    assert redirected_to(response) == "/paciente/turnos/reservar"
     assert get_session(response, :patient_email) == email
     replay = conn |> recycle() |> get("/access/verify?" <> URI.encode_query(%{"token" => token}))
     assert redirected_to(replay) == "/paciente/acceso"

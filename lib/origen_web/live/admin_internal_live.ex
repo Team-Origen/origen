@@ -19,9 +19,10 @@ defmodule OrigenWeb.AdminInternalLive do
 
   @impl true
   def mount(_params, session, socket) do
+    resolved_user = resolve_session_user(session)
+
     current_user =
-      resolve_session_user(session) ||
-        normalize_user(session["current_user"] || session[:current_user])
+      resolved_user || normalize_user(session["current_user"] || session[:current_user])
 
     current_user =
       if current_user == nil and Application.get_env(:origen, :env) == :dev do
@@ -38,6 +39,7 @@ defmodule OrigenWeb.AdminInternalLive do
       {:ok,
        socket
        |> assign(:current_user, current_user)
+       |> assign(:secretary_identity, resolved_user && resolved_user["navigation_identity"])
        |> assign(:form, to_form(new_changeset(), as: :form))
        |> assign(:result, nil)
        |> assign(:allowed_roles, allowed_roles)}
@@ -160,7 +162,19 @@ defmodule OrigenWeb.AdminInternalLive do
 
     with token when is_binary(token) <- token,
          {:ok, internal_session} <- Origen.Sessions.touch_session(token) do
-      %{"id" => internal_session.account_id, "role" => to_string(internal_session.role)}
+      identity =
+        if internal_session.role == :secretary do
+          case Accounts.get_own_navigation_identity(internal_session) do
+            {:ok, identity} -> identity
+            {:error, _} -> nil
+          end
+        end
+
+      %{
+        "id" => internal_session.account_id,
+        "role" => to_string(internal_session.role),
+        "navigation_identity" => identity
+      }
     else
       _ -> nil
     end
@@ -195,6 +209,11 @@ defmodule OrigenWeb.AdminInternalLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={if @current_user["role"] == "secretary", do: :secretary, else: :administrator}
+      active="accounts"
+      secretary_identity={@secretary_identity}
+    />
     <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md lg:max-w-3xl xl:max-w-4xl w-full bg-white border border-[#E2E8F0] rounded-lg shadow-[0px_4px_12px_rgba(23,75,99,0.05)] p-8 lg:p-14 font-inter">
         <div class="mb-8">

@@ -51,11 +51,19 @@ defmodule OrigenWeb.SecretaryPatientLive do
     gender: :string
   }
 
+  defp secretary_identity(principal) do
+    case Origen.Accounts.get_own_navigation_identity(principal) do
+      {:ok, identity} -> identity
+      {:error, _} -> nil
+    end
+  end
+
   @impl true
   def mount(_params, _session, socket) do
     if socket.assigns.current_role == :secretary do
       {:ok,
        socket
+       |> assign(:secretary_identity, secretary_identity(socket.assigns.current_internal_session))
        |> assign(:page_title, "Pacientes")
        |> assign(:doc_options, @doc_options)
        |> assign(:gender_options, @gender_options)
@@ -845,6 +853,11 @@ defmodule OrigenWeb.SecretaryPatientLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:secretary}
+      active="patients"
+      secretary_identity={@secretary_identity}
+    />
     <main class="min-h-screen bg-page dark:bg-gray-950 py-6 text-text dark:text-gray-100 sm:py-10">
       <.container max_width="xl">
         <div class="flex flex-col gap-6 sm:gap-8">

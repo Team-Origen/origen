@@ -429,6 +429,11 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     assigns = assign(assigns, visible_catalog: visible_catalog(assigns))
 
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:professional}
+      active="settings"
+      professional_identity={@current_professional_identity}
+    />
     <main data-theme="light" class="min-h-screen bg-page py-6 text-text sm:py-10">
       <.container max_width="xl">
         <div
@@ -447,18 +452,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                 Preferencias operativas de la práctica profesional.
               </.text_muted>
             </div>
-
-            <.button
-              id="back-to-agenda-button"
-              type="button"
-              icon="hero-arrow-left"
-              color="gray"
-              variant="outline"
-              disabled
-              aria-disabled="true"
-            >
-              Volver a Agenda
-            </.button>
           </header>
 
           <section

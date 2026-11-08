@@ -43,6 +43,27 @@ defmodule Origen.Accounts do
           expires_at: DateTime.t()
         }
 
+  @doc "Returns only the authenticated Secretary's own email for account navigation."
+  @spec get_own_navigation_identity(map()) ::
+          {:ok, %{email: String.t() | nil}} | {:error, :unauthenticated | :unavailable}
+  def get_own_navigation_identity(%{session_id: session_id, account_id: account_id})
+      when is_integer(session_id) and is_integer(account_id) do
+    Repo.transaction(fn ->
+      with {:ok, %{account_id: owner_id, role: :secretary}} <-
+             Sessions.revalidate_principal(session_id, account_id),
+           {:ok, %{rows: [[email]]}} <-
+             Repo.query("SELECT email FROM internal_accounts WHERE id = $1", [owner_id]) do
+        %{email: email}
+      else
+        _ -> Repo.rollback(:unauthenticated)
+      end
+    end)
+  rescue
+    _ -> {:error, :unavailable}
+  end
+
+  def get_own_navigation_identity(_), do: {:error, :unauthenticated}
+
   @doc """
   Creates a pending professional or secretary account and its first invitation atomically.
 

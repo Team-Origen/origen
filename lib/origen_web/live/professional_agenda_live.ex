@@ -339,6 +339,11 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:professional}
+      active="agenda"
+      professional_identity={@current_professional_identity}
+    />
     <div class="min-h-screen bg-[#F6F6F4] py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
       <div class="max-w-4xl mx-auto space-y-6">
         <!-- Mensajes de resultado de la resolución de solicitudes -->

@@ -72,7 +72,9 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
     end
   end
 
-  test "renders the settings navbar first with an honestly disabled agenda action", %{conn: conn} do
+  test "keeps agenda navigation only in the shared navbar, not the settings content", %{
+    conn: conn
+  } do
     {:ok, view, _html} = live(conn, @path)
 
     assert has_element?(
@@ -81,13 +83,10 @@ defmodule OrigenWeb.ProfessionalAvailabilityLiveTest do
              "Ajustes"
            )
 
-    assert has_element?(
-             view,
-             ~s|#back-to-agenda-button[type="button"][disabled][aria-disabled="true"]:not([href]):not([phx-click])|,
-             "Volver a Agenda"
-           )
-
-    assert has_element?(view, "#back-to-agenda-button .hero-arrow-left")
+    refute has_element?(view, "#back-to-agenda-button")
+    refute has_element?(view, "#professional-settings-content button", "Volver a Agenda")
+    assert has_element?(view, "#role-navigation a[href='/profesional/agenda']", "Agenda")
+    assert has_element?(view, "#nav-settings[aria-current='page']", "Ajustes")
   end
 
   test "prioritizes profile then agenda and consultation types before infrequently changed settings",

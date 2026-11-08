@@ -206,7 +206,7 @@ defmodule OrigenWeb.PatientBookingIntegrationTest do
     assert {:ok, :delivered} = PatientAccess.request_magic_link(email)
     token = receive_magic_token!(email)
     conn = get(build_conn(), ~p"/paciente/acceso/verificar?token=#{token}")
-    assert redirected_to(conn) == ~p"/"
+    assert redirected_to(conn) == ~p"/paciente/turnos/reservar"
     assert get_session(conn, :patient_email) == email
     conn
   end
