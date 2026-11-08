@@ -53,6 +53,67 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     assert_logout(view, "Profesional")
   end
 
+  test "secretary navigation retains patients and only offers notices for future sections", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(internal_conn(conn, "secretary"), "/secretaria/pacientes")
+    assert_sticky_nav(view, "secretary")
+    assert has_element?(view, "#nav-patients[href='/secretaria/pacientes'][aria-current='page']")
+    assert has_element?(view, "#nav-agenda[phx-click]", "Agenda")
+    assert has_element?(view, "#nav-summary[phx-click]", "Resumen económico")
+    refute has_element?(view, "#role-navigation a[href='/administrador/cuentas']")
+    assert has_element?(view, "#persona-search-form")
+    assert has_element?(view, "#navigation-secretary-avatar", "S")
+    assert has_element?(view, "#navigation-secretary-role", "Secretaría")
+    assert has_element?(view, "#navigation-secretary-name", "Secretaría")
+    assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
+    assert_logout(view, "Secretaría")
+  end
+
+  test "secretary account design and own email also appear on existing accounts screen", %{
+    conn: conn
+  } do
+    conn = internal_conn(conn, "secretary")
+    {:ok, view, _html} = live(conn, "/administrador/cuentas")
+    assert has_element?(view, "#navigation-secretary-avatar", "S")
+    assert has_element?(view, "#navigation-secretary-role", "Secretaría")
+    assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
+    assert_logout(view, "Secretaría")
+  end
+
+  test "synthetic account identity cannot expose a secretary's persisted email", %{conn: conn} do
+    real_conn = internal_conn(conn, "secretary")
+    {:ok, principal} = Sessions.fetch_session(get_session(real_conn, :internal_session_token))
+
+    forged_conn =
+      init_test_session(build_conn(), %{
+        current_user: %{"id" => principal.account_id, "role" => "secretary"}
+      })
+
+    {:ok, view, _} = live(forged_conn, "/administrador/cuentas")
+    assert has_element?(view, "#navigation-secretary-name", "Secretaría")
+    refute has_element?(view, "#navigation-secretary-email")
+    refute has_element?(view, "#navigation-account-options", "nav-secretary@example.test")
+  end
+
+  test "administrator navigation only links to accounts and preserves its form", %{conn: conn} do
+    {:ok, view, _html} = live(internal_conn(conn, "administrator"), "/administrador/cuentas")
+    assert_sticky_nav(view, "administrator")
+
+    assert has_element?(
+             view,
+             "#nav-accounts[href='/administrador/cuentas'][aria-current='page']",
+             "Cuentas"
+           )
+
+    assert has_element?(view, "#role-navigation a", "Cuentas")
+    refute has_element?(view, "#nav-agenda")
+    refute has_element?(view, "#nav-patients")
+    refute has_element?(view, "#nav-summary")
+    assert has_element?(view, "form[phx-submit='save']")
+    assert_logout(view)
+  end
+
   test "navbar logout invalidates the existing session and protected access", %{conn: conn} do
     conn = internal_conn(conn, "professional")
     token = get_session(conn, :internal_session_token)
@@ -98,7 +159,7 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     assert has_element?(view, "#navigation-future-notice[hidden]", "Próximo en implementar")
   end
 
-  defp assert_logout(view, label) do
+  defp assert_logout(view, label \\ "Mi cuenta") do
     assert has_element?(
              view,
              "#navigation-account-menu button[data-pc-dropdown-trigger].pc-button--white",
