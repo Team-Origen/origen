@@ -142,6 +142,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar role={:patient} patient_profile={@current_patient_profile} />
     <div class="min-h-screen flex items-center justify-center bg-[#F6F6F4] py-12 px-4 sm:px-6 lg:px-8 font-inter">
       <div class="max-w-md w-full bg-white border border-[#AFBAB4]/40 rounded-xl shadow-[0px_4px_20px_rgba(10,56,71,0.06)] p-8 sm:p-10">
         <%= if @state == :verified do %>

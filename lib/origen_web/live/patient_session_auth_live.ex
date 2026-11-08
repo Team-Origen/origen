@@ -20,7 +20,7 @@ defmodule OrigenWeb.PatientSessionAuthLive do
 
     case Patients.verify_patient_session(email, authenticated_at) do
       {:ok, profile} ->
-        {:cont, assign(socket, :current_patient_profile, profile)}
+        {:cont, assign(socket, :current_patient_profile, Origen.Repo.preload(profile, :persona))}
 
       {:error, _reason} ->
         {:halt, redirect(socket, to: "/paciente/acceso")}

@@ -1,7 +1,7 @@
 defmodule OrigenWeb.RoleNavigationLiveTest do
   use OrigenWeb.LiveViewCase
 
-  alias Origen.{Repo, Sessions}
+  alias Origen.{Patients, Repo, Sessions}
 
   test "professional navigation connects real sections and keeps subpages active", %{conn: conn} do
     conn = internal_conn(conn, "professional")
@@ -112,6 +112,62 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     refute has_element?(view, "#nav-summary")
     assert has_element?(view, "form[phx-submit='save']")
     assert_logout(view)
+  end
+
+  test "patient navigation connects existing screens without internal logout or fake destinations",
+       %{conn: conn} do
+    email = "navbar-patient@example.test"
+
+    {:ok, _} =
+      Patients.complete_profile(email, %{
+        first_name: "Ana",
+        last_name: "Pérez",
+        document_type: "dni",
+        document_number: "43999371",
+        birthdate: ~D[1990-01-01],
+        phone: "+5491133445566"
+      })
+
+    conn =
+      init_test_session(conn, %{
+        patient_email: email,
+        patient_authenticated_at: DateTime.to_iso8601(DateTime.utc_now())
+      })
+
+    for {path, active} <- [
+          {"/paciente/turnos/reservar", true},
+          {"/paciente/telefono/verificar", false}
+        ] do
+      {:ok, view, _html} = live(conn, path)
+      assert_sticky_nav(view, "patient")
+      assert has_element?(view, "#nav-book[href='/paciente/turnos/reservar']", "Reservar turno")
+      assert has_element?(view, "#nav-turns[phx-click]", "Mis turnos")
+      assert has_element?(view, "#nav-book[aria-current='page']") == active
+      refute has_element?(view, "#role-navigation a[href='/paciente/turnos']")
+      refute has_element?(view, "#role-navigation form[action='/logout']")
+
+      assert has_element?(
+               view,
+               "#navigation-account-menu button[data-pc-dropdown-trigger]",
+               "Ana Pérez"
+             )
+
+      assert has_element?(view, "#navigation-patient-avatar", "AP")
+      assert has_element?(view, "#navigation-patient-role", "Paciente")
+      assert has_element?(view, "#navigation-patient-name", "Ana Pérez")
+      assert has_element?(view, "#navigation-patient-email", email)
+      refute has_element?(view, "#navigation-account-menu", "43999371")
+      refute has_element?(view, "#navigation-account-menu", "+5491133445566")
+
+      assert has_element?(
+               view,
+               "#navigation-account-menu form[action='/paciente/cerrar-sesion'][method='post']"
+             )
+
+      assert has_element?(view, "#navigation-account-menu input[name='_csrf_token']")
+      assert has_element?(view, "#navigation-account-menu button[type='submit']", "Cerrar sesión")
+      refute has_element?(view, "#nav-settings")
+    end
   end
 
   test "navbar logout invalidates the existing session and protected access", %{conn: conn} do
