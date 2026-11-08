@@ -122,4 +122,3 @@ Human approval of this backend slice is **pending**. The approved #376 contract
 is not approval of the implementation. Domain tests do not certify the UI or
 complete integration of #285, whose #284 dependency remains separate. No GitHub
 publication or issue closure is recorded by this implementation.
-
