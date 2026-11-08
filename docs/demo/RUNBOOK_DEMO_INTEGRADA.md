@@ -132,11 +132,11 @@ Para realizar la presentación interactiva en el navegador ante los profesores:
 
 | Paso | Acción en UI | URL | Datos de entrada (Ficticios) | Resultado visual esperado |
 | :---: | :--- | :--- | :--- | :--- |
-| **1** | **Acceso Paciente** | `http://localhost:4000/access` | Email: `carlos.docente@example.test` | Pantalla de confirmación "Revisá tu correo". |
-| **2** | **Capturar Magic Link** | `http://localhost:4000/dev/mailbox` | Buscar correo a `carlos.docente@example.test` | Clic en el enlace de acceso (`/access/verify?token=...`). Sesión de paciente iniciada. |
+| **1** | **Acceso Paciente** | `http://localhost:4000/paciente/acceso` | Email: `carlos.docente@example.test` | Pantalla de confirmación "Revisá tu correo". |
+| **2** | **Capturar Magic Link** | `http://localhost:4000/dev/mailbox` | Buscar correo a `carlos.docente@example.test` | Clic en el enlace de acceso (`/paciente/acceso/verificar?token=...`). Sesión de paciente iniciada. |
 | **3** | **Completar Perfil** | `http://localhost:4000/patient/profile/complete` | Nombre: `Carlos`, Apellido: `Pérez`, DNI: `35111222`, Nacimiento: `1989-10-10`, Tel: `+5491144556677` | Perfil guardado. Estado: `completed` (teléfono aún no verificado). |
-| **4** | **Verificar Teléfono** | `http://localhost:4000/patient/phone/verify` | Clic en "Enviar código". Abrir `/dev/mailbox`, leer código de 6 dígitos e ingresar. | Badge verde "Teléfono verificado". Habilitado para reservar. |
-| **5** | **Reservar Turno** | `http://localhost:4000/patient/calendar` | Elegir fecha hábil futura (>24h), seleccionar horario (ej. 10:00) y presionar "Confirmar Turno". | Tarjeta verde de confirmación con Turno ID, estado `reserved`, duración 30 min y precio en ARS. |
+| **4** | **Verificar Teléfono** | `http://localhost:4000/paciente/telefono/verificar` | Clic en "Enviar código". Abrir `/dev/mailbox`, leer código de 6 dígitos e ingresar. | Badge verde "Teléfono verificado". Habilitado para reservar. |
+| **5** | **Reservar Turno** | `http://localhost:4000/paciente/turnos/reservar` | Elegir fecha hábil futura (>24h), seleccionar horario (ej. 10:00) y presionar "Confirmar Turno". | Tarjeta verde de confirmación con Turno ID, estado `reserved`, duración 30 min y precio en ARS. |
 | **6** | **Visualizar en Agenda** | `http://localhost:4000/profesional/agenda` | Iniciar sesión como Profesional (previa creación de sesión o en IEx). | Agenda diaria muestra el turno en 10:00 - 10:30, paciente "Carlos Pérez", DNI 35111222 y badge "Reservado". |
 
 ---
@@ -205,7 +205,7 @@ ORDER BY id DESC LIMIT 5;
 - [ ] Base de datos limpia e inicializada con `mix ecto.reset`.
 - [ ] Servidor corriendo en puerto 4000 (`mix phx.server`).
 - [ ] Pestañas del navegador abiertas:
-  - `http://localhost:4000/access` (Acceso paciente).
+  - `http://localhost:4000/paciente/acceso` (Acceso paciente).
   - `http://localhost:4000/dev/mailbox` (Buzón local de desarrollo).
   - `http://localhost:4000/profesional/agenda` (Agenda profesional).
 - [ ] Terminal lista para ejecutar `mix test test/origen/integration/` y demostrar la suite automatizada.

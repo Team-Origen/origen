@@ -39,7 +39,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
 
   describe "mount/3 and rendering" do
     test "renders phone verification screen with masked phone and input", %{conn: conn} do
-      {:ok, _view, html} = live(conn, ~p"/patient/phone/verify")
+      {:ok, _view, html} = live(conn, ~p"/paciente/telefono/verificar")
 
       assert html =~ "Verificar Teléfono"
       assert html =~ "+54...5566"
@@ -51,7 +51,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
 
   describe "real-time validation (phx-change)" do
     test "filters out non-numeric characters and limits to 6 digits", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/phone/verify")
+      {:ok, view, _html} = live(conn, ~p"/paciente/telefono/verificar")
 
       html =
         view
@@ -69,7 +69,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
     } do
       {:ok, _} = Patients.request_phone_verification(profile, @valid_phone, code: @fixed_code)
 
-      {:ok, view, _html} = live(conn, ~p"/patient/phone/verify")
+      {:ok, view, _html} = live(conn, ~p"/paciente/telefono/verificar")
 
       html =
         view
@@ -88,7 +88,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
     test "shows friendly error when code is incorrect", %{conn: conn, profile: profile} do
       {:ok, _} = Patients.request_phone_verification(profile, @valid_phone, code: @fixed_code)
 
-      {:ok, view, _html} = live(conn, ~p"/patient/phone/verify")
+      {:ok, view, _html} = live(conn, ~p"/paciente/telefono/verificar")
 
       html =
         view
@@ -104,7 +104,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
     } do
       {:ok, _} = Patients.request_phone_verification(profile, @valid_phone, code: @fixed_code)
 
-      {:ok, view, _html} = live(conn, ~p"/patient/phone/verify")
+      {:ok, view, _html} = live(conn, ~p"/paciente/telefono/verificar")
 
       view
       |> form("#phone-verification-form", verification: %{"code" => "111111"})
@@ -126,7 +126,7 @@ defmodule OrigenWeb.PatientPhoneVerificationLiveTest do
 
   describe "resend code (phx-click)" do
     test "requests a new challenge and displays info message", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/phone/verify")
+      {:ok, view, _html} = live(conn, ~p"/paciente/telefono/verificar")
 
       html = view |> element("button", "Reenviar nuevo código a mi correo") |> render_click()
 

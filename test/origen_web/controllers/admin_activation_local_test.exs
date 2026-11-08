@@ -64,17 +64,19 @@ defmodule OrigenWeb.AdminActivationLocalTest do
 
     {exchange_conn, exchange_log} =
       capture_result_log(fn ->
-        post(conn, https(~p"/admin/activate/exchange"), %{
+        post(conn, https(~p"/administrador/activar/intercambiar"), %{
           "invitation_id" => fragment["invitation_id"],
           "token" => fragment["token"]
         })
       end)
 
-    assert redirected_to(exchange_conn) == ~p"/admin/activate"
+    assert redirected_to(exchange_conn) == ~p"/administrador/activar"
     nonce = get_session(exchange_conn, :admin_activation_nonce)
 
     {page_conn, render_log} =
-      capture_result_log(fn -> exchange_conn |> recycle() |> get(https(~p"/admin/activate")) end)
+      capture_result_log(fn ->
+        exchange_conn |> recycle() |> get(https(~p"/administrador/activar"))
+      end)
 
     page_body = html_response(page_conn, 200)
     seed = totp_seed_from_page(page_body)
@@ -84,7 +86,7 @@ defmodule OrigenWeb.AdminActivationLocalTest do
       capture_result_log(fn ->
         page_conn
         |> recycle()
-        |> post(https(~p"/admin/activate"), %{
+        |> post(https(~p"/administrador/activar"), %{
           "password" => password,
           "password_confirmation" => password,
           "totp_code" => NimbleTOTP.verification_code(seed)
@@ -140,7 +142,7 @@ defmodule OrigenWeb.AdminActivationLocalTest do
 
   defp endpoint_config do
     %{
-      activation_origin: "https://127.0.0.1:4443/admin/activate",
+      activation_origin: "https://127.0.0.1:4443/administrador/activar",
       endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false},
       certificate_file: "cert",
       certificate_key_file: "cert-key",

@@ -11,7 +11,7 @@ defmodule Origen.PatientAccess.Email do
   """
   def magic_link(email, raw_token, opts \\ []) do
     origin = Keyword.get(opts, :origin, "http://localhost:4000")
-    link = "#{origin}/access/verify?token=#{URI.encode_www_form(raw_token)}"
+    link = "#{origin}/paciente/acceso/verificar?token=#{URI.encode_www_form(raw_token)}"
 
     new()
     |> to(email)

@@ -23,7 +23,7 @@ defmodule OrigenWeb.PatientSessionAuthLive do
         {:cont, assign(socket, :current_patient_profile, profile)}
 
       {:error, _reason} ->
-        {:halt, redirect(socket, to: "/access")}
+        {:halt, redirect(socket, to: "/paciente/acceso")}
     end
   end
 

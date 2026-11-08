@@ -131,7 +131,7 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
     alias Origen.BootstrapAdmin.Local.Origin
 
     {:ok, origin} =
-      Origin.validate("https://127.0.0.1:4443/admin/activate", %{
+      Origin.validate("https://127.0.0.1:4443/administrador/activar", %{
         scheme: :https,
         ip: {127, 0, 0, 1},
         port: 4443,
@@ -161,7 +161,7 @@ defmodule Origen.BootstrapAdmin.Local.EndpointTest do
 
   defp local_config do
     %{
-      activation_origin: "https://127.0.0.1:4443/admin/activate",
+      activation_origin: "https://127.0.0.1:4443/administrador/activar",
       endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false},
       certificate_file: "/synthetic/cert.pem",
       certificate_key_file: "/synthetic/key.pem",

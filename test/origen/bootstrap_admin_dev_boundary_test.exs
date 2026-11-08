@@ -69,7 +69,7 @@ if Mix.env() == :dev do
         profile: :local,
         channel: :source_checkout,
         destination: "public-boundary-canary@example.test",
-        activation_origin: "https://127.0.0.1:4443/admin/activate",
+        activation_origin: "https://127.0.0.1:4443/administrador/activar",
         endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false},
         mailer: Origen.Mailer,
         adapter: Swoosh.Adapters.Local,

@@ -33,6 +33,14 @@ defmodule OrigenWeb.Router do
     get "/login", InternalSessionController, :new
     post "/login", InternalSessionController, :create
     post "/logout", InternalSessionController, :delete
+    get "/activar", InternalActivationController, :new
+    post "/activar/intercambiar", InternalActivationController, :exchange
+    post "/activar", InternalActivationController, :create
+    get "/administrador/activar", AdminActivationController, :new
+    post "/administrador/activar/intercambiar", AdminActivationController, :exchange
+    post "/administrador/activar", AdminActivationController, :create
+
+    # Keep credential-bearing invitations on the same handlers, never redirect POSTs.
     get "/activate", InternalActivationController, :new
     post "/activate/exchange", InternalActivationController, :exchange
     post "/activate", InternalActivationController, :create
@@ -40,15 +48,21 @@ defmodule OrigenWeb.Router do
     post "/admin/activate/exchange", AdminActivationController, :exchange
     post "/admin/activate", AdminActivationController, :create
 
-    live "/admin/internal", AdminInternalLive, :index
+    get "/admin/internal", LegacyUrlController, :accounts
+    get "/access", LegacyUrlController, :access
+    get "/patient/calendar", LegacyUrlController, :booking
+    get "/patient/phone/verify", LegacyUrlController, :phone
+
+    live "/administrador/cuentas", AdminInternalLive, :index
     live "/secretaria/pacientes", SecretaryPatientLive, :index
-    live "/access", PatientAccessLive, :index
+    live "/paciente/acceso", PatientAccessLive, :index
+    get "/paciente/acceso/verificar", PatientAccessController, :verify
     get "/access/verify", PatientAccessController, :verify
 
     live_session :patient_access,
       on_mount: [{OrigenWeb.PatientSessionAuthLive, :ensure_authenticated}] do
-      live "/patient/phone/verify", PatientPhoneVerificationLive, :index
-      live "/patient/calendar", PatientBookingCalendarLive, :index
+      live "/paciente/telefono/verificar", PatientPhoneVerificationLive, :index
+      live "/paciente/turnos/reservar", PatientBookingCalendarLive, :index
     end
 
     live_session :patient_profile_edit,
@@ -65,14 +79,16 @@ defmodule OrigenWeb.Router do
       live "/agenda", ProfessionalAgendaLive, :index
       live "/agenda/crear", ProfessionalPatientSelectionLive, :index
     end
+
+    live "/ajustes", ConsultationTypeCatalogLive
+    live "/ajustes/perfil", ProfessionalProfileLive
   end
 
   scope "/configuracion", OrigenWeb do
     pipe_through [:browser, :require_internal_session, :require_professional]
 
-    live "/profesional", ConsultationTypeCatalogLive
-
-    live "/profesional/perfil", ProfessionalProfileLive
+    get "/profesional", LegacyUrlController, :settings
+    get "/profesional/perfil", LegacyUrlController, :profile
   end
 
   scope "/api/bootstrap", OrigenWeb do

@@ -5,7 +5,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
   alias Origen.{Availability, ConsultationTypes, Patients, ProfessionalProfiles, Sessions}
   alias Origen.Appointments.{Calendar, DatabaseCalendar}
 
-  @settings "/configuracion/profesional"
+  @settings "/profesional/ajustes"
   @editor @settings <> "/perfil"
   @profile %{
     "first_name" => "Sofía",
@@ -115,7 +115,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     refute has_element?(summary, "#profile-patient-preview", "PRIVADA-001/X")
 
     patient_conn = patient_conn!()
-    {:ok, calendar, html} = live(patient_conn, "/patient/calendar")
+    {:ok, calendar, html} = live(patient_conn, "/paciente/turnos/reservar")
     assert html =~ "Sofía Martínez - Cardiología"
     assert html =~ "Consulta integrada (60 min)"
     refute html =~ "PRIVADA-001/X"
@@ -153,7 +153,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     |> form("#profile-form", profile: Map.put(@profile, "specialty", ""))
     |> render_submit()
 
-    {:ok, without_profile, _} = live(patient_conn, "/patient/calendar")
+    {:ok, without_profile, _} = live(patient_conn, "/paciente/turnos/reservar")
 
     refute has_element?(
              without_profile,
@@ -171,7 +171,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     assert {:ok, _} = ConsultationTypes.get_own_configuration(principal)
     editor = open_editor(conn)
     editor |> form("#profile-form", profile: @profile) |> render_submit()
-    {:ok, calendar, _} = live(patient_conn!(), "/patient/calendar")
+    {:ok, calendar, _} = live(patient_conn!(), "/paciente/turnos/reservar")
     assert has_element?(calendar, "#professional-form option[value='#{principal.account_id}']")
 
     assert has_element?(
@@ -192,7 +192,7 @@ defmodule OrigenWeb.ProfessionalProfileIntegrationTest do
     editor = open_editor(conn)
     editor |> form("#profile-form", profile: @profile) |> render_submit()
     Application.put_env(:origen, :consultation_type_catalog_adapter, UnavailableCatalog)
-    {:ok, calendar, _} = live(patient_conn!(), "/patient/calendar")
+    {:ok, calendar, _} = live(patient_conn!(), "/paciente/turnos/reservar")
 
     assert has_element?(
              calendar,

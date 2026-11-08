@@ -4,7 +4,7 @@ defmodule Origen.BootstrapAdmin.Local.OriginTest do
   alias Origen.BootstrapAdmin.Local.Origin
 
   @endpoint %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false}
-  @origin "https://127.0.0.1:4443/admin/activate"
+  @origin "https://127.0.0.1:4443/administrador/activar"
 
   test "accepts only the literal loopback HTTPS activation origin" do
     assert {:ok, origin} = Origin.validate(@origin, @endpoint)
@@ -27,15 +27,15 @@ defmodule Origen.BootstrapAdmin.Local.OriginTest do
 
   test "rejects all non-literal origin variants" do
     invalid = [
-      "http://127.0.0.1:4443/admin/activate",
-      "https://localhost:4443/admin/activate",
-      "https://127.0.0.1/admin/activate",
-      "https://127.0.0.1:4444/admin/activate",
-      "https://user@127.0.0.1:4443/admin/activate",
-      "https://127.0.0.1:4443/admin/activate/",
-      "https://127.0.0.1:4443/admin/activate?next=x",
-      "https://127.0.0.1:4443/admin/activate#fragment",
-      "https://127.0.0.1%3A4443/admin/activate",
+      "http://127.0.0.1:4443/administrador/activar",
+      "https://localhost:4443/administrador/activar",
+      "https://127.0.0.1/administrador/activar",
+      "https://127.0.0.1:4444/administrador/activar",
+      "https://user@127.0.0.1:4443/administrador/activar",
+      "https://127.0.0.1:4443/administrador/activar/",
+      "https://127.0.0.1:4443/administrador/activar?next=x",
+      "https://127.0.0.1:4443/administrador/activar#fragment",
+      "https://127.0.0.1%3A4443/administrador/activar",
       "https://127.0.0.1:4443/admin\\activate"
     ]
 

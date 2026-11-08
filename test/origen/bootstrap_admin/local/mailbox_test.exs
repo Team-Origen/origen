@@ -11,7 +11,7 @@ defmodule Origen.BootstrapAdmin.Local.MailboxTest do
 
     Application.put_env(:origen, :bootstrap_admin_local, %{
       destination: "student@example.test",
-      activation_origin: "https://127.0.0.1:4443/admin/activate",
+      activation_origin: "https://127.0.0.1:4443/administrador/activar",
       endpoint: %{scheme: :https, ip: {127, 0, 0, 1}, port: 4443, http: false}
     })
 

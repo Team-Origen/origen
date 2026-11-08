@@ -115,7 +115,7 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             </div>
             <.button
               link_type="a"
-              to="/configuracion/profesional"
+              to="/profesional/ajustes"
               icon="hero-arrow-left"
               color="gray"
               variant="outline"
@@ -132,7 +132,7 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             <strong>No se pudo cargar el perfil.</strong>
             No se muestra información parcial.
             <:actions>
-              <.button id="profile-retry" link_type="a" to="/configuracion/profesional/perfil">
+              <.button id="profile-retry" link_type="a" to="/profesional/ajustes/perfil">
                 Reintentar carga
               </.button>
             </:actions>
