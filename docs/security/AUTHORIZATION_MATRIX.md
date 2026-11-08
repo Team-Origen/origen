@@ -2,7 +2,7 @@
 
 > **Estado:** Draft — pending independent review
 >
-> **Versión del documento:** `0.6-draft`
+> **Versión del documento:** `0.7-draft`
 >
 > **Base histórica aprobada:** versión `0.4`, validada por el equipo el 2026-08-24; esa aprobación no se extiende a los cambios de `0.5-draft` ni `0.6-draft`.
 >
@@ -51,6 +51,12 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | S1-12 | Crear de forma asistida un turno para un Paciente del centro | Denegar | Denegar | Condicional/alcance — `BOOK-02` | Denegar | No aplica | RF-02, RF-05, RF-06, RF-08, RF-10, RF-23 |
 | S1-13 | Crear un turno para un Paciente ya relacionado | Denegar | Condicional/alcance — `BOOK-03` | Denegar | Denegar | No aplica | RF-05, RF-08, RF-10, RF-23 |
 | S1-14 | Consultar la agenda propia | Denegar | Condicional/alcance — `AGENDA-01` | Denegar | Denegar | No aplica | RF-05, RF-10 |
+| S4-01 | Cancelar solicitud o turno propio antes del inicio | Denegar | Denegar | Denegar | Condicional/alcance — `LIFE-01` | No aplica | #377 / E3–E6 |
+| S4-02 | Cancelar un turno de la agenda propia con motivo | Denegar | Condicional/alcance — `LIFE-02` | Denegar | Denegar | No aplica | #377 / E7, E9–E10 |
+| S4-03 | Cancelar un turno de cualquier agenda con motivo | Denegar | Denegar | Condicional/alcance — `LIFE-03` | Denegar | No aplica | #377 / E8–E9 |
+| S4-04 | Consultar historial operativo propio | Denegar | Denegar | Denegar | Condicional/alcance — `LIFE-04` | No aplica | #377 / E6, E13 |
+| S4-05 | Consultar historial operativo de la agenda propia | Denegar | Condicional/alcance — `LIFE-05` | Denegar | Denegar | No aplica | #377 / E10, E13 |
+| S4-06 | Consultar historial operativo del centro | Denegar | Denegar | Condicional/alcance — `LIFE-06` | Denegar | No aplica | #377 / E8, E13 |
 
 ### Condiciones y alcances
 
@@ -77,6 +83,12 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | `BOOK-02` | Secretaría autenticada con cuenta `Activa` puede buscar Pacientes del centro, crear o reutilizar su Persona y perfil y reservar de forma asistida, incluso con perfil incompleto. Debe respetar identidad mínima, unicidad, disponibilidad y los estados por actor y fecha de RF-10. El primer turno exitoso crea atómicamente relación, turno, snapshots y auditoría; un fallo no crea relación. |
 | `BOOK-03` | Profesional autenticado con cuenta `Activa`; el Paciente ya pertenece a su lista permitida. No puede navegar el registro global ni usar un identificador para alcanzar a un Paciente ajeno. Valida disponibilidad y conserva sin simplificar los estados por actor y fecha de RF-10. |
 | `AGENDA-01` | Profesional autenticado con cuenta `Activa`; el backend deriva el perfil profesional de la sesión y devuelve únicamente sus propios turnos. No acepta un identificador manipulable como ampliación de alcance. |
+| `LIFE-01` | Paciente autenticado por una sesión de acceso revalidada; el backend deriva el perfil propio y permite cancelar solo sus turnos `requested` o `confirmed` estrictamente antes del inicio. No acepta rol o identificador de paciente enviado por el cliente. |
+| `LIFE-02` | Profesional autenticado mediante `Origen.Sessions.revalidate_principal/2`; el backend deriva su cuenta y limita la cancelación a su agenda. El motivo no puede estar en blanco y la regla no impone la frontera temporal del Paciente. |
+| `LIFE-03` | Secretaría autenticada mediante `Origen.Sessions.revalidate_principal/2`; puede cancelar turnos `requested` o `confirmed` de cualquier agenda con motivo no blanco. No concede aceptación o rechazo de solicitudes de #284. |
+| `LIFE-04` | Paciente autenticado; la consulta aplica `WHERE patient_profile_id = perfil_revalidado` y devuelve turnos propios, incluidos `expired` y `cancelled`, sin revelar agendas ajenas. |
+| `LIFE-05` | Profesional autenticado; la consulta aplica `WHERE professional_account_id = cuenta_revalidada`, incluso cuando comparte Paciente con otra agenda. |
+| `LIFE-06` | Secretaría autenticada; la consulta conserva el alcance operativo del centro. Administrador no obtiene acceso implícito a ninguna de estas operaciones. |
 
 ## Pruebas mínimas de autorización
 
@@ -126,7 +138,7 @@ Quedan fuera de esta versión la representación de Pacientes, ausencias y feria
 
 La versión histórica `0.4` cerró los gaps de autorización de su alcance: `S1-05` quedó resuelta como un canal público condicionado por demostración de posesión del número, sin permiso derivado de rol y bajo default deny fuera de `TEL-02`. El equipo aprobó y validó integralmente esa versión el 2026-08-24; esa aprobación documental no acredita implementación ni ejecución de pruebas.
 
-La versión actual `0.6-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda y reservas, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
+La versión actual `0.7-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda, reservas y ciclo operativo, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
 
 ## Cambio, versionado y revisión
 
@@ -141,6 +153,7 @@ La versión actual `0.6-draft`, incluidas las condiciones agregadas para acceso,
 
 | Versión | Fecha | Estado | Cambio |
 | --- | --- | --- | --- |
+| `0.7-draft` | 2026-10-24 | Draft — pending independent review | Agrega cancelación autenticada e historial operativo SQL-acotado de #377 para Paciente, Profesional y Secretaría; exige motivo no blanco al personal, conserva default deny para Administrador y registra pruebas de alcance. No acredita implementación ni ejecución de pruebas. |
 | `0.6-draft` | 2026-09-02 | Draft — pending independent review | Amplía el alcance de demo con acceso y perfil propio de Paciente, verificación telefónica propia, tipo y disponibilidad propios del Profesional, primera reserva autónoma o asistida, reserva relacionada del Profesional y agenda propia. Define que solo la persistencia atómica exitosa crea la relación y agrega pruebas mínimas positivas y negativas. No acredita implementación ni pruebas ejecutadas. |
 | `0.5-draft` | 2026-09-02 | Draft — pending independent review | Agrega `APP-01` como autoridad de aprobación distinta, explicita el límite transaccional acotado y registra que la aceptación de staging está preparada/no ejecutada. No acredita correo, credenciales, despliegue ni bootstrap real. |
 | `0.4` | 2026-08-24 | Aprobada — validada por el equipo | Aprobación humana explícita e integral del contenido de `0.4-draft`, sin ampliar permisos ni modificar el default deny, las condiciones, los alcances o las pruebas mínimas. La aprobación documental no acredita implementación ni ejecución de pruebas. |

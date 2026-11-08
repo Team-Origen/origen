@@ -21,6 +21,8 @@ defmodule Origen.Booking.Appointment do
     field :start_time, :utc_datetime_usec
     field :end_time, :utc_datetime_usec
     field :status, :string, default: "reserved"
+    field :cancellation_origin, :string
+    field :cancellation_reason, :string
 
     # Snapshots históricos inmutables (#63)
     field :snapshot_consultation_type_name, :string
@@ -42,6 +44,8 @@ defmodule Origen.Booking.Appointment do
       :start_time,
       :end_time,
       :status,
+      :cancellation_origin,
+      :cancellation_reason,
       :snapshot_consultation_type_name,
       :snapshot_duration_minutes,
       :snapshot_exact_price_ars
