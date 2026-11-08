@@ -1,6 +1,6 @@
 # Evidence: patient booking integration (#308)
 
-Status: human acceptance recorded on 2026-11-07; CI verification reopened after the reported failures. Calendar fixture correction is locally verified, but full local suites have additional varying failures. Updated GitHub CI is pending; not merge-ready.
+Status: human acceptance recorded on 2026-11-07; reported CI fixture failure corrected and verified by successful GitHub CI on both corrected-source heads. Distinct local full-suite failures remain documented. Required reviews and ordered delivery remain pending; no merge performed.
 
 ## Scope and criterion mapping
 
@@ -48,6 +48,7 @@ The reproduced cause was a test fixture date assumption, not adapter leakage or 
 - Same-seed diagnostic job-15: exit 2, **918/919 passed, 32 skipped, 8 excluded**, but a different availability LiveView token initialization failed with `{:error, :invalid}`; the prior professional booking failure did not recur. No production root cause was established, and no unrelated authorization/token behavior was changed.
 - Isolated first-slice full suite job-16: exit 2, seed `902208`, **914/916 passed, 32 skipped, 8 excluded**; two other failures involved internal login (422 instead of 302) and restoring professional profile completeness. Original nine calendar failures were absent here too.
 - These failing full-suite results remain failures, not green proof. The previous 918-pass run is historical evidence and is not substituted for the new candidate. Updated GitHub CI on each corrected head is required before merge-readiness; no more local full-suite reruns are planned for this correction.
+- Remote GREEN observed after correction: PR #418 at `ca5b778`, [CI 42427155874](https://github.com/Team-Origen/origen/actions/runs/42427155874), and PR #419 at `145ce9f`, [CI 42427158852](https://github.com/Team-Origen/origen/actions/runs/42427158852): branch/issue validation, secret scan and build/tests all **SUCCESS**. Background watcher exit codes were `[0, 0]`; final PR readback confirmed all same-head checks successful. This supersedes earlier pending-CI statements, not the recorded local failures. The PRs still require applicable independent review; the final slice must target `develop` only after its predecessor is merged. No merge or retarget was performed.
 
 ## Test coverage added
 
