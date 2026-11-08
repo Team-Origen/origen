@@ -102,7 +102,7 @@ defmodule Origen.BootstrapAdmin.AuthorizationAuditTest do
 
     for unsafe <- [
           "token-value",
-          "https://approved-host/admin/activate#secret",
+          "https://approved-host/administrador/activar#secret",
           String.duplicate("x", 129)
         ] do
       assert {:error, :invalid_event} =

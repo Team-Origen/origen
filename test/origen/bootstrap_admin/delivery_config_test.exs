@@ -33,7 +33,7 @@ defmodule Origen.BootstrapAdmin.DeliveryConfigTest do
              DeliveryConfig.validate(%{
                enabled: true,
                environment: "staging",
-               activation_origin: "https://approved-host/admin/activate",
+               activation_origin: "https://approved-host/administrador/activar",
                approved_hosts: ["approved-host"]
              })
   end
@@ -50,7 +50,7 @@ defmodule Origen.BootstrapAdmin.DeliveryConfigTest do
     %{
       enabled: true,
       environment: "staging",
-      activation_origin: "https://approved-host/admin/activate",
+      activation_origin: "https://approved-host/administrador/activar",
       approved_hosts: ["approved-host"],
       from: "bootstrap@approved-host",
       adapter: Origen.TestSupport.BootstrapAdmin.NonRetainingAdapter,

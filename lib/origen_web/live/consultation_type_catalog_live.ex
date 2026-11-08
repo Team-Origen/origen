@@ -536,7 +536,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                     <.button
                       id="profile-entry-action"
                       link_type="a"
-                      to="/configuracion/profesional/perfil"
+                      to="/profesional/ajustes/perfil"
                       icon="hero-user-circle"
                     >
                       Ver perfil

@@ -105,10 +105,10 @@ defmodule Origen.Integration.DemoRunbookVerificationTest do
       routes = OrigenWeb.Router.__routes__()
       paths = Enum.map(routes, & &1.path)
 
-      assert "/access" in paths
+      assert "/paciente/acceso" in paths
       assert "/patient/profile/complete" in paths
-      assert "/patient/phone/verify" in paths
-      assert "/patient/calendar" in paths
+      assert "/paciente/telefono/verificar" in paths
+      assert "/paciente/turnos/reservar" in paths
       assert "/profesional/agenda" in paths
     end
   end

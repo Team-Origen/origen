@@ -274,7 +274,7 @@ defmodule Origen.BootstrapAdmin.IssueAndDeliverTest do
       Origen.BootstrapAdmin.DeliveryConfig.validate(%{
         enabled: true,
         environment: "staging",
-        activation_origin: "https://approved-host/admin/activate",
+        activation_origin: "https://approved-host/administrador/activar",
         approved_hosts: ["approved-host"],
         from: "bootstrap@approved-host",
         adapter: Origen.TestSupport.BootstrapAdmin.NonRetainingAdapter,
