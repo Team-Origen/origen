@@ -22,6 +22,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Booking.ProfessionalPatientSelection
   alias Origen.Booking.Expiry
+  alias Origen.Booking.Lifecycle
   alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.ReservationResponse
@@ -175,6 +176,12 @@ defmodule Origen.Booking do
 
   @doc "Expires due requested appointments and keeps their rows as history."
   defdelegate expire_due_requested(opts \\ []), to: Expiry
+
+  @doc "Cancels an appointment through a revalidated patient or internal principal."
+  defdelegate cancel_appointment(principal, appointment_id, attrs \\ []), to: Lifecycle
+
+  @doc "Returns operational history scoped in SQL to the revalidated principal."
+  defdelegate list_appointment_history(principal, opts \\ %{}), to: Lifecycle, as: :history
 
   @doc """
   Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).

@@ -2,10 +2,13 @@ defmodule Origen.TestSupport.AppointmentLifecycleFixtures do
   alias Ecto.Adapters.SQL
   alias Origen.Booking.Appointment
   alias Origen.Repo
+  alias Origen.Sessions
 
   def create! do
-    professional_id = internal_account!("lifecycle-prof")
-    other_professional_id = internal_account!("lifecycle-other-prof")
+    professional_id = internal_account!("lifecycle-prof", "professional")
+    other_professional_id = internal_account!("lifecycle-other-prof", "professional")
+    secretary_id = internal_account!("lifecycle-secretary", "secretary")
+    admin_id = internal_account!("lifecycle-admin", "administrator")
     patient_id = patient_profile!("lifecycle-patient")
     other_patient_id = patient_profile!("lifecycle-other-patient")
     consultation_type_id = Ecto.UUID.generate()
@@ -23,6 +26,8 @@ defmodule Origen.TestSupport.AppointmentLifecycleFixtures do
     %{
       professional_id: professional_id,
       other_professional_id: other_professional_id,
+      secretary_id: secretary_id,
+      admin_id: admin_id,
       patient_id: patient_id,
       other_patient_id: other_patient_id,
       consultation_type_id: consultation_type_id
@@ -49,6 +54,19 @@ defmodule Origen.TestSupport.AppointmentLifecycleFixtures do
     |> Repo.insert!()
   end
 
+  def professional_principal(fixture), do: internal_principal!(fixture.professional_id)
+  def secretary_principal(fixture), do: internal_principal!(fixture.secretary_id)
+  def admin_principal(fixture), do: internal_principal!(fixture.admin_id)
+
+  def patient_principal(fixture) do
+    email =
+      SQL.query!(Repo, "SELECT email FROM patient_profiles WHERE id = $1", [fixture.patient_id]).rows
+      |> hd()
+      |> hd()
+
+    %{patient_email: email, patient_authenticated_at: DateTime.utc_now()}
+  end
+
   def audit_events_for(appointment_id) do
     SQL.query!(
       Repo,
@@ -62,16 +80,21 @@ defmodule Origen.TestSupport.AppointmentLifecycleFixtures do
     ).rows
   end
 
-  defp internal_account!(label) do
+  defp internal_principal!(account_id) do
+    {:ok, %{token: token, session: session}} = Sessions.create_session(account_id)
+    Map.put(session, :token, token)
+  end
+
+  defp internal_account!(label, role) do
     SQL.query!(
       Repo,
       """
       INSERT INTO public.internal_accounts
         (email, role, state, password_hash, totp_secret, activated_at, created_at, updated_at)
-      VALUES ($1, 'professional', 'active', 'hash', decode('0102', 'hex'), clock_timestamp(), clock_timestamp(), clock_timestamp())
+      VALUES ($1, $2, 'active', 'hash', decode('0102', 'hex'), clock_timestamp(), clock_timestamp(), clock_timestamp())
       RETURNING id
       """,
-      ["#{label}-#{System.unique_integer([:positive])}@example.test"]
+      ["#{label}-#{System.unique_integer([:positive])}@example.test", role]
     ).rows
     |> hd()
     |> hd()
