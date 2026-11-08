@@ -169,6 +169,27 @@ defmodule OrigenWeb.SecretaryBookingIntegrationTest do
       # El slot 09:00 ya no se ofrece en la grilla reactiva ni en una nueva consulta al calendario
       refute has_element?(view, ~s(button[phx-click="select_slot"][phx-value-time="09:00"]))
       assert has_element?(view, ~s(button[phx-click="select_slot"][phx-value-time="09:30"]))
+
+      second_start = DateTime.new!(ctx.future_date, ~T[09:30:00], "Etc/UTC")
+
+      assert {:ok, second_result} =
+               AssistedBooking.reserve(ctx.secretary.id, ctx.patient.id, %{
+                 professional_id: ctx.prof_auto.id,
+                 consultation_type_id: ctx.prof_auto.type_id,
+                 start_time: second_start
+               })
+
+      assert second_result.status == :confirmed
+
+      assert Repo.get_by!(Appointment,
+               patient_profile_id: ctx.patient.id,
+               professional_account_id: ctx.prof_auto.id,
+               start_time: second_start
+             ).id != appt.id
+
+      assert Repo.get!(ProfessionalPatientRelationship, rel.id).first_appointment_id == appt.id
+      assert Repo.aggregate(Appointment, :count, :id) == 2
+      assert Repo.aggregate(ProfessionalPatientRelationship, :count, :id) == 1
     end
 
     test "respeta modalidad manual (requested vs confirmed según subconfiguración) y crea relación sin habilitar aprobación/rechazo a Secretaría",

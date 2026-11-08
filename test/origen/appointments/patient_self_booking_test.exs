@@ -119,6 +119,37 @@ defmodule Origen.Appointments.PatientSelfBookingTest do
     assert counts() == before
   end
 
+  test "repeat booking rejections preserve the original appointment and relationship", ctx do
+    assert {:ok, first} = BookingService.reserve(ctx.patient, params(ctx))
+
+    original_appointment = Repo.get!(Appointment, first.appointment_id)
+
+    original_relationship =
+      Repo.get_by!(ProfessionalPatientRelationship,
+        professional_account_id: ctx.professional_id,
+        patient_profile_id: ctx.patient.id
+      )
+
+    foreign_professional = insert_professional!("foreign-repeat-self-booking@example.test")
+    insert_professional_profile!(foreign_professional)
+    insert_agenda!(foreign_professional, "automatic")
+    foreign_type = insert_consultation_type!(foreign_professional)
+    before = counts()
+
+    for {attempt, reason} <- [
+          {params(ctx), :overlap_detected},
+          {params(ctx, slot: %{start_time: ~T[13:00:00]}), :invalid_slot_time},
+          {params(ctx, consultation_type_id: foreign_type), :consultation_type_not_found}
+        ] do
+      assert {:error, ^reason} = BookingService.reserve(ctx.patient, attempt)
+      assert counts() == before
+      assert Repo.get!(Appointment, original_appointment.id) == original_appointment
+
+      assert Repo.get!(ProfessionalPatientRelationship, original_relationship.id) ==
+               original_relationship
+    end
+  end
+
   test "forces the profile argument as identity and rejects a collision at the service boundary",
        ctx do
     forged_params = Map.put(params(ctx), :patient_profile_id, ctx.other_patient.id)

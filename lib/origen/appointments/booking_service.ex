@@ -234,7 +234,10 @@ defmodule Origen.Appointments.BookingService do
       patient_profile_id: appointment.patient_profile_id,
       first_appointment_id: appointment.id
     })
-    |> Repo.insert()
+    |> Repo.insert(
+      on_conflict: :nothing,
+      conflict_target: [:professional_account_id, :patient_profile_id]
+    )
     |> case do
       {:ok, _relationship} ->
         :ok
