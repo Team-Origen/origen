@@ -1,6 +1,6 @@
 # Contrato de aceptación de entrega beta
 
-> **Estado:** contrato aprobado en [#325](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891) para la versión `c59cf6b`; entrega y ejecución pendientes.
+> **Estado:** contrato aprobado en [#325](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891) para la versión `c59cf6b` y publicado por [PR #408](https://github.com/Team-Origen/origen/pull/408); ejecución de la entrega beta pendiente.
 > **Alcance:** definir evidencia de entrega, no implementar ni certificar la aplicación.
 > **Ejecución de aceptación:** no ejecutada por esta tarea. Ningún resultado está aprobado.
 
@@ -26,10 +26,10 @@ La aprobación de #325 autoriza el contrato, no despliegue, cierre de #290 ni ac
 | --- | --- |
 | [#266 — Wayfinder](https://github.com/Team-Origen/origen/issues/266) | Alcance aprobado; el orden de implementación no excluye capacidades. |
 | [#290 — Artefacto de aceptación](https://github.com/Team-Origen/origen/issues/290) | Padre del contrato y de su verificación documental. |
-| [#325 — Reglas y contrato](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891) | Acuerdo explícito sobre estos criterios para `c59cf6b`; publicación pendiente. |
-| [#326 — Verificación documental](https://github.com/Team-Origen/origen/issues/326) | Etapa posterior; no ejecutada en esta tarea. |
-| [#274 — Identidad visual](https://github.com/Team-Origen/origen/issues/274) | Decisión abierta, sin nombre, logo, paleta ni tipografía elegidos aquí. |
-| [#275 — Hosting y condiciones](https://github.com/Team-Origen/origen/issues/275) | Decisión abierta sobre proveedor, presupuesto y condiciones docentes. |
+| [#325 — Reglas y contrato](https://github.com/Team-Origen/origen/issues/325#issuecomment-6499068891) | Criterios aprobados para `c59cf6b` y publicados en `develop` por PR #408. |
+| [#326 — Verificación documental](https://github.com/Team-Origen/origen/issues/326) | Verifica por separado la definición; no acredita la entrega final. |
+| [#274 — Identidad visual](https://github.com/Team-Origen/origen/issues/274#issuecomment-6691979001) | Decisión registrada y cerrada; los recursos se incorporaron por #416. Contrastar su aplicación y el manual, sin darla por aceptada aquí. |
+| [#275 — Fecha académica](https://github.com/Team-Origen/origen/issues/275#issuecomment-6691042373) | Se aclaró la fecha de primera entrega académica. No resolvió proveedor, presupuesto ni detalles técnicos; corresponden a #292. |
 
 **OpenSpec:** cambio `health-center-beta-core`, ruta `openspec/changes/health-center-beta-core/`.
 Slice: contrato documental de entrega de #290, subissue #325; sin backend ni interfaz.
@@ -75,7 +75,7 @@ Los criterios de este contrato están acordados en #325; su ejecución y la acep
 
 **Evidencia esperada:** enlace versionado al manual, índice de recorridos por rol y recibos de lectura guiada con pasos y resultados.
 Las imágenes deben corresponder a datos ficticios y ocultar secretos; el manual no debe contener credenciales de acceso.
-La identidad visual final se contrasta con #274 cuando exista decisión; no se adopta la marca actual por defecto.
+La identidad visual acordada en #274 debe contrastarse con el manual cuando exista y con la aplicación de #291; su acuerdo no acredita esos recorridos.
 
 **Estado inicial:** no ejecutado. Manual final, recorrido guiado y aprobación pendientes.
 
@@ -133,7 +133,7 @@ Las pruebas automatizadas y la comprobación del producto integrado se complemen
 
 **Criterio de aprobación:** las personas autorizadas pueden acceder a la versión candidata en el entorno de nube acordado, sin depender de la máquina del presentador.
 
-- [ ] Se referencia la decisión aprobada de #275 y su implementación/aceptación en #292.
+- [ ] Se referencia la fecha aclarada en #275 y las decisiones técnicas autorizadas y la aceptación de acceso pendientes de #292.
 - [ ] Se identifica entorno, versión desplegada, URL de entrada sin tokens y fecha de observación.
 - [ ] Se demuestra acceso desde un navegador fuera del entorno local de desarrollo.
 - [ ] Funcionan autenticación y recorridos representativos con los datos persistentes del Resultado 2.
@@ -145,13 +145,13 @@ Las pruebas automatizadas y la comprobación del producto integrado se complemen
 No se elige proveedor, dominio, presupuesto ni garantía de disponibilidad desde este contrato.
 No se presenta el buzón de desarrollo, una captura local o un comando de arranque como despliegue aceptado.
 
-**Estado inicial:** no ejecutado; decisión #275 pendiente. URL, despliegue y acceso remoto sin evidencia en esta tarea.
+**Estado inicial:** no ejecutado; fecha aclarada en #275. Decisiones técnicas de #292, URL, despliegue y acceso remoto sin evidencia en esta tarea.
 
 ## Resultado 5 — Condiciones docentes de entrega
 
 **Criterio de aprobación:** las condiciones acordadas con docentes están registradas y cada una tiene una comprobación vinculada.
 
-- [ ] Se enlaza la resolución explícita de #275 sobre condiciones de evaluación y hosting/presupuesto.
+- [ ] Se enlaza la fecha aclarada en #275 y, cuando existan, el acuerdo docente de evaluación y las decisiones de entorno autorizadas en #292; no se atribuyen a #275.
 - [ ] Se identifican versión del acuerdo, quién lo confirmó, fecha y alcance, sin presumir autoridad.
 - [ ] Se precisan modalidad de acceso/demostración, período requerido y restricciones que efectivamente se acuerden.
 - [ ] Se vinculan las condiciones al manual, conjunto de datos, acceso en nube y evidencia funcional.
@@ -162,7 +162,7 @@ No se presenta el buzón de desarrollo, una captura local o un comando de arranq
 No se inventan rúbrica, fecha de evaluación, costo permitido, cuentas docentes ni nivel de servicio.
 La posibilidad de preparar manual/casos no resuelve estas decisiones ni bloquea trabajo independiente.
 
-**Estado inicial:** no ejecutado; condiciones docentes pendientes en #275, sin aprobación registrada aquí.
+**Estado inicial:** no ejecutado; fecha de entrega aclarada en #275, pero sin recibo de condiciones docentes detalladas ni de su comprobación en este artefacto.
 
 ## Resultado 6 — Estabilización de dos semanas
 
@@ -237,10 +237,9 @@ La ambigüedad histórica de `Confirmed` no se arrastra: en beta significa turno
 
 | Pendiente | Qué impide afirmar | Próxima evidencia necesaria |
 | --- | --- | --- |
-| Publicación de #325 | Contrato aprobado disponible en `develop` | PR documental autorizado para este contrato, controles del head e integración posterior. |
 | Verificación #326 | Artefacto documental verificado en su etapa posterior | Revisión tras aprobación de dependencias; no ejecutada aquí. |
-| #274 abierta | Identidad visual final aceptada | Decisión explícita y contraste posterior en #291/manual. |
-| #275 abierta | Hosting, presupuesto y condiciones docentes acordados | Resolución explícita y evidencia posterior de #292 y Resultados 4–5. |
+| #274 resuelta; #291 abierta | Manual e interfaz contrastados con la identidad acordada | Citar la resolución y los recursos de #416; verificar #291 y lectura del manual cuando existan. |
+| #275 resuelta; #292 abierta | Acceso cloud y condiciones técnicas/docentes aceptados | Separar la fecha aclarada de las decisiones de entorno y recibos de #292; verificar Resultados 4–5 y el acuerdo docente aplicable. |
 | Resultados 1–3 sin ejecución | Manual usable, datos persistentes y funcionalidad/permisos aceptados | Recibos por criterio y corrección de incompatibilidades. |
 | Resultado 6 sin ejecución | Estabilización completada | Ventana acordada y seguimiento observado de dos semanas. |
 | Aceptación final | Beta entregada y aprobada | Evaluación conjunta de resultados con evidencia y aprobación explícita. |
@@ -249,4 +248,4 @@ La ambigüedad histórica de `Confirmed` no se arrastra: en beta significa turno
 - **Verificación documental #326:** pendiente; no realizada por este documento.
 - **Aprobación final de entrega:** pendiente; no se deduce de la aprobación contractual.
 
-Siguiente paso: entregar el contrato aprobado con sus controles documentales y verificar #326 por separado, sin anticipar la entrega final.
+Siguiente paso: verificar la definición en #326 y registrar el acuerdo sobre #290 por separado, sin anticipar la aceptación final de la beta.
