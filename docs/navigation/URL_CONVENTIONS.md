@@ -85,6 +85,7 @@ Administrador no recibe acceso a pacientes, agendas, pagos, resumen económico n
 | `GET /` | `/` | Conservar. Hoy funciona como portal de Paciente; el destino del logo y el comportamiento de inicio por rol se acordarán con navegación. |
 | `GET /login`, `POST /login` | Sin cambio | Excepción explícita para ingreso interno. |
 | `POST /logout` | Sin cambio | Excepción explícita: reutilizar el cierre de sesión interno existente y retorno a `/login`. No convertirlo en GET ni equipararlo al flujo de Paciente. |
+| `POST /paciente/cerrar-sesion` | Endpoint de salida del Paciente (#371) | Protegido por CSRF. Elimina la autenticación del Paciente en el navegador actual, renueva la cookie y vuelve a `/paciente/acceso`, sin terminar una sesión interna coexistente. No es una pantalla ni admite GET. |
 | `GET /activate`, `POST /activate` | `/activar` | Destino en español para el mismo flujo de invitación. |
 | `POST /activate/exchange` | `/activar/intercambiar` | Paso técnico del mismo flujo, no una pantalla de menú. |
 | `GET /admin/activate`, `POST /admin/activate` | `/administrador/activar` | Destino en español para la activación especial del Administrador inicial. |
@@ -134,6 +135,12 @@ Las decisiones visuales e inicios por rol registrados en `NAVIGATION_DECISIONS.m
 - Verificación independiente: controles de sesión/rol, preservación exacta de consultas, handlers de compatibilidad y validadores de origen aprobados.
 - La base local preexistente produjo errores de preparación por la FK `agenda_settings_owner_account_id_fkey`; no se borraron ni corrigieron sus datos para hacer pasar las pruebas.
 - Acceso directo, guards de LiveView y recarga de activación se comprobaron mediante pruebas automatizadas. Atrás/Adelante y recarga en navegador real no se verificaron; no se presentan como evidencia completada.
+
+## Cuenta e ingreso del Paciente (#371)
+
+Después de consumir correctamente un magic link, tanto `/paciente/acceso/verificar` como su entrada compatible `/access/verify` llevan a `/paciente/turnos/reservar`. No se implementa `/paciente/turnos` para completar esta navegación: Mis turnos sigue pendiente y su botón sólo muestra el aviso acordado.
+
+La navbar muestra nombre, apellido y correo del perfil autenticado, sin DNI ni teléfono. Si el perfil aún no tiene nombre registrado, muestra «Paciente», sin inventar datos ni habilitar autoedición. La salida usa `POST /paciente/cerrar-sesion`, no el endpoint interno. El alcance de esta salida es la cookie del navegador actual: no agrega revocación global, revocación de copias previas de cookies ni desconexión de LiveViews que ya estuvieran abiertos en otras pestañas. Esas capacidades no existen en el mecanismo actual de sesión del Paciente.
 
 ## Fuentes y trazabilidad
 

@@ -88,7 +88,7 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
 
     # Consume the actual local link through the public HTTP endpoint.
     old_conn = get(build_conn(), ~p"/paciente/acceso/verificar?token=#{old_token}")
-    assert redirected_to(old_conn) == ~p"/"
+    assert redirected_to(old_conn) == ~p"/paciente/turnos/reservar"
     assert get_session(old_conn, :patient_email) == old_email
     old_authenticated_at = get_session(old_conn, :patient_authenticated_at)
     assert {:ok, _old_auth_dt, _offset} = DateTime.from_iso8601(old_authenticated_at)
@@ -155,7 +155,7 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
     # session through the same public endpoint.
     new_token = receive_magic_token!(new_email)
     new_conn = get(build_conn(), ~p"/paciente/acceso/verificar?token=#{new_token}")
-    assert redirected_to(new_conn) == ~p"/"
+    assert redirected_to(new_conn) == ~p"/paciente/turnos/reservar"
     assert get_session(new_conn, :patient_email) == new_email
     new_authenticated_at = get_session(new_conn, :patient_authenticated_at)
     assert {:ok, _new_auth_dt, _offset} = DateTime.from_iso8601(new_authenticated_at)

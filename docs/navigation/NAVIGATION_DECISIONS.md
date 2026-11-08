@@ -87,6 +87,12 @@ Para los usuarios internos, la referencia existente de cierre de sesión es `POS
 
 El destino del logo se dejó sin definir en esta etapa porque el usuario indicó que no era necesario resolverlo. El enlace de inicio presente en el prototipo es una facilidad de demostración, no una decisión productiva aprobada. Este punto sigue abierto respecto del criterio correspondiente de #369.
 
+## Integración productiva de la navbar (#371)
+
+La aclaración posterior del usuario para #371 incorpora el menú del Paciente con nombre, apellido y correo, sin DNI ni teléfono. Su acción «Cerrar sesión» utiliza `POST /paciente/cerrar-sesion`, protegido por CSRF, elimina sólo su autenticación del navegador y vuelve a `/paciente/acceso`; no termina una sesión interna coexistente. No agrega revocación global de cookies ni desconexión de otras pestañas ya conectadas. Al ingresar mediante magic link se abre la pantalla real `/paciente/turnos/reservar`, mientras Mis turnos continúa pendiente. Estas decisiones productivas posteriores sustituyen la ausencia de definición del flujo del Paciente en el mock; no implementan pantallas ficticias ni cambian permisos.
+
+Después del login interno exitoso, el rol de la sesión autenticada determina el destino: Profesional → `/profesional/agenda`; Secretaría → `/secretaria/pacientes` (su Agenda sigue pendiente); Administrador → `/administrador/cuentas`. No se toman el rol ni el destino desde parámetros del formulario. La portada `/` y el acceso directo a URLs autorizadas permanecen disponibles sin cambios; no se crean pantallas de inicio ni destinos ficticios. El ingreso del Paciente por magic link conserva la alternativa real `/paciente/turnos/reservar` mientras Mis turnos esté pendiente.
+
 ## Prototipo y mapa de referencia
 
 El [prototipo aislado](../../prototypes/navigation/README.md) permite cambiar de rol y recorrer vistas con datos ficticios sin iniciar sesión. El selector de rol y el comparador inferior son herramientas del prototipo, no elementos del producto.
