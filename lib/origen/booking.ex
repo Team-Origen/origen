@@ -183,6 +183,9 @@ defmodule Origen.Booking do
   @doc "Returns operational history scoped in SQL to the revalidated principal."
   defdelegate list_appointment_history(principal, opts \\ %{}), to: Lifecycle, as: :history
 
+  @doc "Records attended or no_show for a confirmed appointment within the actor's scope."
+  defdelegate record_attendance(principal, appointment_id, outcome, opts \\ []), to: Lifecycle
+
   @doc """
   Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).
   """

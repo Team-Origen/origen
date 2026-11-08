@@ -43,6 +43,42 @@ defmodule Origen.Booking.HistoryTest do
              [own.id, cancelled.id, foreign_agenda.id] |> Enum.sort()
   end
 
+  test "history retains attended and no_show outcomes in each authorized scope", %{fixture: f} do
+    own = Fixtures.appointment!(f, start_time: ~U[2026-12-02 12:00:00Z], status: "confirmed")
+
+    foreign =
+      Fixtures.appointment!(f,
+        professional_account_id: f.other_professional_id,
+        patient_profile_id: f.other_patient_id,
+        start_time: ~U[2026-12-02 13:00:00Z],
+        status: "confirmed"
+      )
+
+    assert {:ok, %{status: "attended"}} =
+             Booking.record_attendance(Fixtures.professional_principal(f), own.id, :attended)
+
+    assert {:ok, %{status: "no_show"}} =
+             Booking.record_attendance(Fixtures.secretary_principal(f), foreign.id, :no_show)
+
+    assert {:ok, [own_history]} = Booking.list_appointment_history(Fixtures.patient_principal(f))
+    assert own_history.id == own.id
+    assert own_history.status == "attended"
+
+    assert {:ok, [professional_history]} =
+             Booking.list_appointment_history(Fixtures.professional_principal(f))
+
+    assert professional_history.id == own.id
+    assert professional_history.status == "attended"
+
+    assert {:ok, secretary_history} =
+             Booking.list_appointment_history(Fixtures.secretary_principal(f))
+
+    assert Map.new(secretary_history, &{&1.id, &1.status}) == %{
+             own.id => "attended",
+             foreign.id => "no_show"
+           }
+  end
+
   test "tampered internal principal, revoked session, and administrator are denied", %{fixture: f} do
     other = Fixtures.professional_principal(f)
 
