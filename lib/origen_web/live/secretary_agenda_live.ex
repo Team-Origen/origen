@@ -32,7 +32,7 @@ defmodule OrigenWeb.SecretaryAgendaLive do
        |> assign(:secretary_identity, secretary_identity(socket.assigns.current_internal_session))
        |> assign(
          page_title: "Agenda del centro",
-         date: Date.utc_today(),
+         date: organization_today(),
          appointments: [],
          history: [],
          history_error: nil,
@@ -61,7 +61,7 @@ defmodule OrigenWeb.SecretaryAgendaLive do
   def handle_event("next_day", _params, socket), do: move_date(socket, 1)
 
   def handle_event("today", _params, socket) do
-    {:noreply, assign(socket, date: Date.utc_today()) |> load_history()}
+    {:noreply, assign(socket, date: organization_today()) |> load_history()}
   end
 
   def handle_event("retry", _params, socket), do: {:noreply, load_history(socket)}
@@ -161,8 +161,17 @@ defmodule OrigenWeb.SecretaryAgendaLive do
     end
   end
 
-  defp same_date?(%DateTime{} = datetime, %Date{} = date), do: DateTime.to_date(datetime) == date
+  defp same_date?(%DateTime{} = datetime, %Date{} = date) do
+    DateTime.shift_zone!(datetime, organization_timezone()) |> DateTime.to_date() == date
+  end
+
   defp same_date?(_datetime, _date), do: false
+
+  defp organization_today do
+    organization_timezone() |> DateTime.now!() |> DateTime.to_date()
+  end
+
+  defp organization_timezone, do: Application.fetch_env!(:origen, :organization_timezone)
 
   defp professional_name(appointment, names),
     do:
@@ -171,6 +180,11 @@ defmodule OrigenWeb.SecretaryAgendaLive do
         to_string(appointment.professional_account_id),
         "Profesional ##{appointment.professional_account_id}"
       )
+
+  defp patient_identifier(%{patient_profile_id: id}) when is_integer(id),
+    do: "Paciente ##{id}"
+
+  defp patient_identifier(_appointment), do: "Paciente no identificado"
 
   defp parse_id(value) when is_binary(value) do
     case Integer.parse(value) do
@@ -327,6 +341,12 @@ defmodule OrigenWeb.SecretaryAgendaLive do
               <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 class="font-semibold text-stone-900">{appointment.consultation_type_name}</h3>
+                  <p
+                    id={"secretary-patient-#{appointment.id}"}
+                    class="mt-1 text-sm font-medium text-stone-700"
+                  >
+                    {patient_identifier(appointment)}
+                  </p>
                   <p class="mt-1 text-sm text-stone-600">
                     {local_time(appointment.start_time, @organization_timezone, "%d/%m/%Y · %H:%M")} a {local_time(
                       appointment.end_time,
@@ -379,6 +399,12 @@ defmodule OrigenWeb.SecretaryAgendaLive do
                 class="mt-3 space-y-2 rounded-lg border border-rose-100 bg-rose-50 p-3"
               >
                 <input type="hidden" name="appointment_id" value={appointment.id} />
+                <p
+                  id={"cancellation-patient-#{appointment.id}"}
+                  class="text-sm font-semibold text-rose-900"
+                >
+                  {patient_identifier(appointment)}
+                </p>
                 <label
                   for={"cancellation-reason-#{appointment.id}"}
                   class="block text-xs font-semibold text-rose-900"
@@ -433,13 +459,20 @@ defmodule OrigenWeb.SecretaryAgendaLive do
             id="secretary-history-list"
             class="space-y-3"
           >
-            <AppointmentLifecycle.history
+            <div
               :for={appointment <- @history}
-              appointment={appointment}
-              timezone={@organization_timezone}
-              id_prefix="secretary-history-appointment"
-              professional_name={professional_name(appointment, @professional_names)}
-            />
+              id={"secretary-history-appointment-#{appointment.id}-wrapper"}
+            >
+              <p class="mb-2 text-sm font-semibold text-stone-700">
+                {patient_identifier(appointment)}
+              </p>
+              <AppointmentLifecycle.history
+                appointment={appointment}
+                timezone={@organization_timezone}
+                id_prefix="secretary-history-appointment"
+                professional_name={professional_name(appointment, @professional_names)}
+              />
+            </div>
           </div>
         </section>
       </main>

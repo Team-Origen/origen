@@ -110,11 +110,58 @@ el enlace funcional a `/secretaria/pacientes`, marca como activa la agenda actua
 habilita la entrada a `/secretaria/agenda`, de acuerdo con
 `docs/navigation/URL_CONVENTIONS.md`. El menú de cuenta conserva el cierre de sesión
 interno y muestra la identidad de Secretaría obtenida por
-`Origen.Accounts.get_own_navigation_identity/1`, sin cambiar autorización. La prueba
+`Origen.Accounts.get_own_navigation_identity/1`, sin cambiar autorización. La pantalla
+de Pacientes conserva sus controles de búsqueda, registro y reserva asistida sin
+reemplazar el recorrido existente. La pantalla de Agenda identifica cada turno en
+formularios e historial con el `patient_profile_id` que ya forma parte de la
+proyección pública autorizada de historial; no realiza búsquedas adicionales de
+perfiles ajenos ni expone datos clínicos o credenciales. La agrupación y el botón
+«Hoy» convierten los instantes UTC a la zona horaria de la organización antes de
+comparar fechas. El parámetro de fecha de Agenda no se agrega ni se modifica.
+
+La prueba
 `test/origen_web/live/secretary_agenda_live_test.exs` usa PostgreSQL real y
 fixtures persistentes para verificar autorización, los seis estados, cancelación
 en múltiples agendas, motivo en blanco sin mutación, asistencia/ausencia,
-identificadores forjados y visibilidad del origen Secretaría en la historia
-pública del Paciente. Es evidencia de LiveView y dominio real, no una prueba de
-navegador, despliegue o integración final de #285; la verificación independiente
-queda a cargo de T4.
+identificadores forjados, identificación segura del paciente, agrupación por
+zona horaria y visibilidad del origen Secretaría en la historia pública del
+Paciente. La prueba `test/origen_web/live/secretary_patient_live_test.exs`
+verifica la entrada funcional a Agenda sin perder los controles existentes.
+La prueba de controlador verifica que el inicio autenticado de Paciente enlace
+a `/paciente/turnos`, no a un aviso de sección pendiente. Es evidencia de
+LiveView y dominio real, no una prueba de navegador, despliegue o integración
+final de #285; la verificación independiente queda a cargo de T4.
+
+## Evidencia de integración T4 y limitaciones conocidas
+
+La regresión focal autorizada para esta integración observó `37 passed` en la
+base aislada UTF-8, incluyendo Agenda de Secretaría, Pacientes de Secretaría,
+navegación de Paciente y `PageController`. La ejecución no demuestra por sí
+sola una prueba de navegador ni una aprobación independiente de privacidad.
+
+Se conservan explícitamente los dos intentos de suite completa ejecutados por
+el padre y no se presentan como suite verde ni como prueba de una línea base
+completamente probada:
+
+- Job-4: `981/986 passed`, `32 skip`, `8 exclude`; cuatro fallos de bootstrap
+  por configuración de base ausente cuando sólo se usó URL y un fallo de
+  migración Unicode SQLASCII. Después se reparó la preparación a UTF-8 con
+  claves de configuración explícitas; no se modificó `config/test.exs`.
+- Job-5: `885/986 passed`, `101 failures`; se observó una caída de
+  `ExpiryWorker` (`:sweep` después de 60 s) por pérdida de ownership del
+  sandbox, seguida por errores de Repo no iniciado. Su reproducción en la
+  base `5284df1` está pendiente: no se certifica como fallo preexistente.
+  No se detuvo ni deshabilitó el worker para hacer pasar la suite.
+- Verificación independiente: preparación fallida antes de las pruebas,
+  **cero tests y cero probes ejecutados**. El verificador buscó `initdb` y
+  `pg_ctl` en `PATH`, aunque el servidor aislado ya estaba preparado. Los
+  ejecutables existen en `/usr/lib/postgresql/18/bin/`; se comprobó su
+  disponibilidad sin relanzar el intento. No hubo copia aislada ni una base
+  nueva del verificador, ni aprobación funcional independiente.
+
+T4 permanece bloqueada por la prueba independiente no ejecutada y por la suite
+completa sin resultado satisfactorio. Un nuevo intento independiente requiere
+autorización explícita, las rutas absolutas de PostgreSQL y una base aislada
+UTF-8; debe incluir el diagnóstico diferencial contra `5284df1` sin deshabilitar
+el worker. No se ejecutaron comprobaciones visuales en navegador ni integración
+en nube. La aprobación de #378 y el cierre de #285 no se declaran.
