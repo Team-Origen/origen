@@ -3,52 +3,112 @@ defmodule OrigenWeb.InternalSessionHTML do
 
   def new(assigns) do
     ~H"""
-    <main class="mx-auto max-w-lg p-8">
-      <h1 class="text-2xl font-semibold">Iniciar sesión</h1>
+    <main data-theme="light" class="min-h-screen bg-surface py-8 text-text sm:py-12">
+      <.container max_width="sm">
+        <div class="mx-auto flex w-full max-w-md flex-col gap-6">
+          <header class="flex flex-col items-center gap-3 text-center">
+            <img
+              src={~p"/images/origen-logo-primary.png"}
+              alt=""
+              width="56"
+              height="55"
+              class="shrink-0"
+            />
+            <div class="flex flex-col gap-1">
+              <.text_small class="text-text-muted">Origen - Gestión de turnos</.text_small>
+              <h1 class="pc-h2 text-text">Iniciar sesión</h1>
+            </div>
+            <.text_muted class="text-text-muted">
+              Ingresá con tu cuenta interna y el código actual de tu aplicación autenticadora.
+            </.text_muted>
+          </header>
 
-      <p :if={@error} role="alert" class="mt-4">{@error}</p>
+          <.card variant="basic">
+            <.card_content class="flex flex-col gap-6">
+              <.alert
+                :if={@error}
+                id="login-error"
+                color="danger"
+                variant="callout"
+                with_icon
+              >
+                {@error}
+              </.alert>
 
-      <form action={~p"/login"} method="post" class="mt-6 space-y-4">
-        <input type="hidden" name="_csrf_token" value={@csrf_token} />
-        <.input
-          name="identifier"
-          type="text"
-          label="Email o ID de cuenta"
-          value=""
-          required
-          autocomplete="username"
-        />
-        <p class="text-xs text-gray-500 -mt-2">
-          El email con el que te invitaron (por ejemplo, dra.garcia@clinicaorigen.com).
-        </p>
+              <form
+                id="internal-login-form"
+                action={~p"/login"}
+                method="post"
+                class="flex flex-col gap-4"
+              >
+                <input type="hidden" name="_csrf_token" value={@csrf_token} />
 
-        <.input
-          name="password"
-          type="password"
-          label="Contraseña"
-          value=""
-          required
-          autocomplete="current-password"
-        />
-        <p class="text-xs text-gray-500 -mt-2">
-          La contraseña que definiste al activar tu cuenta.
-        </p>
+                <div class="flex flex-col gap-2">
+                  <.field
+                    id="identifier"
+                    name="identifier"
+                    type="text"
+                    label="Email o ID de cuenta"
+                    value=""
+                    required
+                    autocomplete="username"
+                    aria-describedby="identifier-help"
+                    label_class="text-text"
+                    no_margin
+                  />
+                  <.field_help_text id="identifier-help" class="mt-0 text-text-muted">
+                    El email con el que te invitaron (por ejemplo, dra.garcia@clinicaorigen.com).
+                  </.field_help_text>
+                </div>
 
-        <.input
-          name="totp_code"
-          type="text"
-          label="Código del autenticador"
-          value=""
-          required
-          inputmode="numeric"
-          pattern="[0-9]{6}"
-          autocomplete="one-time-code"
-        />
-        <p class="text-xs text-gray-500 -mt-2">
-          Los 6 dígitos actuales que te muestra tu app de autenticación (la que configuraste con el QR).
-        </p>
-        <button type="submit" class="btn btn-primary">Ingresar</button>
-      </form>
+                <div class="flex flex-col gap-2">
+                  <.field
+                    id="password"
+                    name="password"
+                    type="password"
+                    label="Contraseña"
+                    value=""
+                    required
+                    autocomplete="current-password"
+                    aria-describedby="password-help"
+                    label_class="text-text"
+                    no_margin
+                  />
+                  <.field_help_text id="password-help" class="mt-0 text-text-muted">
+                    La contraseña que definiste al activar tu cuenta.
+                  </.field_help_text>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                  <.field
+                    id="totp_code"
+                    name="totp_code"
+                    type="text"
+                    label="Código del autenticador"
+                    value=""
+                    required
+                    inputmode="numeric"
+                    pattern="[0-9]{6}"
+                    autocomplete="one-time-code"
+                    aria-describedby="totp_code-help"
+                    label_class="text-text"
+                    no_margin
+                  />
+                  <.field_help_text id="totp_code-help" class="mt-0 text-text-muted">
+                    Los 6 dígitos actuales que te muestra tu app de autenticación (la que configuraste con el QR).
+                  </.field_help_text>
+                </div>
+
+                <div class="pt-2">
+                  <.button type="submit" color="primary" size="lg" class="w-full">
+                    Ingresar
+                  </.button>
+                </div>
+              </form>
+            </.card_content>
+          </.card>
+        </div>
+      </.container>
     </main>
     """
   end
