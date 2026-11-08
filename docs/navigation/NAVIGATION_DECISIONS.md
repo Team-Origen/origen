@@ -43,16 +43,16 @@ No se propuso una sección independiente de pagos ni habilitar la autoedición d
 
 ### Profesional
 
-El mock actual muestra **Agenda · Resumen económico · Ajustes**. Durante la conversación se confirmó contemplar **Solicitudes** como cuarto acceso, con orden de referencia **Agenda · Solicitudes · Resumen económico · Ajustes**. Después se aclaró que este acuerdo no congela el menú: la necesidad y ubicación final se evaluarán con la implementación funcional.
+El mock muestra **Agenda · Solicitudes · Resumen económico · Ajustes**. Se aprobó agregar únicamente el botón **Solicitudes**, con el mismo estilo de los otros ítems, que abre una vista del mock con el texto «Próximo en implementar». Esta última decisión reemplaza el estado deshabilitado considerado inicialmente; no define una pantalla ni URL productiva. No se toman decisiones de diseño funcional de #284/#323 dentro de esta planificación. Este acuerdo no congela el menú: la ubicación y el destino final se evaluarán con la implementación correspondiente.
 
 | Sección | Pantalla o recorrido de referencia | Situación |
 | --- | --- | --- |
 | Agenda | Agenda propia → Crear turno → regreso a Agenda. La creación conserva Agenda como sección activa. | Recorrido existente, representado de forma simplificada. |
-| Solicitudes | Acceso a pendientes y resolución por el Profesional dueño, según [#284](https://github.com/Team-Origen/origen/issues/284) y su frontend [#323](https://github.com/Team-Origen/origen/issues/323). | Ítem contemplado para #371; todavía no incorporado al mock. Pantalla independiente y URL no definidas por este registro. |
+| Solicitudes | Acceso a pendientes y resolución por el Profesional dueño, según [#284](https://github.com/Team-Origen/origen/issues/284) y su frontend [#323](https://github.com/Team-Origen/origen/issues/323). | Acceso a un marcador del mock: «Próximo en implementar». Pantalla funcional y URL productiva no definidas por este registro; se resolverán con las issues correspondientes. |
 | Resumen económico | Consulta del resumen propio por período. | Pendiente de [#288](https://github.com/Team-Origen/origen/issues/288); vista ficticia en el mock. |
 | Ajustes | Ajustes → Mi perfil → regreso a Ajustes. Mi perfil pertenece a Ajustes y no necesita un ítem propio. Agenda y Ajustes quedan accesibles desde la navbar. | Recorrido de perfil existente; configuración de aprobación de #284 todavía no representada en el mock. |
 
-El mock muestra una solicitud con «Resolver solicitud», pero la acción sólo da feedback. No demuestra la cobertura de #323: falta representar configuración automática/manual, regla para reservas de Secretaría, lista de pendientes, aceptar/rechazar, estados y errores. Su diseño funcional debe coordinarse con el contrato de [#321](https://github.com/Team-Origen/origen/issues/321). No se deduce una URL nueva del acuerdo sobre la navbar.
+El ejemplo previo de Agenda conserva una solicitud con «Resolver solicitud», pero la acción sólo da feedback. La decisión posterior fue limitar la incorporación a la navbar: no diseñar aquí lista de pendientes, configuración automática/manual, regla de Secretaría ni acciones de aceptar/rechazar. Esos recorridos pertenecen a #284/#323 y al contrato de [#321](https://github.com/Team-Origen/origen/issues/321); completarlos no es una condición añadida para terminar el diseño de la navbar. No se deduce una URL nueva del botón.
 
 ### Secretaría
 

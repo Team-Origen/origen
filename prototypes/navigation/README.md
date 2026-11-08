@@ -30,7 +30,7 @@ The role selector is a prototype-only control, not product navigation. It resets
 
 1. Patient: switch between **Mis turnos** and **Reservar turno**, including the page's reservation action and return link.
 2. Professional: **Agenda → Crear turno → Agenda**; **Ajustes → Mi perfil → Ajustes**. The parent section remains selected in both subpages.
-3. Visit Professional **Resumen económico**, explicitly marked as a pending screen with fictional data.
+3. Professional **Solicitudes** appears after Agenda with the same link style as the other items. It opens a mock-only placeholder titled “Próximo en implementar” (`#role=profesional&page=requests`); no production URL is defined and #284/#323 functional design remains out of scope. Visit **Resumen económico**, explicitly marked as a pending screen with fictional data.
 4. Open the account dropdown, activate **Cerrar sesión**, then **Volver a la simulación**. This never calls `/logout`, terminates a session, or changes browser credentials. Patient logout behavior is intentionally not specified by this preview.
 5. Try Tab, Enter/Space on the native account disclosure, Escape to close it, and clicking outside it. Check visible focus, zoom and narrow layouts in a browser before accepting a design.
 

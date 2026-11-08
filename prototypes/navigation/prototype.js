@@ -16,6 +16,7 @@ const pages = {
     summary: { title: 'Resumen económico', path: '/secretaria/resumen-economico', section: 'summary', pending: true }
   },
   profesional: {
+    requests: { title: 'Solicitudes', path: null, section: 'requests', pending: true },
     agenda: { title: 'Agenda', path: '/profesional/agenda', section: 'agenda', pending: false },
     create: { title: 'Crear turno', path: '/profesional/agenda/crear', section: 'agenda', pending: false },
     summary: { title: 'Resumen económico', path: '/profesional/resumen-economico', section: 'summary', pending: true },
@@ -23,7 +24,7 @@ const pages = {
     profile: { title: 'Mi perfil', path: '/profesional/ajustes/perfil', section: 'settings', pending: false }
   }
 };
-const menus = { paciente: ['turns', 'booking'], profesional: ['agenda', 'summary', 'settings'], secretaria: ['agenda', 'patients', 'summary'], administrador: ['accounts'] };
+const menus = { paciente: ['turns', 'booking'], profesional: ['agenda', 'requests', 'summary', 'settings'], secretaria: ['agenda', 'patients', 'summary'], administrador: ['accounts'] };
 const variants = { A: 'Una línea · fondo blanco', B: 'Una línea · fondo petróleo', C: 'Dos niveles · pestañas' };
 function getState(search, hash) {
   const query = new URLSearchParams(search);
@@ -132,9 +133,9 @@ if (typeof document !== 'undefined') {
     $('role-name').textContent = identity[2];
     $('account-description').textContent = state.role === 'paciente' ? 'Salida visual de demostración. El mecanismo real de cierre de Paciente no está definido aquí.' : 'En producción se reutilizaría POST /logout. Este prototipo no envía solicitudes.';
     $('variant-label').innerHTML = `<small>Comparador de prototipo · ${state.variant}</small>${variants[state.variant]}`;
-    const views = { accounts: adminAccounts, turns: patientTurns, booking: () => booking(), agenda: state.role === 'secretaria' ? secretaryAgenda : agenda, patients: secretaryPatients, create: () => booking(true), summary, settings, profile };
+    const views = { requests: () => title('Solicitudes', 'Próximo en implementar', 'Esta vista es sólo un marcador del prototipo. El diseño y la funcionalidad se definirán en la issue correspondiente.'), accounts: adminAccounts, turns: patientTurns, booking: () => booking(), agenda: state.role === 'secretaria' ? secretaryAgenda : agenda, patients: secretaryPatients, create: () => booking(true), summary, settings, profile };
     $('main').innerHTML = simulatedExit ? '<div class="panel empty"><div class="eyebrow">Simulación, no autenticación</div><h1>Salida simulada</h1><p>No se cerró ninguna sesión real. El selector de rol sigue disponible para explorar el diseño.</p><button type="button" class="primary" data-page="' + menus[state.role][0] + '">Volver a la simulación</button></div>' : views[state.page]() +
-      `<div id="feedback" role="status" aria-live="polite"></div><div class="route"><p>URL futura representada: <code>${page.path}</code></p><p>${page.pending ? 'Pantalla productiva pendiente.' : 'Recorrido existente, representado aquí con contenido simplificado.'} Navegación por fragmentos; esta URL no se solicita al servidor.</p><p>Estado del prototipo: ${state.role} · ${state.page} · diseño ${state.variant}. Sin persistencia ni datos reales.</p></div>`;
+      `<div id="feedback" role="status" aria-live="polite"></div><div class="route"><p>${page.path ? `URL futura representada: <code>${page.path}</code>` : 'URL productiva: todavía no definida. Esta vista existe sólo en el prototipo.'}</p><p>${page.pending ? 'Pantalla productiva pendiente.' : 'Recorrido existente, representado aquí con contenido simplificado.'} Navegación por fragmentos; esta URL no se solicita al servidor.</p><p>Estado del prototipo: ${state.role} · ${state.page} · diseño ${state.variant}. Sin persistencia ni datos reales.</p></div>`;
     $('account').open = false;
   }
   function navigate(page) {
