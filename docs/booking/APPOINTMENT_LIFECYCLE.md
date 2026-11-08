@@ -1,4 +1,4 @@
-# Appointment lifecycle: T1 expiry
+# Appointment operational lifecycle
 
 T1 adds the `expired` operational state for unresolved `requested` appointments.
 
@@ -90,3 +90,36 @@ Appointment snapshots, patient/professional/type identity, `start_time`, and
 type change is therefore represented by cancelling the original appointment and
 creating a new one through an existing authorized reservation function. There is
 no reschedule operation.
+
+## Verification record — #377
+
+Observed on the isolated `origen_test_377_lifecycle` database:
+
+| Check | Result |
+| --- | --- |
+| Baseline request resolution | 13 passed |
+| T1 expiry, resolution and overlap | RED observed; GREEN 38 passed |
+| T2 cancellation, history and immutable replacement | RED observed; GREEN combined 55 passed |
+| T3 attendance plus all lifecycle regressions | RED observed; GREEN combined 62 passed |
+| Complete `mix test` suite after T3 | Exit 0: 949 passed, 32 skipped, 8 excluded |
+| Changed-file formatting and `git diff --check` | Passed for each implementation unit |
+| Independent verification attempt 1 | Setup failed: scratch `mix` shim unresolved; zero tests/probes |
+| Independently authorized attempt 2 | Setup failed: credential helper and isolated executable resolution; zero tests/probes |
+
+The eight exclusions follow the existing `postgres_security` test configuration;
+they are not claimed as executed. Existing OTP 28 and deprecated legacy helper
+warnings remain. No failed test is hidden by the successful full-suite result:
+the setup failures and corrected test-fixture failures are recorded in
+`odd/tasks/377-appointment-lifecycle-backend.md`.
+
+Independent runtime verification, the baseline/current differential comparison,
+and concurrency/migration probes remain **unverified** because verifier setup
+failed before execution. The implementation is not ready for approval or delivery
+on that evidence alone. A new attempt requires explicit human authorization;
+prior failures and correction limits remain recorded.
+
+Human approval of this backend slice is **pending**. The approved #376 contract
+is not approval of the implementation. Domain tests do not certify the UI or
+complete integration of #285, whose #284 dependency remains separate. No GitHub
+publication or issue closure is recorded by this implementation.
+
