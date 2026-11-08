@@ -63,6 +63,7 @@ defmodule OrigenWeb.Router do
     live_session :patient_access,
       on_mount: [{OrigenWeb.PatientSessionAuthLive, :ensure_authenticated}] do
       live "/paciente/telefono/verificar", PatientPhoneVerificationLive, :index
+      live "/paciente/turnos", PatientAppointmentsLive, :index
       live "/paciente/turnos/reservar", PatientBookingCalendarLive, :index
     end
 

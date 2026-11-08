@@ -130,15 +130,22 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
       })
 
     for {path, active} <- [
-          {"/paciente/turnos/reservar", true},
-          {"/paciente/telefono/verificar", false}
+          {"/paciente/turnos", "turns"},
+          {"/paciente/turnos/reservar", "book"},
+          {"/paciente/telefono/verificar", nil}
         ] do
       {:ok, view, _html} = live(conn, path)
       assert_sticky_nav(view, "patient")
+      assert has_element?(view, "#nav-turns[href='/paciente/turnos']", "Mis turnos")
       assert has_element?(view, "#nav-book[href='/paciente/turnos/reservar']", "Reservar turno")
-      assert has_element?(view, "#nav-turns[phx-click]", "Mis turnos")
-      assert has_element?(view, "#nav-book[aria-current='page']") == active
-      refute has_element?(view, "#role-navigation a[href='/paciente/turnos']")
+
+      if active do
+        assert has_element?(view, "#nav-#{active}[aria-current='page']")
+      else
+        refute has_element?(view, "#nav-turns[aria-current='page']")
+        refute has_element?(view, "#nav-book[aria-current='page']")
+      end
+
       refute has_element?(view, "#role-navigation form[action='/logout']")
 
       assert has_element?(
