@@ -3,7 +3,7 @@ defmodule Origen.Booking.Overlap do
   Reglas de dominio de prevención de solapamientos de turnos (Issue #65 / PLN-08).
 
   Espejo exacto de las restricciones de exclusión PostgreSQL instaladas por la
-  migración `20260927100000_add_appointment_overlap_exclusion_constraints`:
+  migraciones de exclusión de agenda:
 
   - **Agenda del profesional**: ningún par de turnos activos del mismo
     profesional puede solaparse en el intervalo semiabierto `[start_time, end_time)`.
@@ -11,9 +11,9 @@ defmodule Origen.Booking.Overlap do
     puede solaparse en `[start_time, end_time)`, incluso con distintos
     profesionales.
 
-  Turno activo: `status NOT IN ('cancelled', 'rejected')`. La semántica `[)`
-  permite turnos contiguos (09:00-09:30 y 09:30-10:00); los turnos cancelados
-  o rechazados liberan el bloque horario.
+  Turno activo: `status NOT IN ('cancelled', 'rejected', 'expired')`. La
+  semántica `[)` permite turnos contiguos (09:00-09:30 y 09:30-10:00); los
+  turnos cancelados, rechazados o vencidos liberan el bloque horario.
 
   Esta verificación es una precondición amigable para fallear temprano con un
   error de dominio claro. La garantía definitiva ante reservas concurrentes la
@@ -24,9 +24,10 @@ defmodule Origen.Booking.Overlap do
   import Ecto.Query, only: [from: 2]
 
   alias Origen.Booking.Appointment
+  alias Origen.Booking.Expiry
   alias Origen.Repo
 
-  @slot_freeing_statuses ~w(cancelled rejected)
+  @slot_freeing_statuses ~w(cancelled rejected expired)
 
   @type conflict_reason :: :professional_schedule_conflict | :patient_schedule_conflict
 
@@ -44,25 +45,46 @@ defmodule Origen.Booking.Overlap do
   turno activo solapado (aunque sea con otro profesional); o `{:error,
   :invalid_overlap_params}` si faltan atributos o son de tipo inválido.
   """
-  @spec validate_no_overlap(map()) ::
-          {:ok, :no_conflict} | {:error, conflict_reason() | :invalid_overlap_params}
-  def validate_no_overlap(attrs) when is_map(attrs) do
+  @spec validate_no_overlap(map(), keyword()) ::
+          {:ok, :no_conflict}
+          | {:error, conflict_reason() | :invalid_overlap_params | {:expiry_failed, term()}}
+  def validate_no_overlap(attrs, opts \\ [])
+
+  def validate_no_overlap(attrs, opts) when is_map(attrs) and is_list(opts) do
     with {:ok, params} <- extract_params(attrs),
+         {:ok, now} <- resolve_now(opts),
+         {:ok, _result} <- Expiry.expire_due_requested(now: now),
          :ok <- reject_scope_conflict(params, :professional_account_id),
          :ok <- reject_scope_conflict(params, :patient_profile_id) do
       {:ok, :no_conflict}
+    else
+      {:error, reason} when reason in [:invalid_expiry_now, :invalid_expiry_options] ->
+        {:error, {:expiry_failed, reason}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
-  def validate_no_overlap(_attrs), do: {:error, :invalid_overlap_params}
+  def validate_no_overlap(_attrs, _opts), do: {:error, :invalid_overlap_params}
 
   @doc """
   Alias de `validate_no_overlap/1` conservado como verbo descriptivo de la
   consulta de conflictos de agenda.
   """
-  @spec check_overlaps(map()) ::
-          {:ok, :no_conflict} | {:error, conflict_reason() | :invalid_overlap_params}
-  def check_overlaps(attrs), do: validate_no_overlap(attrs)
+  @spec check_overlaps(map(), keyword()) ::
+          {:ok, :no_conflict}
+          | {:error, conflict_reason() | :invalid_overlap_params | {:expiry_failed, term()}}
+  def check_overlaps(attrs, opts \\ [])
+  def check_overlaps(attrs, opts), do: validate_no_overlap(attrs, opts)
+
+  defp resolve_now(opts) do
+    case Keyword.get(opts, :now) do
+      nil -> {:ok, DateTime.utc_now()}
+      %DateTime{} = now -> {:ok, now}
+      _invalid -> {:error, :invalid_expiry_now}
+    end
+  end
 
   defp extract_params(attrs) do
     with {:ok, professional_id} <- fetch_id(attrs, :professional_account_id, :professional_id),

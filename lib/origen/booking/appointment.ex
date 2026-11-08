@@ -11,7 +11,7 @@ defmodule Origen.Booking.Appointment do
 
   @type t :: %__MODULE__{}
 
-  @statuses ~w(requested reserved confirmed attended cancelled no_show)
+  @statuses ~w(requested reserved confirmed expired attended cancelled no_show)
 
   @primary_key {:id, :id, autogenerate: true}
   schema "appointments" do
