@@ -23,8 +23,8 @@ rescheduling behavior is introduced by T1.
 ## T2 authenticated cancellation
 
 T2 adds the authenticated cancellation and operational-history slice of #377.
-Expiry remains the separate T1 operation; attendance and no-show outcomes are
-not part of this slice.
+Expiry remains the separate T1 operation; T3 adds attendance and no-show outcomes
+as the separate authenticated internal operation described below.
 
 `Origen.Booking.cancel_appointment/3` accepts a server principal, an appointment
 id, and optional cancellation attributes. Attribute maps may provide only
@@ -51,6 +51,22 @@ maps are not authorization evidence.
 
 Rejected authorization, timing, status, or reason checks do not invoke expiry,
 change occupancy, or write appointment metadata or audit rows.
+
+## T3 attendance and no-show outcomes
+
+`Origen.Booking.record_attendance/4` records a terminal operational outcome for an
+authenticated internal principal. A Professional may act only on the own agenda;
+a Secretary may act on any centre agenda. The operation revalidates the active
+session, locks the appointment, requires the current status to be `confirmed`,
+and stores either `attended` or `no_show`.
+
+There is intentionally no product time window and no terminal correction workflow
+in this slice. `requested`, `expired`, `cancelled`, `attended`, and `no_show`
+appointments reject the operation without changing state, metadata, occupancy,
+history, relationship data, or audit. The status change and one minimized audit
+event (`appointment_attended` or `appointment_no_show`) commit atomically. No
+fine, notification, or other side effect is produced. Existing occupancy
+predicates remain authoritative for `attended` and `no_show`.
 
 ## Operational history
 

@@ -6,7 +6,7 @@ defmodule Origen.Authorization.Policy do
   revalidation; this module only describes which roles may request each action.
   """
 
-  @lifecycle_operations [:cancel_appointment, :read_appointment_history]
+  @lifecycle_operations [:cancel_appointment, :read_appointment_history, :record_attendance]
 
   @spec lifecycle_allowed?(atom(), atom()) :: boolean()
   def lifecycle_allowed?(role, operation) when operation in @lifecycle_operations do
@@ -17,6 +17,8 @@ defmodule Origen.Authorization.Policy do
       {:patient, :read_appointment_history} -> true
       {:professional, :read_appointment_history} -> true
       {:secretary, :read_appointment_history} -> true
+      {:professional, :record_attendance} -> true
+      {:secretary, :record_attendance} -> true
       _ -> false
     end
   end
