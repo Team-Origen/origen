@@ -261,13 +261,14 @@ defmodule Origen.Booking.OverlapTest do
       assert count_appointments(ctx.fixture.professional_id) == 1
     end
 
-    test "el INSERT directo contiguo y el que solapa un turno cancelado son aceptados", ctx do
+    test "el INSERT directo contiguo y el que solapa turnos liberados son aceptados", ctx do
       raw_insert_appointment!(ctx, ~U[2026-10-20 09:00:00Z], 30, "cancelled")
+      raw_insert_appointment!(ctx, ~U[2026-10-20 09:00:00Z], 30, "expired")
 
       raw_insert_appointment!(ctx, ~U[2026-10-20 09:00:00Z], 30, "reserved", patient: :main)
       raw_insert_appointment!(ctx, ~U[2026-10-20 09:30:00Z], 30, "reserved")
 
-      assert count_appointments(ctx.fixture.professional_id) == 3
+      assert count_appointments(ctx.fixture.professional_id) == 4
     end
   end
 
