@@ -143,16 +143,16 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       unauthenticated_conn =
         Phoenix.ConnTest.build_conn() |> Phoenix.ConnTest.init_test_session(%{})
 
-      assert {:error, {:redirect, %{to: "/access"}}} =
-               live(unauthenticated_conn, ~p"/patient/calendar")
+      assert {:error, {:redirect, %{to: "/paciente/acceso"}}} =
+               live(unauthenticated_conn, ~p"/paciente/turnos/reservar")
     end
 
     test "redirects when the patient session was invalidated", %{conn: conn, profile: profile} do
       invalidated_at = DateTime.add(DateTime.utc_now(), 1, :second)
       Repo.update!(Ecto.Changeset.change(profile, sessions_invalidated_at: invalidated_at))
 
-      assert {:error, {:redirect, %{to: "/access"}}} =
-               live(conn, ~p"/patient/calendar")
+      assert {:error, {:redirect, %{to: "/paciente/acceso"}}} =
+               live(conn, ~p"/paciente/turnos/reservar")
     end
   end
 
@@ -164,7 +164,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.ErrorCalendar
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No se pudo cargar la lista de profesionales"
       assert has_element?(view, "#patient-professionals-error")
@@ -178,7 +178,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.UnavailableCatalog
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No se pudieron cargar los tipos de consulta"
       assert has_element?(view, "#patient-catalog-error")
@@ -192,7 +192,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.EmptyCatalog
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No hay tipos de consulta disponibles"
       assert has_element?(view, "#patient-catalog-empty")
@@ -212,7 +212,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.AvailableCatalog
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No pudimos cargar la disponibilidad"
       refute has_element?(view, "button[phx-click='select_slot']")
@@ -229,7 +229,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       )
 
       before = Repo.query!("SELECT count(*) FROM appointments").rows
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       assert html =~ "No hay profesionales disponibles"
       refute has_element?(view, "#professional-form")
       refute has_element?(view, "button[phx-click='select_slot']")
@@ -253,7 +253,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -276,7 +276,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
       before = view |> element("#professional-form") |> render()
@@ -290,7 +290,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -318,7 +318,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
          } do
       Repo.update!(Ecto.Changeset.change(profile, state: "pending_completion"))
 
-      {:ok, _view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, _view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "Completá tu perfil para reservar"
       refute html =~ "verificar tu teléfono"
@@ -326,7 +326,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     end
 
     test "booking fixture chooses a configured weekday for booking journeys", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
 
       for offset <- 0..6 do
         reference_date = Date.add(Date.utc_today(), offset)
@@ -341,7 +341,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     end
 
     test "renders the real profile and slots and navigates dates", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
 
       assert html =~ "Calendario de Reservas" and html =~ "Medicina General"
@@ -405,7 +405,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         [prof_id]
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       assert html =~ "Consulta general (60 min)"
 
       html = render_change(view, "change_date", %{"date" => Date.to_iso8601(friday)})
@@ -461,7 +461,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
       assert original_relationship.first_appointment_id == first_appointment.id
 
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
       view
@@ -496,7 +496,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
 
   describe "slot selection, policies and booking confirmation" do
     test "selecting a slot shows confirmation panel with policies and clears slot", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
 
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
@@ -521,7 +521,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       profile: profile,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -577,7 +577,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -615,7 +615,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         [prof_id]
       )
 
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -633,7 +633,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -693,7 +693,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         [Ecto.UUID.dump!(control_id), prof_id]
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
 
       assert html =~ "Tipo de Consulta"

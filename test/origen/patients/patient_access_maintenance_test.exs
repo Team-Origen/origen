@@ -62,7 +62,7 @@ defmodule Origen.Patients.PatientAccessMaintenanceTest do
       # Assert magic link email sent for proof of possession
       assert_email_sent(fn email ->
         assert email.to == [{"", new_email}]
-        assert email.html_body =~ "/access/verify?token="
+        assert email.html_body =~ "/paciente/acceso/verificar?token="
       end)
 
       # Assert audit log entry
@@ -234,7 +234,7 @@ defmodule Origen.Patients.PatientAccessMaintenanceTest do
 
       # Assert magic link sent to new email
       assert_email_sent(fn email ->
-        email.to == [{"", new_email}] and email.html_body =~ "/access/verify?token="
+        email.to == [{"", new_email}] and email.html_body =~ "/paciente/acceso/verificar?token="
       end)
 
       # Assert audit log entry

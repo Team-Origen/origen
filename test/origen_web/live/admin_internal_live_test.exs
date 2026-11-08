@@ -32,7 +32,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "renders the form with role and email fields", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "Crear Cuenta"
       assert html =~ "Rol"
@@ -43,7 +43,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "shows both professional and secretary options for administrator", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "Profesional"
       assert html =~ "Secretaria"
@@ -52,7 +52,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "shows only secretary option for non-administrator", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 2, role: :secretary})
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "Secretaria"
       refute html =~ "Profesional"
@@ -68,7 +68,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
         |> Plug.Test.init_test_session(%{})
         |> Plug.Conn.put_session(:internal_session_token, token)
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "Crear Cuenta"
       assert html =~ "Profesional"
@@ -78,19 +78,19 @@ defmodule OrigenWeb.AdminInternalLiveTest do
 
   describe "authorization" do
     test "redirects away without rendering the screen when there is no session", %{conn: conn} do
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/internal")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/administrador/cuentas")
     end
 
     test "redirects away for a role that is neither administrator nor secretary", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 3, role: :professional})
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/internal")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/administrador/cuentas")
     end
 
     test "redirects away for a patient session", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 4, role: :patient})
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/admin/internal")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/administrador/cuentas")
     end
   end
 
@@ -98,7 +98,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "shows validation error for invalid email", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -111,7 +111,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "shows validation error for missing role", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -124,7 +124,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "shows validation error for missing email", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -137,7 +137,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "clears validation errors when input is corrected", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -160,7 +160,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -176,7 +176,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -192,7 +192,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -206,7 +206,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -220,7 +220,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       view
       |> form("#admin-internal-form",
@@ -242,7 +242,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       secretary = insert_active_account("secretary")
       conn = put_user_in_session(conn, secretary)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -258,7 +258,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       secretary = insert_active_account("secretary")
       conn = put_user_in_session(conn, secretary)
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       # The form should not have professional as an option for secretaries
       refute html =~ "Profesional"
@@ -269,7 +269,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       secretary = insert_active_account("secretary")
       conn = put_user_in_session(conn, secretary)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       # Client bypasses DOM and directly pushes event
       html =
@@ -285,7 +285,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       # Client bypasses DOM and directly pushes event
       html =
@@ -300,7 +300,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       # First submission creates the account
       view
@@ -335,7 +335,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     } do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, view, html} = live(conn, ~p"/admin/internal")
+      {:ok, view, html} = live(conn, ~p"/administrador/cuentas")
       assert html =~ ~s(id="form_role")
       assert html =~ ~s(id="form_email")
 
@@ -352,7 +352,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
          %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       html =
         view
@@ -368,7 +368,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
 
-      {:ok, view, _html} = live(conn, ~p"/admin/internal")
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
 
       # Success case has role="status"
       html =
@@ -396,7 +396,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "form container has specified styling", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "bg-white"
       assert html =~ "border-[#E2E8F0]"
@@ -407,7 +407,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "inputs have specified styling", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "py-[20px]"
       assert html =~ "px-[16px]"
@@ -420,7 +420,7 @@ defmodule OrigenWeb.AdminInternalLiveTest do
     test "submit button has specified styling", %{conn: conn} do
       conn = put_user_in_session(conn, %{id: 1, role: :administrator})
 
-      {:ok, _view, html} = live(conn, ~p"/admin/internal")
+      {:ok, _view, html} = live(conn, ~p"/administrador/cuentas")
 
       assert html =~ "phx-disable-with=\"Creando Cuenta...\""
       assert html =~ "bg-[#174B63]"

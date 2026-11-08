@@ -52,7 +52,7 @@ defmodule OrigenWeb.InternalSessionControllerTest do
     assert {:ok, %{account_id: account_id}} = Sessions.fetch_session(token)
     assert account_id == account.id
 
-    protected_conn = conn |> recycle() |> get("/configuracion/profesional")
+    protected_conn = conn |> recycle() |> get("/profesional/ajustes")
     assert html_response(protected_conn, 200)
   end
 

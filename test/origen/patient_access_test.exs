@@ -23,7 +23,7 @@ defmodule Origen.PatientAccessTest do
       assert_email_sent(fn email ->
         assert email.to == [{"", @valid_email}]
         assert email.subject == "Tu enlace de acceso a Origen"
-        assert email.html_body =~ "/access/verify?token="
+        assert email.html_body =~ "/paciente/acceso/verificar?token="
 
         [_, raw_token] = Regex.run(~r/token=([^"&]+)/, email.html_body)
         decoded_token = URI.decode_www_form(raw_token)

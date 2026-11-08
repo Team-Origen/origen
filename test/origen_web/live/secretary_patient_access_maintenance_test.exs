@@ -165,7 +165,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
 
       # Assert email dispatch
       assert_email_sent(fn email ->
-        email.to == [{"", new_email}] and email.html_body =~ "/access/verify?token="
+        email.to == [{"", new_email}] and email.html_body =~ "/paciente/acceso/verificar?token="
       end)
     end
 

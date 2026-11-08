@@ -8,7 +8,12 @@ defmodule OrigenWeb.AdminActivationHTML do
 
       <p id="activation-status" class="mt-4">Checking invitation…</p>
       <meta name="_csrf_token" content={@csrf_token} />
-      <form id="fragment-exchange" action={~p"/admin/activate/exchange"} method="post" hidden>
+      <form
+        id="fragment-exchange"
+        action={~p"/administrador/activar/intercambiar"}
+        method="post"
+        hidden
+      >
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
         <input id="invitation-id" type="hidden" name="invitation_id" />
         <input id="invitation-token" type="hidden" name="token" />
@@ -50,7 +55,7 @@ defmodule OrigenWeb.AdminActivationHTML do
         <code data-totp-uri={@totp_uri} class="mt-2 block break-all">{@totp_uri}</code>
       </section>
 
-      <form action={~p"/admin/activate"} method="post" class="mt-6 space-y-4">
+      <form action={~p"/administrador/activar"} method="post" class="mt-6 space-y-4">
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
         <.input
           name="password"

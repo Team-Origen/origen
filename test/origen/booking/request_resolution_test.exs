@@ -42,12 +42,15 @@ defmodule Origen.Booking.RequestResolutionTest do
 
       # Comprobar que Booking.check_overlaps detecta el conflicto
       assert {:error, :professional_schedule_conflict} =
-               Booking.check_overlaps(%{
-                 professional_id: ctx.prof_a_id,
-                 patient_id: insert_patient_profile!("Maria", "Lopez", "35000222"),
-                 start_time: start_time,
-                 end_time: DateTime.add(start_time, 30, :minute)
-               })
+               Booking.check_overlaps(
+                 %{
+                   professional_id: ctx.prof_a_id,
+                   patient_id: insert_patient_profile!("Maria", "Lopez", "35000222"),
+                   start_time: start_time,
+                   end_time: DateTime.add(start_time, 30, :minute)
+                 },
+                 now: @fixed_now
+               )
 
       assert appt.status == "requested"
     end
@@ -57,7 +60,9 @@ defmodule Origen.Booking.RequestResolutionTest do
       start_time = ~U[2026-10-15 10:00:00Z]
       appt = insert_appointment!(ctx.patient_id, ctx.prof_a_id, start_time, "requested")
 
-      assert {:ok, updated} = RequestResolution.accept_request(ctx.prof_a_id, appt.id)
+      assert {:ok, updated} =
+               RequestResolution.accept_request(ctx.prof_a_id, appt.id, now: @fixed_now)
+
       assert updated.status == "confirmed"
 
       persisted = Repo.get!(Appointment, appt.id)
@@ -65,12 +70,15 @@ defmodule Origen.Booking.RequestResolutionTest do
 
       # El slot sigue ocupado
       assert {:error, :professional_schedule_conflict} =
-               Booking.check_overlaps(%{
-                 professional_id: ctx.prof_a_id,
-                 patient_id: insert_patient_profile!("Maria", "Lopez", "35000222"),
-                 start_time: start_time,
-                 end_time: DateTime.add(start_time, 30, :minute)
-               })
+               Booking.check_overlaps(
+                 %{
+                   professional_id: ctx.prof_a_id,
+                   patient_id: insert_patient_profile!("Maria", "Lopez", "35000222"),
+                   start_time: start_time,
+                   end_time: DateTime.add(start_time, 30, :minute)
+                 },
+                 now: @fixed_now
+               )
     end
 
     test "C3 & C4: profesional dueño rechaza solicitud pasando a cancelled y liberando el slot",
@@ -78,7 +86,9 @@ defmodule Origen.Booking.RequestResolutionTest do
       start_time = ~U[2026-10-15 11:00:00Z]
       appt = insert_appointment!(ctx.patient_id, ctx.prof_a_id, start_time, "requested")
 
-      assert {:ok, updated} = RequestResolution.reject_request(ctx.prof_a_id, appt.id)
+      assert {:ok, updated} =
+               RequestResolution.reject_request(ctx.prof_a_id, appt.id, now: @fixed_now)
+
       assert updated.status == "cancelled"
 
       persisted = Repo.get!(Appointment, appt.id)
@@ -88,12 +98,15 @@ defmodule Origen.Booking.RequestResolutionTest do
       other_patient_id = insert_patient_profile!("Pedro", "Sanchez", "36000333")
 
       assert {:ok, :no_conflict} =
-               Booking.check_overlaps(%{
-                 professional_id: ctx.prof_a_id,
-                 patient_id: other_patient_id,
-                 start_time: start_time,
-                 end_time: DateTime.add(start_time, 30, :minute)
-               })
+               Booking.check_overlaps(
+                 %{
+                   professional_id: ctx.prof_a_id,
+                   patient_id: other_patient_id,
+                   start_time: start_time,
+                   end_time: DateTime.add(start_time, 30, :minute)
+                 },
+                 now: @fixed_now
+               )
     end
 
     test "C5: Secretaría y Administrador tienen denegada la aceptación o rechazo", ctx do
@@ -136,7 +149,8 @@ defmodule Origen.Booking.RequestResolutionTest do
       appt =
         insert_appointment!(ctx.patient_id, ctx.prof_a_id, ~U[2026-10-15 16:30:00Z], "requested")
 
-      assert {:ok, _updated} = RequestResolution.accept_request(ctx.prof_a_id, appt.id)
+      assert {:ok, _updated} =
+               RequestResolution.accept_request(ctx.prof_a_id, appt.id, now: @fixed_now)
 
       prof_ref = "internal_account:#{ctx.prof_a_id}"
       entity_ref = "appointment:#{appt.id}"
@@ -158,7 +172,8 @@ defmodule Origen.Booking.RequestResolutionTest do
       appt =
         insert_appointment!(ctx.patient_id, ctx.prof_a_id, ~U[2026-10-15 16:45:00Z], "requested")
 
-      assert {:ok, _updated} = RequestResolution.reject_request(ctx.prof_a_id, appt.id)
+      assert {:ok, _updated} =
+               RequestResolution.reject_request(ctx.prof_a_id, appt.id, now: @fixed_now)
 
       prof_ref = "internal_account:#{ctx.prof_a_id}"
       entity_ref = "appointment:#{appt.id}"

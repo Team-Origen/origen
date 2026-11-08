@@ -13,6 +13,7 @@ defmodule Origen.Application do
       OrigenWeb.AdminActivationSessionStore,
       OrigenWeb.InternalActivationSessionStore,
       Origen.BootstrapAdmin.Local.Endpoint,
+      Origen.Booking.ExpiryWorker,
       OrigenWeb.ProviderEventReplay,
       {DNSCluster, query: Application.get_env(:origen, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Origen.PubSub},

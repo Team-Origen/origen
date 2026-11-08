@@ -43,10 +43,10 @@ defmodule OrigenWeb.AdminActivationControllerTest do
   } do
     invitation = issue_invitation()
 
-    assert response(get(conn, ~p"/admin/activate"), 404) == "Activation unavailable"
+    assert response(get(conn, ~p"/administrador/activar"), 404) == "Activation unavailable"
 
     conn =
-      post(build_conn(), ~p"/admin/activate/exchange", %{
+      post(build_conn(), ~p"/administrador/activar/intercambiar", %{
         "invitation_id" => to_string(invitation.invitation_id),
         "token" => invitation.token
       })
@@ -59,13 +59,13 @@ defmodule OrigenWeb.AdminActivationControllerTest do
   test "renders only a fragment exchange shell and removes the fragment before POST", %{
     conn: conn
   } do
-    conn = get(conn, https(~p"/admin/activate"))
+    conn = get(conn, https(~p"/administrador/activar"))
     body = html_response(conn, 200)
 
     assert body =~ "window.location.hash"
     assert body =~ "history.replaceState"
     assert body =~ ~s(name="_csrf_token")
-    assert body =~ ~s(action="/admin/activate/exchange")
+    assert body =~ ~s(action="/administrador/activar/intercambiar")
     refute body =~ ~s(type="password")
 
     {replace_index, _} = :binary.match(body, "history.replaceState")
@@ -98,7 +98,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       conn
       |> recycle()
       |> enforce_csrf()
-      |> post(https(~p"/admin/activate/exchange"), %{
+      |> post(https(~p"/administrador/activar/intercambiar"), %{
         "invitation_id" => to_string(invitation.invitation_id),
         "token" => invitation.token
       })
@@ -110,13 +110,13 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       conn
       |> recycle()
       |> enforce_csrf()
-      |> post(https(~p"/admin/activate/exchange"), %{
+      |> post(https(~p"/administrador/activar/intercambiar"), %{
         "_csrf_token" => csrf_token,
         "invitation_id" => to_string(invitation.invitation_id),
         "token" => invitation.token
       })
 
-    assert redirected_to(conn) == ~p"/admin/activate"
+    assert redirected_to(conn) == ~p"/administrador/activar"
     refute redirected_to(conn) =~ invitation.token
     refute redirected_to(conn) =~ to_string(invitation.invitation_id)
   end
@@ -127,7 +127,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
     invitation = issue_invitation()
 
     malformed_conn =
-      post(conn, https(~p"/admin/activate/exchange"), %{
+      post(conn, https(~p"/administrador/activar/intercambiar"), %{
         "invitation_id" => [],
         "token" => invitation.token
       })
@@ -136,7 +136,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
 
     conn =
       build_conn()
-      |> post(https(~p"/admin/activate/exchange"), %{
+      |> post(https(~p"/administrador/activar/intercambiar"), %{
         "invitation_id" => to_string(invitation.invitation_id),
         "token" => "invalid-token"
       })
@@ -164,17 +164,17 @@ defmodule OrigenWeb.AdminActivationControllerTest do
     invitation = issue_invitation()
     exchange_conn = exchange(conn, invitation)
 
-    page_conn = exchange_conn |> recycle() |> get(https(~p"/admin/activate"))
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/administrador/activar"))
     body = html_response(page_conn, 200)
 
     assert body =~ ~s(type="password")
     assert body =~ "otpauth://totp/"
     refute body =~ invitation.token
 
-    unrelated_body = build_conn() |> get(https(~p"/admin/activate")) |> html_response(200)
+    unrelated_body = build_conn() |> get(https(~p"/administrador/activar")) |> html_response(200)
     refute unrelated_body =~ ~s(type="password")
 
-    refreshed = page_conn |> recycle() |> get(https(~p"/admin/activate"))
+    refreshed = page_conn |> recycle() |> get(https(~p"/administrador/activar"))
     assert response(refreshed, 404) == "Activation unavailable"
     refute refreshed.resp_body =~ "otpauth://totp/"
   end
@@ -187,7 +187,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
 
     Process.sleep(1_100)
 
-    expired_conn = exchange_conn |> recycle() |> get(https(~p"/admin/activate"))
+    expired_conn = exchange_conn |> recycle() |> get(https(~p"/administrador/activar"))
     assert response(expired_conn, 404) == "Activation unavailable"
     assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
   end
@@ -195,13 +195,13 @@ defmodule OrigenWeb.AdminActivationControllerTest do
   test "rejects an invalid TOTP without persisting either factor", %{conn: conn} do
     invitation = issue_invitation()
     exchange_conn = exchange(conn, invitation)
-    page_conn = exchange_conn |> recycle() |> get(https(~p"/admin/activate"))
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/administrador/activar"))
     seed = page_conn |> html_response(200) |> totp_seed_from_page()
 
     conn =
       page_conn
       |> recycle()
-      |> post(https(~p"/admin/activate"), %{
+      |> post(https(~p"/administrador/activar"), %{
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password",
         "totp_code" => wrong_totp_code(seed)
@@ -222,7 +222,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       elem(BootstrapAdmin.reissue_first(failed.account_id, %{verifier_key: @verifier_key}), 1)
 
     exchange_conn = exchange(conn, invitation)
-    page_conn = exchange_conn |> recycle() |> get(https(~p"/admin/activate"))
+    page_conn = exchange_conn |> recycle() |> get(https(~p"/administrador/activar"))
     seed = page_conn |> html_response(200) |> totp_seed_from_page()
     code = NimbleTOTP.verification_code(seed)
 
@@ -232,7 +232,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       "totp_code" => code
     }
 
-    success_conn = page_conn |> recycle() |> post(https(~p"/admin/activate"), submission)
+    success_conn = page_conn |> recycle() |> post(https(~p"/administrador/activar"), submission)
     assert redirected_to(success_conn) == ~p"/"
 
     [["active", password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
@@ -241,7 +241,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
     assert [[consumed_at, nil]] = invitation_state(invitation.invitation_id)
     assert not is_nil(consumed_at)
 
-    replay_conn = page_conn |> recycle() |> post(https(~p"/admin/activate"), submission)
+    replay_conn = page_conn |> recycle() |> post(https(~p"/administrador/activar"), submission)
     assert response(replay_conn, 404) == "Activation unavailable"
 
     assert account_credentials(invitation.account_id) ==
@@ -258,14 +258,14 @@ defmodule OrigenWeb.AdminActivationControllerTest do
 
   defp exchange(conn, invitation) do
     conn
-    |> post(https(~p"/admin/activate/exchange"), %{
+    |> post(https(~p"/administrador/activar/intercambiar"), %{
       "invitation_id" => to_string(invitation.invitation_id),
       "token" => invitation.token
     })
   end
 
   defp csrf_page do
-    conn = build_conn() |> enforce_csrf() |> get(https(~p"/admin/activate"))
+    conn = build_conn() |> enforce_csrf() |> get(https(~p"/administrador/activar"))
 
     [csrf_token] =
       Regex.run(~r/name="_csrf_token" content="([^"]+)"/, conn.resp_body, capture: :all_but_first)
