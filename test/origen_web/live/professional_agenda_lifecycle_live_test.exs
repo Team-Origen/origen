@@ -65,13 +65,18 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
     conn: conn,
     principal: principal
   } do
+    agenda_date = ~D[2099-01-15]
+    appointment_start = DateTime.new!(agenda_date, ~T[09:00:00], "Etc/UTC")
+
     appointment =
       Fixtures.appointment!(fixture,
-        start_time: DateTime.add(DateTime.utc_now(), 3600, :second),
+        start_time: appointment_start,
         status: "requested"
       )
 
-    {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+    {:ok, view, _html} =
+      live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(agenda_date)}")
+
     {:ok, before} = Booking.list_appointment_history(principal)
 
     view |> element("#cancel-appointment-#{appointment.id}") |> render_click()
@@ -94,20 +99,25 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
     conn: conn,
     principal: principal
   } do
+    agenda_date = ~D[2099-01-15]
+    requested_start = DateTime.new!(agenda_date, ~T[09:00:00], "Etc/UTC")
+    confirmed_start = DateTime.new!(agenda_date, ~T[10:00:00], "Etc/UTC")
+
     requested =
       Fixtures.appointment!(fixture,
-        start_time: DateTime.add(DateTime.utc_now(), 1800, :second),
+        start_time: requested_start,
         status: "requested"
       )
 
     confirmed =
       Fixtures.appointment!(fixture,
         patient_profile_id: fixture.other_patient_id,
-        start_time: DateTime.add(DateTime.utc_now(), 3600, :second),
+        start_time: confirmed_start,
         status: "confirmed"
       )
 
-    {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+    {:ok, view, _html} =
+      live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(agenda_date)}")
 
     for {appointment, reason} <- [{requested, "Paciente reubicado"}, {confirmed, "Corte de luz"}] do
       view |> element("#cancel-appointment-#{appointment.id}") |> render_click()

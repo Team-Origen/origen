@@ -212,3 +212,46 @@ No hubo correcciones ni reintentos automáticos. La verificación usa fixtures
 sintéticos y PostgreSQL real, no navegador ni nube. T4 permanece bloqueada por
 los tres fallos y la prueba integral incompleta; una corrección acotada requiere
 una decisión explícita. No se declara aceptación de #378 ni cierre de #285.
+
+### Corrección acotada y reverificación de los tres bloqueos
+
+El usuario autorizó «Autorizo la corrección». Se ejecutó una sola tanda de
+correcciones, sin cambios de producción:
+
+- Los dos casos profesionales usan fixtures UTC deterministas para el
+  `2099-01-15` y abren explícitamente `?date=2099-01-15`. Los fixtures anteriores
+  sumaban minutos a la hora actual y podían caer en el día siguiente, fuera
+  del día UTC consultado por la agenda.
+- La prueba de privacidad del Paciente usa IDs exactos de tarjetas DOM propias
+  y ajenas y conserva la comprobación de identidad mediante
+  `Booking.list_appointment_history/1`; no se eliminó ni debilitó esa regla.
+
+Se conserva el RED original independiente de `107/110`. La reproducción local
+previa a la corrección observó `109/110` (exit 2): persistía el falso positivo
+numérico de privacidad, mientras los dos fallos de fecha no reaparecieron
+tras cambiar el día de ejecución. No se afirma haber reproducido localmente
+esos dos fallos por segunda vez. Tras la corrección, el comando focalizado de
+once archivos con `--seed 232781` obtuvo **110 passed, exit 0**. Formato y
+whitespace también pasaron; un error de formato se corrigió antes del resultado
+final.
+
+La reverificación independiente usó otra copia y base aisladas
+(`origen_test378recheck1`) y ejecutó una sola vez los tres casos originales:
+
+```sh
+mix test \
+  test/origen_web/live/professional_agenda_lifecycle_live_test.exs:63 \
+  test/origen_web/live/professional_agenda_lifecycle_live_test.exs:97 \
+  test/origen_web/live/patient_appointments_live_test.exs:30 \
+  --seed 232781
+```
+
+Resultado: **3 passed, 8 excluded, exit 0**. Los tres bloqueos quedaron
+satisfechos: motivo obligatorio/rechazo sin mutación, cancelación de solicitudes
+y confirmados, e identidad privada del historial del Paciente. No se tocaron
+backend, runtime ni autorización ni se deshabilitó el worker.
+
+Esto verifica la corrección acotada, no una nueva suite completa. Los fallos
+integrales anteriores, el problema baseline del sandbox y la ausencia de
+validación visual en navegador/nube se conservan como limitaciones. No se
+infiere aprobación de #378 ni cierre de #285.
