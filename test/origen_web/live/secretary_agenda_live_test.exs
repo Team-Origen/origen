@@ -90,6 +90,13 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
     assert html =~ "Paciente ##{fixture.patient_id}"
   end
 
+  test "renders the agenda date control with explicit light native colors", %{conn: conn} do
+    {:ok, _view, html} = live(conn, @path)
+
+    assert html =~
+             ~r/id="secretary-agenda-date"[^>]*class="[^\"]*bg-white[^\"]*text-stone-900[^\"]*\[color-scheme:light\][^\"]*"/s
+  end
+
   test "groups agenda entries and today by the organization timezone", %{
     fixture: fixture,
     conn: conn

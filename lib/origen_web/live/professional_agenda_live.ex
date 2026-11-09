@@ -723,7 +723,10 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                 <div class="space-y-1">
                   <div class="flex items-center gap-2.5">
                     <span class="text-lg font-bold text-[#0A3847]">
-                      {format_time(appt.start_time)} - {format_time(appt.end_time)}
+                      {format_time(appt.start_time, @organization_timezone)} - {format_time(
+                        appt.end_time,
+                        @organization_timezone
+                      )}
                     </span>
                     <span class={"text-xs font-semibold px-2.5 py-0.5 rounded-full border " <> status_classes}>
                       {status_label}
@@ -819,7 +822,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                         rows="2"
                         required
                         aria-describedby={"cancellation-help-#{appt.id}"}
-                        class="w-full rounded-md border-rose-200 text-sm focus:border-rose-500 focus:ring-rose-500"
+                        placeholder="Escribí el motivo de la cancelación"
+                        class="w-full rounded-md border-rose-200 bg-white text-stone-900 placeholder:text-stone-500 text-sm focus:border-rose-500 focus:ring-rose-500"
                       >{@cancellation_reason}</textarea>
                       <p id={"cancellation-help-#{appt.id}"} class="text-xs text-rose-800">
                         El motivo queda visible en el historial autorizado del turno.
@@ -1024,11 +1028,11 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
     """
   end
 
-  defp format_time(%DateTime{} = dt) do
-    Calendar.strftime(dt, "%H:%M")
+  defp format_time(%DateTime{} = dt, timezone) do
+    dt |> DateTime.shift_zone!(timezone) |> Calendar.strftime("%H:%M")
   end
 
-  defp format_time(_), do: "--:--"
+  defp format_time(_, _timezone), do: "--:--"
 
   defp format_date_spanish(%Date{} = d) do
     day_name =
