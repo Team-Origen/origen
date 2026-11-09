@@ -5,6 +5,7 @@ defmodule Origen.Appointments.AssistedBookingTest do
   alias Ecto.Adapters.SQL.Sandbox
   alias Origen.Appointments.AssistedBooking
   alias Origen.Booking.Appointment
+  alias Origen.Booking.Lifecycle
   alias Origen.Booking.ProfessionalPatientRelationship
   alias Origen.Repo
 
@@ -346,6 +347,78 @@ defmodule Origen.Appointments.AssistedBookingTest do
   end
 
   # Helpers privados de inserción
+
+  describe "corte de nuevas reservas para profesionales desactivados (contrato #372, #373)" do
+    test "list_consultation_types/1 rechaza un profesional desactivado", ctx do
+      SQL.query(Repo, "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1", [
+        ctx.professional_id
+      ])
+
+      assert {:error, :invalid_professional} =
+               AssistedBooking.list_consultation_types(ctx.professional_id)
+    end
+
+    test "get_daily_schedule/3 rechaza un profesional desactivado", ctx do
+      SQL.query(Repo, "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1", [
+        ctx.professional_id
+      ])
+
+      assert {:error, :invalid_professional} =
+               AssistedBooking.get_daily_schedule(ctx.professional_id, ~D[2026-10-15],
+                 duration_minutes: 30,
+                 now: @fixed_now,
+                 calendar_adapter: Origen.Appointments.DatabaseCalendar
+               )
+    end
+
+    test "reserve/4 sigue rechazando reservas para un profesional desactivado", ctx do
+      SQL.query(Repo, "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1", [
+        ctx.professional_id
+      ])
+
+      params = %{
+        professional_id: ctx.professional_id,
+        consultation_type_id: @consultation_type_id,
+        start_time: ~U[2026-10-15 09:00:00Z]
+      }
+
+      assert {:error, :invalid_professional} =
+               AssistedBooking.reserve(ctx.secretary_id, ctx.patient_profile_id, params,
+                 now: @fixed_now
+               )
+
+      assert Repo.aggregate(Appointment, :count, :id) == 0
+    end
+
+    test "los turnos históricos del profesional desactivado siguen legibles", ctx do
+      assert {:ok, _} =
+               AssistedBooking.reserve(
+                 ctx.secretary_id,
+                 ctx.patient_profile_id,
+                 %{
+                   professional_id: ctx.professional_id,
+                   consultation_type_id: @consultation_type_id,
+                   start_time: ~U[2026-10-15 09:00:00Z]
+                 },
+                 now: @fixed_now
+               )
+
+      SQL.query(Repo, "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1", [
+        ctx.professional_id
+      ])
+
+      {:ok, %{session: session}} = Origen.Sessions.create_session(ctx.secretary_id)
+
+      assert {:ok, history} =
+               Lifecycle.history(%{
+                 session_id: session.session_id,
+                 account_id: ctx.secretary_id
+               })
+
+      assert length(history) == 1
+      assert hd(history).professional_account_id == ctx.professional_id
+    end
+  end
 
   defp insert_internal_account!(email, role, "active") do
     query = """

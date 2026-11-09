@@ -115,9 +115,10 @@ defmodule Origen.Appointments.DatabaseCalendar do
 
   defp fetch_agenda_settings(owner_id) do
     query = """
-    SELECT weekly_availability, booking_horizon_days, minimum_lead_minutes, interval_minutes
-    FROM agenda_settings
-    WHERE owner_account_id = $1
+    SELECT s.weekly_availability, s.booking_horizon_days, s.minimum_lead_minutes, s.interval_minutes
+    FROM agenda_settings s
+    JOIN internal_accounts a ON a.id = s.owner_account_id
+    WHERE s.owner_account_id = $1 AND a.role = 'professional' AND a.state = 'active'
     """
 
     case Repo.query(query, [owner_id]) do

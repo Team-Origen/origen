@@ -21,9 +21,11 @@ defmodule Origen.ConsultationTypes.DatabaseCatalog do
            """
            SELECT s.interval_minutes, t.id, t.name, t.interval_count, t.exact_price_ars
            FROM agenda_settings s
+           JOIN internal_accounts a ON a.id = s.owner_account_id
            LEFT JOIN consultation_types t
              ON t.owner_account_id = s.owner_account_id AND t.status = 'active'
            WHERE s.owner_account_id = $1
+             AND a.role = 'professional' AND a.state = 'active'
            ORDER BY t.created_at, t.id
            """,
            [owner_id]
