@@ -16,6 +16,10 @@ alcance, estado y límite temporal en cada operación.
   identidad cargada por `PatientSessionAuthLive` conserva el nombre de cuenta,
   correo y el cierre de sesión de Paciente (`POST /paciente/cerrar-sesion`)
   tanto en el historial como en la reserva.
+- La disponibilidad de `/paciente/turnos/reservar` se actualiza periódicamente
+  mientras la sesión LiveView está conectada. Conserva la selección si el
+  horario sigue libre y la descarta si deja de estar disponible; no hace falta
+  cambiar la fecha o el filtro para ver las tarjetas actuales.
 - Un Paciente puede cancelar sus solicitudes y turnos confirmados sólo si el
   inicio todavía no llegó. La interfaz oculta la acción fuera de esa frontera,
   pero la garantía efectiva es `Origen.Booking.cancel_appointment/3`.
@@ -53,6 +57,12 @@ historial operativo se consulta por separado con
 `Origen.Booking.list_appointment_history/2`, que vuelve a validar la sesión y
 aplica el alcance de la agenda en el servidor.
 
+La agenda diaria y el historial operativo presentan el inicio y el fin en la
+misma zona horaria de la organización. Por ejemplo, un intervalo persistido
+como `15:30–16:00 UTC` se muestra como `12:30–13:00` en Buenos Aires en ambos
+bloques. Esta conversión es de presentación: no altera el instante persistido
+ni la reserva original.
+
 - Las solicitudes `requested` y los turnos `confirmed` de la agenda muestran
   cancelación con motivo obligatorio. El motivo se valida en el formulario y
   nuevamente en `Origen.Booking.cancel_appointment/3`; una denegación conserva
@@ -64,13 +74,17 @@ aplica el alcance de la agenda en el servidor.
 - El historial propio permanece visible después de cancelar o registrar un
   resultado. Expone estado, fecha, tipo, origen y motivo de cancelación cuando
   corresponden, sin notas clínicas, notificaciones automáticas, multas ni
-  reprogramación directa.
+  reprogramación directa. El bloque compartido de origen y motivo fija texto
+  oscuro sobre la tarjeta blanca, incluidos los valores, para evitar heredar
+  un texto claro del tema en las vistas que lo utilizan.
 - `expired` se presenta como vencido y no como ausencia. Cambiar fecha, hora o
   tipo exige cancelar el original y crear otro turno por el flujo autorizado.
 - La interfaz mantiene acciones con botones y formularios navegables por
   teclado, foco visible, etiquetas asociadas, mensajes `role="alert"`/`status`
-  y composición adaptable a pantallas angostas. No se agrega una ruta ni un
-  filtro nuevo para estas acciones.
+  y composición adaptable a pantallas angostas. Los campos de motivo fijan
+  fondo claro, texto oscuro y placeholder legible para no depender del color
+  heredado del tema. No se agrega una ruta ni un filtro nuevo para estas
+  acciones.
 
 ## Verificación del alcance Profesional
 
@@ -80,6 +94,9 @@ historial, cancelación ni asistencia. Cubren historial persistente al
 reingresar, motivo obligatorio sin mutación, cancelación de solicitudes y
 confirmados, ambos resultados de asistencia, rechazo de estados no confirmados
 o vencidos y rechazo de un identificador de otra agenda sin fuga de historial.
+La regresión horaria compara la tarjeta diaria y el historial del mismo turno:
+`15:30–16:00 UTC` debe verse como `12:30–13:00` en Buenos Aires, sin cambiar
+los datos del historial. También conserva la presentación original en UTC.
 Las pruebas existentes de `professional_agenda_live_test.exs` conservan
 aceptación/rechazo #284 y el parámetro de fecha. La prueba de dominio
 `request_resolution_test.exs` permanece incluida como regresión del recorrido
@@ -117,7 +134,9 @@ formularios e historial con el `patient_profile_id` que ya forma parte de la
 proyección pública autorizada de historial; no realiza búsquedas adicionales de
 perfiles ajenos ni expone datos clínicos o credenciales. La agrupación y el botón
 «Hoy» convierten los instantes UTC a la zona horaria de la organización antes de
-comparar fechas. El parámetro de fecha de Agenda no se agrega ni se modifica.
+comparar fechas. El control de fecha fija fondo claro, texto oscuro y
+`color-scheme: light` para que el valor y los controles nativos sigan siendo
+legibles en temas oscuros. El parámetro de fecha de Agenda no se agrega ni se modifica.
 
 La prueba
 `test/origen_web/live/secretary_agenda_live_test.exs` usa PostgreSQL real y
@@ -379,3 +398,39 @@ cambios de producción, dependencias ni tests durante esta verificación. Los
 fallos anteriores quedan como historia, no como bloqueos técnicos vigentes.
 La aprobación humana de #378, navegador/nube, publicación y cierre de #285
 siguen sin declararse.
+
+## Correcciones operativas verificadas
+
+El seguimiento de estas correcciones está en
+`odd/tasks/378-appointment-lifecycle-bugfix.md`. Se partió de `a987668` y se
+preservaron el servidor, la base local, las cuentas y los turnos manuales.
+La verificación utilizó exclusivamente un snapshot aislado y una base de
+pruebas UTF-8 con las 22 migraciones, sin provisioning ni cambios históricos.
+
+- Reserva e historial conservan el mismo instante: horario local en las
+  tarjetas y agendas, UTC persistido. La agenda diaria del Profesional y su
+  historial aplican la misma zona horaria de la organización.
+- El mensaje de horario ocupado se limpia al cambiar la selección. La
+  disponibilidad se refresca cada cinco segundos mientras LiveView está
+  conectado, conserva selecciones válidas y elimina las que quedan ocupadas.
+- Motivo, origen y sus valores tienen contraste explícito sobre la tarjeta
+  blanca; también lo tienen los campos de cancelación y la fecha de Secretaría.
+- El deslogueo dejó de reproducirse y el dueño confirmó que las sesiones se
+  conservan. Se agregó una regresión; no se modificó la autenticación.
+
+La pasada independiente aprobó **56 pruebas focales**. Su único caso pendiente
+se aprobó después en una ejecución exclusiva del timer: dos esperas reales de
+5,5 segundos, sin enviar eventos de refresh manualmente, verificaron tarjetas,
+selección válida y selección invalidada. La comprobación puntual del padre
+aprobó además el recorrido real tarjeta → UTC persistido → historial.
+Formato, comparación de 19 paths del snapshot y whitespace también pasaron.
+
+Los fallos auxiliares de resolución de Mix y de expectativa de duración del
+probe se conservaron antes de corregirlos; no se cuentan como ejecuciones
+aprobadas. La evidencia local está en
+`tmp/378-bugfix-independent.35vZwM/final-verification/`.
+
+La comprobación de contraste es DOM/CSS, no visual en navegador. La suite
+global y la carrera profesional optativa no se reejecutaron para estas
+correcciones; sus cifras anteriores son históricas. No se publicaron cambios
+ni se cerraron issues, ni se infiere aceptación humana integral.
