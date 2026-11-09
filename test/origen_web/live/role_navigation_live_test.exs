@@ -70,18 +70,16 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     assert_logout(view, "Secretaría")
   end
 
-  test "secretary account design and own email also appear on existing accounts screen", %{
+  test "secretary session is denied and redirected away from administrator accounts screen", %{
     conn: conn
   } do
     conn = internal_conn(conn, "secretary")
-    {:ok, view, _html} = live(conn, "/administrador/cuentas")
-    assert has_element?(view, "#navigation-secretary-avatar", "S")
-    assert has_element?(view, "#navigation-secretary-role", "Secretaría")
-    assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
-    assert_logout(view, "Secretaría")
+    assert {:error, {:redirect, %{to: "/"}}} = live(conn, "/administrador/cuentas")
   end
 
-  test "synthetic account identity cannot expose a secretary's persisted email", %{conn: conn} do
+  test "synthetic secretary identity is also denied on administrator accounts screen", %{
+    conn: conn
+  } do
     real_conn = internal_conn(conn, "secretary")
     {:ok, principal} = Sessions.fetch_session(get_session(real_conn, :internal_session_token))
 
@@ -90,10 +88,7 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
         current_user: %{"id" => principal.account_id, "role" => "secretary"}
       })
 
-    {:ok, view, _} = live(forged_conn, "/administrador/cuentas")
-    assert has_element?(view, "#navigation-secretary-name", "Secretaría")
-    refute has_element?(view, "#navigation-secretary-email")
-    refute has_element?(view, "#navigation-account-options", "nav-secretary@example.test")
+    assert {:error, {:redirect, %{to: "/"}}} = live(forged_conn, "/administrador/cuentas")
   end
 
   test "administrator navigation only links to accounts and preserves its form", %{conn: conn} do
