@@ -17,6 +17,8 @@ defmodule Origen.Booking.RequestResolution do
   alias Origen.Booking.Appointment
   alias Origen.Booking.Expiry
   alias Origen.Repo
+  alias Origen.Sessions
+  alias Origen.Sessions.InternalSession
 
   @resolution_audit_insert """
   INSERT INTO public.audit_events
@@ -31,13 +33,13 @@ defmodule Origen.Booking.RequestResolution do
   profesional o inactivo siempre recibe `{:error, :unauthorized}`, incluso ante
   IDs inexistentes, sin revelar la existencia de turnos ajenos (oráculo IDOR).
   """
-  @spec accept_request(integer(), integer(), keyword()) ::
+  @spec accept_request(integer() | map() | InternalSession.t(), integer(), keyword()) ::
           {:ok, Appointment.t()} | {:error, term()}
-  def accept_request(actor_account_id, appointment_id, opts \\ [])
+  def accept_request(actor, appointment_id, opts \\ [])
 
-  def accept_request(actor_account_id, appointment_id, opts)
-      when is_integer(actor_account_id) and is_integer(appointment_id) and is_list(opts) do
-    with :ok <- ensure_active_professional(actor_account_id) do
+  def accept_request(actor, appointment_id, opts)
+      when is_integer(appointment_id) and is_list(opts) do
+    with {:ok, actor_account_id} <- resolve_active_professional(actor) do
       resolve_request(
         actor_account_id,
         appointment_id,
@@ -55,13 +57,13 @@ defmodule Origen.Booking.RequestResolution do
 
   La validación del actor precede a cualquier consulta del turno (ver `accept_request/2`).
   """
-  @spec reject_request(integer(), integer(), keyword()) ::
+  @spec reject_request(integer() | map() | InternalSession.t(), integer(), keyword()) ::
           {:ok, Appointment.t()} | {:error, term()}
-  def reject_request(actor_account_id, appointment_id, opts \\ [])
+  def reject_request(actor, appointment_id, opts \\ [])
 
-  def reject_request(actor_account_id, appointment_id, opts)
-      when is_integer(actor_account_id) and is_integer(appointment_id) and is_list(opts) do
-    with :ok <- ensure_active_professional(actor_account_id) do
+  def reject_request(actor, appointment_id, opts)
+      when is_integer(appointment_id) and is_list(opts) do
+    with {:ok, actor_account_id} <- resolve_active_professional(actor) do
       resolve_request(
         actor_account_id,
         appointment_id,
@@ -117,11 +119,11 @@ defmodule Origen.Booking.RequestResolution do
   valor inválido produce `{:error, :invalid_approval_mode}` o
   `{:error, :invalid_secretary_approval_mode}`.
   """
-  @spec update_approval_configuration(integer(), map()) ::
+  @spec update_approval_configuration(integer() | map() | InternalSession.t(), map()) ::
           {:ok, map()} | {:error, term()}
-  def update_approval_configuration(professional_account_id, attrs)
-      when is_integer(professional_account_id) and is_map(attrs) do
-    with :ok <- ensure_active_professional(professional_account_id),
+  def update_approval_configuration(professional_actor, attrs)
+      when is_map(attrs) do
+    with {:ok, professional_account_id} <- resolve_active_professional(professional_actor),
          {:ok, app_mode} <- validate_optional_approval_mode(attrs),
          {:ok, sec_mode} <- validate_optional_secretary_mode(attrs) do
       query = """
@@ -233,6 +235,25 @@ defmodule Origen.Booking.RequestResolution do
   end
 
   # Helpers privados
+
+  defp resolve_active_professional(%InternalSession{id: session_id, account_id: account_id}),
+    do: resolve_active_professional(%{session_id: session_id, account_id: account_id})
+
+  defp resolve_active_professional(%{session_id: session_id, account_id: account_id})
+       when is_integer(session_id) and is_integer(account_id) do
+    case Sessions.revalidate_principal(session_id, account_id) do
+      {:ok, %{account_id: id, role: :professional}} -> {:ok, id}
+      _ -> {:error, :unauthorized}
+    end
+  end
+
+  defp resolve_active_professional(actor_id) when is_integer(actor_id) do
+    with :ok <- ensure_active_professional(actor_id) do
+      {:ok, actor_id}
+    end
+  end
+
+  defp resolve_active_professional(_invalid), do: {:error, :unauthorized}
 
   defp ensure_active_professional(actor_id) do
     query = """

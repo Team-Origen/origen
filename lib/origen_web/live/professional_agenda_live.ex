@@ -173,9 +173,9 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   def handle_event("accept_request", %{"id" => id_str}, socket) do
     case parse_appointment_id(id_str) do
       {:ok, appt_id} ->
-        actor_id = socket.assigns.current_internal_session.account_id
+        actor = socket.assigns.current_internal_session
 
-        case Booking.accept_request(actor_id, appt_id) do
+        case Booking.accept_request(actor, appt_id) do
           {:ok, _updated} ->
             {:noreply,
              socket
@@ -201,9 +201,9 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   def handle_event("reject_request", %{"id" => id_str}, socket) do
     case parse_appointment_id(id_str) do
       {:ok, appt_id} ->
-        actor_id = socket.assigns.current_internal_session.account_id
+        actor = socket.assigns.current_internal_session
 
-        case Booking.reject_request(actor_id, appt_id) do
+        case Booking.reject_request(actor, appt_id) do
           {:ok, _updated} ->
             {:noreply,
              socket
@@ -227,14 +227,14 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
   @impl true
   def handle_event("update_approval_config", params, socket) do
-    actor_id = socket.assigns.current_internal_session.account_id
+    actor = socket.assigns.current_internal_session
 
     attrs = %{
       approval_mode: Map.get(params, "approval_mode"),
       secretary_approval_mode: Map.get(params, "secretary_approval_mode")
     }
 
-    case Booking.update_approval_configuration(actor_id, attrs) do
+    case Booking.update_approval_configuration(actor, attrs) do
       {:ok, config} ->
         {:noreply,
          socket
@@ -578,9 +578,19 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
         <!-- Listado cronológico de turnos -->
         <%= if is_nil(@error) and @appointments != [] do %>
+          <% primary_appt_by_patient =
+            Enum.reduce(@appointments, %{}, fn a, acc ->
+              Map.put_new(acc, a.patient.id, a.id)
+            end) %>
           <div id="agenda-appointments-list" class="space-y-3" role="list">
             <%= for appt <- @appointments do %>
               <% {status_label, status_classes} = status_badge(appt.status) %>
+              <% primary_patient_card? =
+                Map.get(primary_appt_by_patient, appt.patient.id) == appt.id %>
+              <% patient_dom_key =
+                if primary_patient_card?,
+                  do: to_string(appt.patient.id),
+                  else: "#{appt.patient.id}-#{appt.id}" %>
               <div
                 id={"appointment-#{appt.id}"}
                 role="listitem"
@@ -653,7 +663,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
                   <% {access_label, access_classes} = access_badge(appt.patient.access_status) %>
                   <div
-                    id={"patient-access-status-#{appt.patient.id}"}
+                    id={"patient-access-status-#{patient_dom_key}"}
                     class={"mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold " <> access_classes}
                     role="status"
                   >
@@ -664,7 +674,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                     <button
                       :if={appt.patient.access_status == :unlinked}
                       type="button"
-                      id={"btn-open-link-access-#{appt.patient.id}"}
+                      id={"btn-open-link-access-#{patient_dom_key}"}
                       phx-click="open_link_access"
                       phx-value-patient-id={appt.patient.id}
                       class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
@@ -674,7 +684,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                     <button
                       :if={appt.patient.access_status != :unlinked}
                       type="button"
-                      id={"btn-open-replace-access-#{appt.patient.id}"}
+                      id={"btn-open-replace-access-#{patient_dom_key}"}
                       phx-click="open_replace_access"
                       phx-value-patient-id={appt.patient.id}
                       class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
@@ -683,14 +693,14 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                     </button>
                   </div>
 
-                  <%= if to_string(@access_patient_id) == to_string(appt.patient.id) and @access_action do %>
+                  <%= if primary_patient_card? and to_string(@access_patient_id) == to_string(appt.patient.id) and @access_action do %>
                     <section
-                      id={"patient-access-form-#{appt.patient.id}"}
+                      id={"patient-access-form-#{patient_dom_key}"}
                       class="mt-3 border-t border-stone-200 pt-3 text-left sm:text-right"
                     >
                       <div
                         :if={@access_error}
-                        id={"patient-access-error-#{appt.patient.id}"}
+                        id={"patient-access-error-#{patient_dom_key}"}
                         role="alert"
                         class="mb-2 text-xs font-medium text-rose-700"
                       >
@@ -700,7 +710,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       <.form
                         for={%{}}
                         as={:access}
-                        id={"patient-access-form-fields-#{appt.patient.id}"}
+                        id={"patient-access-form-fields-#{patient_dom_key}"}
                         phx-submit={
                           if @access_action == :link,
                             do: "submit_link_access",
