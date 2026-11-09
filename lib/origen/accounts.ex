@@ -12,6 +12,7 @@ defmodule Origen.Accounts do
 
   @allowed_roles ~w(administrator professional secretary)
   @staff_roles ~w(professional secretary)
+  @staff_role_atoms [:professional, :secretary]
 
   @type account_summary :: %{
           id: integer(),
@@ -139,6 +140,250 @@ defmodule Origen.Accounts do
   end
 
   def reissue_internal_invitation(_actor_id, _account_id, _opts),
+    do: {:error, :unauthorized}
+
+  @doc """
+  Lists professional and secretary accounts as a sanitized administrative
+  projection for an active Administrator (contract #372).
+
+  The projection never exposes credentials, TOTP material, patient identities,
+  or agendas; it includes the count of future affected appointments so the
+  Administrator can flag Secretary follow-up without opening operational data.
+  Accepts an administrator account id, a revalidated session principal
+  (`%{session_id: _, account_id: _}`), or an id map as `actor`.
+  """
+  @spec list_internal_accounts(integer() | map(), keyword()) ::
+          {:ok, [map()]} | {:error, :unauthorized}
+  def list_internal_accounts(actor, opts \\ [])
+
+  def list_internal_accounts(actor, opts) when is_list(opts) do
+    Repo.transaction(fn ->
+      administrator = resolve_administrator_actor!(actor)
+
+      authorize_administrator_lifecycle!(
+        administrator,
+        :list_internal_accounts,
+        %{roles: @staff_role_atoms}
+      )
+
+      now = Keyword.get(opts, :now, DateTime.utc_now())
+
+      Repo.query!("""
+      SELECT id, email, role, state, activated_at, created_at, updated_at
+      FROM internal_accounts
+      WHERE role IN ('professional', 'secretary')
+      ORDER BY id ASC
+      """).rows
+      |> Enum.map(fn [id, email, role, state, activated_at, created_at, updated_at] ->
+        %{
+          id: id,
+          email: email,
+          role: role_atom(role),
+          state: state_atom(state),
+          activated_at: activated_at,
+          created_at: created_at,
+          updated_at: updated_at,
+          future_affected_appointments_count: future_affected_appointments_count(role, id, now)
+        }
+      end)
+    end)
+  end
+
+  def list_internal_accounts(_actor, _opts), do: {:error, :unauthorized}
+
+  @doc """
+  Edits the administrative email of a professional or secretary account.
+
+  The email is normalized with `trim + downcase`, validated, and checked for
+  case-insensitive uniqueness (`{:error, :invalid_email}` / `{:error,
+  :email_taken}`). The account `id`, role, state, credentials, appointments, and
+  relationships are preserved. Only an active Administrator may perform the
+  operation; every rejection leaves zero mutations and zero audit events.
+  """
+  @spec update_internal_account(integer() | map(), integer(), map(), keyword()) ::
+          {:ok, map()} | {:error, :unauthorized | :invalid_email | :email_taken}
+  def update_internal_account(actor, target_account_id, attrs, opts \\ [])
+
+  def update_internal_account(actor, target_account_id, attrs, opts)
+      when is_integer(target_account_id) and is_map(attrs) and is_list(opts) do
+    Repo.transaction(fn ->
+      administrator = resolve_administrator_actor!(actor)
+      target = lock_account!(target_account_id, "FOR UPDATE")
+      ensure_staff_target!(target)
+
+      authorize_administrator_lifecycle!(
+        administrator,
+        :update_internal_account,
+        %{role: role_atom(target.role), state: state_atom(target.state)}
+      )
+
+      clean_email = normalize_update_email!(attrs)
+      ensure_email_available!(clean_email, target.id)
+
+      %{rows: [[^target_account_id]]} =
+        Repo.query!(
+          """
+          UPDATE internal_accounts
+          SET email = $2, updated_at = clock_timestamp()
+          WHERE id = $1
+          RETURNING id
+          """,
+          [target.id, clean_email]
+        )
+
+      append_lifecycle_audit!(
+        Events.internal_account_updated(
+          {:administrator, to_string(administrator.id)},
+          to_string(target.id)
+        )
+      )
+
+      count =
+        future_affected_appointments_count(
+          target.role,
+          target.id,
+          Keyword.get(opts, :now, DateTime.utc_now())
+        )
+
+      %{
+        id: target.id,
+        email: clean_email,
+        role: role_atom(target.role),
+        state: state_atom(target.state),
+        future_affected_appointments_count: count
+      }
+    end)
+  end
+
+  def update_internal_account(_actor, _target_account_id, _attrs, _opts),
+    do: {:error, :unauthorized}
+
+  @doc "Alias for `update_internal_account/4` using the contract's public verb."
+  def update_staff_account_email(actor, target_account_id, attrs),
+    do: update_internal_account(actor, target_account_id, attrs)
+
+  @doc """
+  Deactivates a professional or secretary account atomically (contract #372).
+
+  Moves the account to `"deactivated"` (credentials and `activated_at` are kept
+  when the account had been activated), revokes every active session and any
+  pending invitation, preserves all appointments and history untouched, and
+  returns the count of future affected appointments (`requested`, `confirmed`,
+  or `reserved` starting after `now`; `0` for Secretary accounts) without
+  exposing patient identities or agendas.
+  """
+  @spec deactivate_internal_account(integer() | map(), integer(), keyword()) ::
+          {:ok, map()} | {:error, :unauthorized}
+  def deactivate_internal_account(actor, target_account_id, opts \\ [])
+
+  def deactivate_internal_account(actor, target_account_id, opts)
+      when is_integer(target_account_id) and is_list(opts) do
+    Repo.transaction(fn ->
+      administrator = resolve_administrator_actor!(actor)
+      target = lock_account!(target_account_id, "FOR UPDATE")
+      ensure_staff_target!(target)
+
+      authorize_administrator_lifecycle!(
+        administrator,
+        :deactivate_internal_account,
+        %{role: role_atom(target.role), state: state_atom(target.state)}
+      )
+
+      now = Keyword.get(opts, :now, DateTime.utc_now())
+
+      Repo.query!(
+        """
+        UPDATE internal_accounts
+        SET state = 'deactivated', updated_at = clock_timestamp()
+        WHERE id = $1
+        """,
+        [target.id]
+      )
+
+      :ok = Sessions.terminate_all_sessions(target.id, now: now)
+
+      Repo.query!(
+        """
+        UPDATE internal_account_invitations
+        SET revoked_at = clock_timestamp()
+        WHERE account_id = $1 AND consumed_at IS NULL AND revoked_at IS NULL
+        """,
+        [target.id]
+      )
+
+      count = future_affected_appointments_count(target.role, target.id, now)
+
+      append_lifecycle_audit!(
+        Events.internal_account_deactivated(
+          {:administrator, to_string(administrator.id)},
+          to_string(target.id)
+        )
+      )
+
+      staff_account_result(target, :deactivated, count)
+    end)
+  end
+
+  def deactivate_internal_account(_actor, _target_account_id, _opts),
+    do: {:error, :unauthorized}
+
+  @doc """
+  Reactivates a deactivated professional or secretary account (contract #372).
+
+  Restores `"active"` when the account kept its enrolled credentials, or
+  `"pending_activation"` when it was deactivated before activation (allowing a
+  fresh invitation). Existing appointments are never modified: cancelled
+  appointments stay cancelled and pending requests keep their state.
+  """
+  @spec reactivate_internal_account(integer() | map(), integer(), keyword()) ::
+          {:ok, map()} | {:error, :unauthorized}
+  def reactivate_internal_account(actor, target_account_id, opts \\ [])
+
+  def reactivate_internal_account(actor, target_account_id, opts)
+      when is_integer(target_account_id) and is_list(opts) do
+    Repo.transaction(fn ->
+      administrator = resolve_administrator_actor!(actor)
+      target = lock_staff_account!(target_account_id)
+      ensure_staff_target!(target)
+
+      authorize_administrator_lifecycle!(
+        administrator,
+        :reactivate_internal_account,
+        %{role: role_atom(target.role), state: state_atom(target.state)}
+      )
+
+      restored_state =
+        if is_binary(target.password_hash) and is_binary(target.totp_secret) and
+             not is_nil(target.activated_at) do
+          "active"
+        else
+          "pending_activation"
+        end
+
+      Repo.query!(
+        "UPDATE internal_accounts SET state = $2, updated_at = clock_timestamp() WHERE id = $1",
+        [target.id, restored_state]
+      )
+
+      count =
+        future_affected_appointments_count(
+          target.role,
+          target.id,
+          Keyword.get(opts, :now, DateTime.utc_now())
+        )
+
+      append_lifecycle_audit!(
+        Events.internal_account_reactivated(
+          {:administrator, to_string(administrator.id)},
+          to_string(target.id)
+        )
+      )
+
+      staff_account_result(target, state_atom(restored_state), count)
+    end)
+  end
+
+  def reactivate_internal_account(_actor, _target_account_id, _opts),
     do: {:error, :unauthorized}
 
   @doc """
@@ -494,6 +739,140 @@ defmodule Origen.Accounts do
     end
   end
 
+  defp resolve_administrator_actor!(%{session_id: session_id, account_id: account_id})
+       when is_integer(session_id) and is_integer(account_id) do
+    case Sessions.revalidate_principal(session_id, account_id) do
+      {:ok, _session} -> lock_account!(account_id, "FOR SHARE")
+      _stale -> Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp resolve_administrator_actor!(actor_id) when is_integer(actor_id),
+    do: lock_account!(actor_id, "FOR SHARE")
+
+  defp resolve_administrator_actor!(%{id: account_id}) when is_integer(account_id),
+    do: lock_account!(account_id, "FOR SHARE")
+
+  defp resolve_administrator_actor!(%{"id" => account_id}) when is_integer(account_id),
+    do: lock_account!(account_id, "FOR SHARE")
+
+  defp resolve_administrator_actor!(_invalid), do: Repo.rollback(:unauthorized)
+
+  defp ensure_staff_target!(target) do
+    unless target.role in @staff_roles, do: Repo.rollback(:unauthorized)
+    :ok
+  end
+
+  defp authorize_administrator_lifecycle!(actor, operation, target) do
+    request =
+      Request.new(
+        operation: Fact.known(operation),
+        subject: Fact.known({:role, role_atom(actor.role)}),
+        account_state: Fact.known(state_atom(actor.state)),
+        target: Fact.known(target),
+        scope: :not_applicable
+      )
+
+    case Authorization.decide(request) do
+      {:allow, _rule} -> :ok
+      _denied -> Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp lock_staff_account!(account_id) do
+    case Repo.query!(
+           """
+           SELECT id, email, role, state, password_hash, totp_secret, activated_at
+           FROM internal_accounts
+           WHERE id = $1
+           FOR UPDATE
+           """,
+           [account_id]
+         ).rows do
+      [[id, email, role, state, password_hash, totp_secret, activated_at]] ->
+        %{
+          id: id,
+          email: email,
+          role: role,
+          state: state,
+          password_hash: password_hash,
+          totp_secret: totp_secret,
+          activated_at: activated_at
+        }
+
+      [] ->
+        Repo.rollback(:unauthorized)
+    end
+  end
+
+  defp normalize_update_email!(attrs) do
+    attrs
+    |> Map.get(:email)
+    |> Kernel.||(Map.get(attrs, "email"))
+    |> case do
+      raw when is_binary(raw) ->
+        clean = raw |> String.trim() |> String.downcase()
+
+        if Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, clean) do
+          clean
+        else
+          Repo.rollback(:invalid_email)
+        end
+
+      _missing_or_invalid ->
+        Repo.rollback(:invalid_email)
+    end
+  end
+
+  defp ensure_email_available!(email, account_id) do
+    case Repo.query!(
+           "SELECT 1 FROM internal_accounts WHERE lower(email) = lower($1) AND id != $2",
+           [email, account_id]
+         ).rows do
+      [] -> :ok
+      _taken -> Repo.rollback(:email_taken)
+    end
+  end
+
+  defp future_affected_appointments_count("professional", account_id, %DateTime{} = now) do
+    %{rows: [[count]]} =
+      Repo.query!(
+        """
+        SELECT count(*)
+        FROM appointments
+        WHERE professional_account_id = $1
+          AND start_time > $2
+          AND status IN ('requested', 'confirmed', 'reserved')
+        """,
+        [account_id, now]
+      )
+
+    count
+  end
+
+  defp future_affected_appointments_count(_secretary, _account_id, _now), do: 0
+
+  defp append_lifecycle_audit!(event) do
+    with {:ok, audit_event} <- event,
+         {:ok, _audit} <- Writer.append(audit_event, {:allow, :sys_01}) do
+      :ok
+    else
+      _audit_failure -> Repo.rollback(:audit_unavailable)
+    end
+  end
+
+  defp staff_account_result(target, state_atom, count) do
+    account = %{
+      id: target.id,
+      email: target.email,
+      role: role_atom(target.role),
+      state: state_atom,
+      future_affected_appointments_count: count
+    }
+
+    Map.put(account, :account, account)
+  end
+
   defp lock_account!(account_id, lock) when lock in ["FOR SHARE", "FOR UPDATE"] do
     case Repo.query!(
            "SELECT id, email, role, state FROM internal_accounts WHERE id = $1 #{lock}",
@@ -535,7 +914,21 @@ defmodule Origen.Accounts do
           [invitation_id]
         )
 
-      _missing_or_invalid ->
+      [] ->
+        case Repo.query!(
+               """
+               SELECT id
+               FROM internal_account_invitations
+               WHERE account_id = $1 AND consumed_at IS NULL AND revoked_at IS NOT NULL
+               LIMIT 1
+               """,
+               [account_id]
+             ).rows do
+          [[_revoked_id]] -> :ok
+          _missing -> Repo.rollback(:unauthorized)
+        end
+
+      _invalid ->
         Repo.rollback(:unauthorized)
     end
   end
@@ -761,6 +1154,7 @@ defmodule Origen.Accounts do
 
   defp state_atom("active"), do: :active
   defp state_atom("pending_activation"), do: :pending_activation
+  defp state_atom("deactivated"), do: :deactivated
   defp state_atom(_unknown), do: :unknown
 
   defp unwrap_invitation_transaction({:ok, result}), do: {:ok, result}
