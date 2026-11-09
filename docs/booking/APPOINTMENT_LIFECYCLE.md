@@ -127,12 +127,21 @@ The isolated UTF-8 database used port `55439` and partition
 Existing OTP 28.0 regex, deprecated helper and migration-redefinition warnings
 remain, along with the expected sandbox ownership deferral warning.
 
-Independent runtime verification remains **unverified**: its scratch copy
-contained the old worker, so its 13 failures are not evidence against this fix.
-A fresh source payload has been byte-checked, without rerunning verification.
-Initialization without ownership, timer-driven rescheduling/recovery and
-unexpected-error propagation still need the independent runtime proof. No
-approval, publication or issue closure is inferred from the global pass.
+The first independent runtime attempt used the old worker, so its 13 failures
+are not evidence against this fix. A newly authorized attempt archived the
+committed corrected source and verified source/test bytes before execution.
+Its focused command passed **13 tests**, exit 0, seed 0. A scratch-only probe
+also observed initialization and two timer-driven sweeps surviving without
+ownership, with rescheduling preserved.
+
+That probe then failed at `Sandbox.allow/3` with `:not_found`, exit 1: switching
+from shared to manual mode had checked in its owner's connection. This is a
+probe setup error, not an observed production regression. Timer-driven owned
+expiration and unexpected-error DOWN were not reached and remain **unverified**.
+No automatic rerun occurred; a bounded continuation needs a fresh explicit
+human request, fixing only scratch ownership setup and exact DOWN assertions.
+The previous global pass remains valid and was not repeated. No approval,
+publication or issue closure is inferred.
 
 ## Verification record — #377
 

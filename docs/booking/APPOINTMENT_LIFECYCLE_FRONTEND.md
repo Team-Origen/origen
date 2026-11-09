@@ -297,3 +297,26 @@ Los apartados anteriores conservan la secuencia histórica, incluidos todos los
 fallos y sus correcciones; este apartado registra el estado vigente. Se usaron
 fixtures sintéticos con PostgreSQL real: no se declara verificación visual en
 navegador, integración en nube, aprobación de #378 ni cierre de #285.
+
+### Nueva verificación independiente autorizada — prueba parcial vigente
+
+El usuario autorizó «Autorizo la nueva verificación independiente.». Esta vez
+el snapshot de `bd7fa0b` contenía la corrección: los hashes y la igualdad de bytes
+del worker y de su prueba se comprobaron antes de ejecutar. El comando focal
+independiente obtuvo **13 passed, exit 0, seed 0**.
+
+El probe aislado comprobó el arranque sin ownership y dos barridos reales del
+temporizador sin ownership, con reprogramación conservada. Después falló en
+`Sandbox.allow/3`: `:not_found`, `MatchError`, **exit 1**. El propio probe había
+cambiado de sandbox compartido a manual después de crear el owner; ese cambio
+devuelve su checkout y lo invalida. Es un fallo recuperable de preparación del
+probe, no un fallo demostrado del código de producción.
+
+No se alcanzaron las fases de expiración persistida por temporizador con
+ownership ni de `DOWN` por un error inesperado. Esas dos pruebas siguen
+pendientes; tampoco se acepta una aserción que sólo descarte una excepción
+sin validar su forma dentro del motivo de `DOWN`. No hubo reintento automático,
+cambios de producción ni repetición de la suite global ya aprobada. Una
+continuación acotada debe corregir sólo el setup y las aserciones del probe y
+ejecutar únicamente esas dos fases, con autorización explícita. Los resultados
+anteriores y las limitaciones de navegador/nube/aprobación se conservan.
