@@ -155,7 +155,37 @@ The prior one-correction/one-execution bound is exhausted. A new explicit bounde
 continuation must cover those scratch-only fixes and the two remaining checks
 against the already prepared database, without production changes or repeated
 passing tests. This remains verifier preparation/probe failure, not observed
-application regression or completed independent proof.
+application regression or completed independent proof at that stage.
+
+### Completed independent runtime verification
+
+The next explicitly authorized batch corrected only the duplicate allowance and
+DOWN tuple assertions in a new scratch helper. The parent confirmed the existing
+UTF-8 verifier database, appointments table and 22 migrations before execution,
+and inspected the complete corrected helper. Static syntax validation passed.
+The single independent `mix run` then exited **0**, with both remaining cases
+actually executed and passed:
+
+- `timer_owned_expiry=expired`: persisted status was `requested` before granting
+  worker ownership, then became `expired` after a traced real timer delivery and
+  synchronized sweep. No manual sweep or lazy-expiry history read caused it.
+- Unexpected-error DOWN matched exactly
+  `{%RuntimeError{message: exact_missing_repo_message}, stacktrace}` with a list
+  stacktrace. The deliberate unavailable-repo error terminated the anonymous
+  worker rather than being swallowed.
+
+Together with the previous independent 13 tests and initialization/two periodic
+no-ownership sweeps, this completes the required runtime proof. Earlier failed
+attempts remain in the record. A redundant child metadata query failed on the
+nonexistent `pg_database_encoding()` function and was not retried; it is not
+claimed as passing. The parent's valid metadata query had already passed, and
+both runtime cases used the correct prepared database. OTP/ownership warnings
+and the intentional RuntimeError termination log are retained.
+
+No production code, tests or dependencies changed during verification. Neither
+passing tests nor the global suite were repeated. Technical verification is
+complete; human feature acceptance, browser/cloud validation, publication and
+issue closure are not claimed.
 
 ## Verification record — #377
 

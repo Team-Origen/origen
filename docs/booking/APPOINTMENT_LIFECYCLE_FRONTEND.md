@@ -343,4 +343,39 @@ La continuación propuesta queda limitada a una tanda para esas dos aserciones
 y una ejecución de los dos casos, con `gentle-ai-verify`, reutilizando la base
 ya creada y migrada. No requiere otra suite global, fixtures de otras bases,
 cambios de producción ni publicación. La evidencia previa sigue válida, pero
-la verificación independiente del runtime continúa incompleta.
+la verificación independiente del runtime continuaba incompleta en esa etapa.
+
+### Verificación técnica del runtime completada — estado vigente
+
+La autorización siguiente permitió una tanda para las dos aserciones y una
+única ejecución de los dos casos. `gentle-ai-verify` preparó `probe.final.exs`
+sin sobrescribir los intentos anteriores. Antes de ejecutarlo, el padre confirmó
+la base existente en UTF-8, la tabla `appointments` y las 22 migraciones, y leyó
+el helper corregido completo. La validación de sintaxis pasó.
+
+La ejecución independiente terminó con **exit 0** y ambos casos aprobados:
+
+- **Expiración por temporizador con ownership:** verificó el estado persistido
+  `requested` antes de permitir acceso al worker; observó un mensaje real del
+  temporizador y luego `expired` persistido. No envió `:sweep` manualmente ni
+  consultó un historial que pudiera producir vencimiento por sí mismo.
+- **Propagación de errores inesperados:** el monitor recibió exactamente
+  `{%RuntimeError{message: mensaje_del_repo_inexistente}, stacktrace}`, con el
+  mensaje comprobado y stacktrace lista. La caída del proceso anónimo fue el
+  resultado esperado del caso, no un fallo ocultado.
+
+Se conservó un fallo auxiliar de metadata del hijo: intentó usar la función
+inexistente `pg_database_encoding()`. No se repitió esa consulta ni se presenta
+como aprobada. La consulta válida del padre ya había comprobado esa misma base
+antes del arranque; los dos casos runtime sí se ejecutaron y pasaron. También
+se conservan los warnings de OTP, ownership diferido y el log intencional de
+terminación por `RuntimeError`.
+
+Con las **13 pruebas focales independientes** y las pruebas previas de arranque
+y dos timers sin ownership, queda completa la prueba técnica requerida del
+runtime. La suite global anterior sigue en **990 passed, 32 skipped, 8 excluded,
+exit 0**; no se repitió y las exclusiones no se cuentan como ejecutadas. No hubo
+cambios de producción, dependencias ni tests durante esta verificación. Los
+fallos anteriores quedan como historia, no como bloqueos técnicos vigentes.
+La aprobación humana de #378, navegador/nube, publicación y cierre de #285
+siguen sin declararse.
