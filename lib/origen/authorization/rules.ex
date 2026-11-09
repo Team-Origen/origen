@@ -109,6 +109,36 @@ defmodule Origen.Authorization.Rules do
              do:
                {:rei_02, :reissue_internal_invitation, {:role, :administrator}, :active,
                 %{role: role, state: :pending_activation}, %{authenticated: true}}
+           ) ++
+           for(
+             role <- [:professional, :secretary],
+             do:
+               {:adm_01, :list_internal_accounts, {:role, :administrator}, :active, %{role: role},
+                :not_applicable}
+           ) ++
+           [
+             {:adm_01, :list_internal_accounts, {:role, :administrator}, :active,
+              %{roles: [:professional, :secretary]}, :not_applicable}
+           ] ++
+           for(
+             role <- [:professional, :secretary],
+             state <- [:pending_activation, :active, :deactivated],
+             do:
+               {:adm_02, :update_internal_account, {:role, :administrator}, :active,
+                %{role: role, state: state}, :not_applicable}
+           ) ++
+           for(
+             role <- [:professional, :secretary],
+             state <- [:pending_activation, :active],
+             do:
+               {:adm_03, :deactivate_internal_account, {:role, :administrator}, :active,
+                %{role: role, state: state}, :not_applicable}
+           ) ++
+           for(
+             role <- [:professional, :secretary],
+             do:
+               {:adm_04, :reactivate_internal_account, {:role, :administrator}, :active,
+                %{role: role, state: :deactivated}, :not_applicable}
            )
 
   @operations @rules

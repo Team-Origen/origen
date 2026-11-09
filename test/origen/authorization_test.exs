@@ -176,6 +176,214 @@ defmodule Origen.AuthorizationTest do
     end
   end
 
+  describe "internal account lifecycle administration (#373)" do
+    test "an active Administrator may list Professional and Secretary accounts" do
+      for target <- [
+            fact(%{role: :professional}),
+            fact(%{role: :secretary}),
+            fact(%{roles: [:professional, :secretary]})
+          ] do
+        request =
+          request(
+            :list_internal_accounts,
+            {:role, :administrator},
+            {:known, :active},
+            target,
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:allow, :adm_01}
+      end
+    end
+
+    test "listing staff accounts is denied to every other subject and to Administrator targets" do
+      for subject <- [{:role, :secretary}, {:role, :professional}, {:role, :patient}] do
+        request =
+          request(
+            :list_internal_accounts,
+            subject,
+            {:known, :active},
+            fact(%{roles: [:professional, :secretary]}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+
+      for state <- [:pending_activation, :deactivated] do
+        request =
+          request(
+            :list_internal_accounts,
+            {:role, :administrator},
+            {:known, state},
+            fact(%{roles: [:professional, :secretary]}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+
+      for target <- [
+            fact(%{role: :administrator}),
+            fact(%{roles: [:professional, :secretary, :administrator]})
+          ] do
+        request =
+          request(
+            :list_internal_accounts,
+            {:role, :administrator},
+            {:known, :active},
+            target,
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+    end
+
+    test "an active Administrator may edit staff accounts in any staff state" do
+      for role <- [:professional, :secretary],
+          state <- [:pending_activation, :active, :deactivated] do
+        request =
+          request(
+            :update_internal_account,
+            {:role, :administrator},
+            {:known, :active},
+            fact(%{role: role, state: state}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:allow, :adm_02}
+      end
+    end
+
+    test "editing is denied for Administrator targets and non-administrator actors" do
+      for role <- [:administrator], state <- [:pending_activation, :active, :deactivated] do
+        request =
+          request(
+            :update_internal_account,
+            {:role, :administrator},
+            {:known, :active},
+            fact(%{role: role, state: state}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+
+      for subject <- [{:role, :secretary}, {:role, :professional}, {:role, :patient}] do
+        request =
+          request(
+            :update_internal_account,
+            subject,
+            {:known, :active},
+            fact(%{role: :professional, state: :active}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+
+      request =
+        request(
+          :update_internal_account,
+          {:role, :administrator},
+          {:known, :deactivated},
+          fact(%{role: :secretary, state: :active}),
+          :not_applicable
+        )
+
+      assert Authorization.decide(request) == {:deny, :no_matching_rule}
+    end
+
+    test "an active Administrator may deactivate pending or active staff accounts only" do
+      for role <- [:professional, :secretary],
+          state <- [:pending_activation, :active] do
+        request =
+          request(
+            :deactivate_internal_account,
+            {:role, :administrator},
+            {:known, :active},
+            fact(%{role: role, state: state}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:allow, :adm_03}
+      end
+
+      for role <- [:professional, :secretary, :administrator],
+          state <- [:active, :pending_activation, :deactivated] do
+        allowed? = role in [:professional, :secretary] and state in [:active, :pending_activation]
+
+        request =
+          request(
+            :deactivate_internal_account,
+            {:role, :administrator},
+            {:known, :active},
+            fact(%{role: role, state: state}),
+            :not_applicable
+          )
+
+        expected = if allowed?, do: {:allow, :adm_03}, else: {:deny, :no_matching_rule}
+        assert Authorization.decide(request) == expected
+      end
+
+      for subject <- [{:role, :secretary}, {:role, :professional}, {:role, :patient}] do
+        request =
+          request(
+            :deactivate_internal_account,
+            subject,
+            {:known, :active},
+            fact(%{role: :professional, state: :active}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+    end
+
+    test "an active Administrator may reactivate deactivated staff accounts only" do
+      for role <- [:professional, :secretary] do
+        request =
+          request(
+            :reactivate_internal_account,
+            {:role, :administrator},
+            {:known, :active},
+            fact(%{role: role, state: :deactivated}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:allow, :adm_04}
+      end
+
+      for role <- [:professional, :secretary, :administrator],
+          state <- [:active, :pending_activation] do
+        request =
+          request(
+            :reactivate_internal_account,
+            {:role, :administrator},
+            {:known, :active},
+            fact(%{role: role, state: state}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+
+      for subject <- [{:role, :secretary}, {:role, :professional}, {:role, :patient}] do
+        request =
+          request(
+            :reactivate_internal_account,
+            subject,
+            {:known, :active},
+            fact(%{role: :secretary, state: :deactivated}),
+            :not_applicable
+          )
+
+        assert Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+    end
+  end
+
   describe "default denial" do
     test "denies each unknown dimension with a stable reason" do
       base =
