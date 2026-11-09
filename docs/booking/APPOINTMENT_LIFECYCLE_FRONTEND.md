@@ -149,9 +149,13 @@ completamente probada:
   claves de configuración explícitas; no se modificó `config/test.exs`.
 - Job-5: `885/986 passed`, `101 failures`; se observó una caída de
   `ExpiryWorker` (`:sweep` después de 60 s) por pérdida de ownership del
-  sandbox, seguida por errores de Repo no iniciado. Su reproducción en la
-  base `5284df1` está pendiente: no se certifica como fallo preexistente.
-  No se detuvo ni deshabilitó el worker para hacer pasar la suite.
+  sandbox, seguida por errores de Repo no iniciado. T5 corrigió ese fallo de
+  runtime de forma acotada: sólo se difiere y registra el `OwnershipError`
+  conocido, se conserva la programación periódica y los demás fallos de base
+  siguen propagándose. Una prueba con ownership explícito observó una solicitud
+  vencida persistida como `expired` después de enviar `:sweep` al proceso; esto
+  prueba el barrido, no el disparo autónomo del temporizador. No se detuvo ni
+  deshabilitó el worker para hacer pasar la suite.
 - Verificación independiente: preparación fallida antes de las pruebas,
   **cero tests y cero probes ejecutados**. El verificador buscó `initdb` y
   `pg_ctl` en `PATH`, aunque el servidor aislado ya estaba preparado. Los
@@ -159,12 +163,13 @@ completamente probada:
   disponibilidad sin relanzar el intento. No hubo copia aislada ni una base
   nueva del verificador, ni aprobación funcional independiente.
 
-T4 permanece bloqueada por la prueba independiente no ejecutada y por la suite
-completa sin resultado satisfactorio. Un nuevo intento independiente requiere
-autorización explícita, las rutas absolutas de PostgreSQL y una base aislada
-UTF-8; debe incluir el diagnóstico diferencial contra `5284df1` sin deshabilitar
-el worker. No se ejecutaron comprobaciones visuales en navegador ni integración
-en nube. La aprobación de #378 y el cierre de #285 no se declaran.
+T4 permanece pendiente de la suite global posterior a T5, de la prueba
+independiente y de la evidencia visual: la autorización S3 permite que el padre
+repita esa suite, pero este worker sólo ejecutó la regresión focal autorizada.
+La prueba independiente previa y la comparación contra `5284df1` se conservan
+como evidencia histórica; no se declaran reemplazadas por la prueba focal. No
+se ejecutaron comprobaciones visuales en navegador ni integración en nube. La
+aprobación de #378 y el cierre de #285 no se declaran.
 
 ### Segundo intento independiente autorizado
 
@@ -255,3 +260,40 @@ Esto verifica la corrección acotada, no una nueva suite completa. Los fallos
 integrales anteriores, el problema baseline del sandbox y la ausencia de
 validación visual en navegador/nube se conservan como limitaciones. No se
 infiere aprobación de #378 ni cierre de #285.
+
+### Corrección del runtime y suite global autorizadas — estado vigente
+
+Autorización: «Te autorizo a corregir el runtime y repetir la suite global».
+Se reprodujo el fallo de `ExpiryWorker` sin ownership del sandbox (RED, exit 2).
+La corrección sólo rescata y registra `DBConnection.OwnershipError`; conserva
+la programación del próximo barrido y no rescata otros errores de base. No se
+cambiaron configuración, autorizaciones ni reglas del ciclo operativo.
+
+- Regresión focal del worker y del backend: **13 passed, exit 0, seed 0**.
+- Suite global sobre el código corregido real: **990 passed, 32 skipped,
+  8 excluded, exit 0, seed 232781**, en 56,1 segundos. Se ejecutó con PostgreSQL
+  UTF-8 aislado en `55439`, `MIX_TEST_PARTITION=378runtimeglobal1` y sin
+  `ORIGEN_DATABASE_URL`. Las ocho exclusiones son `postgres_security` y no se
+  presentan como ejecutadas.
+- Persisten warnings de OTP 28.0/regex, helper legado deprecado y redefinición
+  de una migración; se registró además el warning esperado del barrido diferido
+  por falta de ownership. No hubo caída de Repo ni tests fallidos en esta suite.
+
+La verificación independiente del runtime **no quedó validada**. Su copia
+contenía el worker anterior: ejecutó 13 pruebas con exit 2 (primer fallo de
+ownership y doce fallos por Repo no iniciado). Son pruebas ejecutadas sobre un
+payload incorrecto, no evidencia contra la corrección actual. No se repitió el
+intento ni se cuentan esos resultados como aprobación.
+
+El diagnóstico de preparación comprobó que Git dentro del scratch heredaba
+la raíz del repositorio padre. Se preservó esa copia fallida y se preparó un
+payload nuevo mediante archivo de HEAD y copias explícitas del código actual,
+con igualdad de bytes comprobada. Falta un nuevo intento independiente,
+expresamente solicitado, para probar inicialización sin ownership, recuperación
+mediante temporizador y propagación de errores inesperados. La suite global
+exitosa no reemplaza esa prueba requerida.
+
+Los apartados anteriores conservan la secuencia histórica, incluidos todos los
+fallos y sus correcciones; este apartado registra el estado vigente. Se usaron
+fixtures sintéticos con PostgreSQL real: no se declara verificación visual en
+navegador, integración en nube, aprobación de #378 ni cierre de #285.

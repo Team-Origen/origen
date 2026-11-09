@@ -24,6 +24,13 @@ deterministic tests may inject `now` through the explicit infrastructure
 option. Request resolution locks the appointment row and expires a due request
 before confirmation can succeed.
 
+`Origen.Booking.ExpiryWorker` keeps its supervised process alive when a test SQL
+Sandbox temporarily has no ownership for the worker process. That narrowly
+recognized `DBConnection.OwnershipError` is logged and the next periodic sweep
+is still scheduled; other database failures are not rescued. Test-owned process
+isolation explicitly allows the worker and observes a due request becoming
+`expired` through the real database, so this is not a disabled-expiry test path.
+
 No cancellation, attendance, absence, notification, fine, or direct
 rescheduling behavior is introduced by T1.
 
@@ -104,6 +111,28 @@ Appointment snapshots, patient/professional/type identity, `start_time`, and
 type change is therefore represented by cancelling the original appointment and
 creating a new one through an existing authorized reservation function. There is
 no reschedule operation.
+
+## Runtime follow-up — #378
+
+The authorized runtime correction reproduced the periodic sandbox crash (RED,
+exit 2). Focused worker and existing backend lifecycle tests then passed:
+`13 passed`, exit 0, `--seed 0`. The expiration assertion reads the persisted
+appointment after an explicitly sent worker sweep; it does not use a history
+query that could itself expire the request.
+
+The global suite against the corrected working tree also passed:
+`mix test --seed 232781`, exit 0, **990 passed, 32 skipped, 8 excluded**.
+The isolated UTF-8 database used port `55439` and partition
+`378runtimeglobal1`; these results are separate from the #377 database below.
+Existing OTP 28.0 regex, deprecated helper and migration-redefinition warnings
+remain, along with the expected sandbox ownership deferral warning.
+
+Independent runtime verification remains **unverified**: its scratch copy
+contained the old worker, so its 13 failures are not evidence against this fix.
+A fresh source payload has been byte-checked, without rerunning verification.
+Initialization without ownership, timer-driven rescheduling/recovery and
+unexpected-error propagation still need the independent runtime proof. No
+approval, publication or issue closure is inferred from the global pass.
 
 ## Verification record — #377
 
