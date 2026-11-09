@@ -678,6 +678,106 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       refute html =~ "No se pudo realizar la reserva:"
     end
 
+    test "stale booking feedback clears when another slot is selected", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
+      booking_date = next_booking_weekday(Date.utc_today())
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      slot =
+        view
+        |> render()
+        |> then(fn _ ->
+          {:ok, schedule} =
+            Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+              duration_minutes: 60
+            )
+
+          Enum.find(schedule.slots, &(&1.start_formatted == "08:00"))
+        end)
+
+      view |> element(~s(button[phx-value-slot_id="#{slot.id}"])) |> render_click()
+
+      {:ok, %{profile: other}} =
+        Patients.complete_profile("stale-feedback-other@example.test", %{
+          first_name: "Otro",
+          last_name: "Paciente",
+          document_type: "dni",
+          document_number: "38123457",
+          birthdate: ~D[1994-05-20],
+          phone: "+5491133445567"
+        })
+
+      assert {:ok, _} =
+               BookingService.reserve(other, %{
+                 professional_id: prof_id,
+                 consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+                 date: booking_date,
+                 slot:
+                   Map.put(slot, :start_time, Time.from_iso8601!(slot.start_formatted <> ":00"))
+               })
+
+      assert render_click(view, "confirm_booking") =~ "Ese horario ya no está disponible"
+
+      alternate_id = "SLOT-#{Date.to_iso8601(booking_date)}-0900"
+      html = render_click(view, "select_slot", %{"slot_id" => alternate_id})
+      refute html =~ "Ese horario ya no está disponible"
+      assert html =~ "Confirmar Reserva"
+    end
+
+    test "refreshes availability after external bookings and cancellations", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
+      booking_date = next_booking_weekday(Date.utc_today())
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      {:ok, schedule} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      slot = Enum.find(schedule.slots, &(&1.start_formatted == "08:00"))
+      view |> element(~s(button[phx-value-slot_id="#{slot.id}"])) |> render_click()
+
+      {:ok, %{profile: other}} =
+        Patients.complete_profile("refresh-other@example.test", %{
+          first_name: "Otro",
+          last_name: "Paciente",
+          document_type: "dni",
+          document_number: "38123458",
+          birthdate: ~D[1994-05-20],
+          phone: "+5491133445568"
+        })
+
+      assert {:ok, reservation} =
+               BookingService.reserve(other, %{
+                 professional_id: prof_id,
+                 consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+                 date: booking_date,
+                 slot:
+                   Map.put(slot, :start_time, Time.from_iso8601!(slot.start_formatted <> ":00"))
+               })
+
+      send(view.pid, :refresh)
+      refute has_element?(view, "button[phx-click='confirm_booking']")
+      refute has_element?(view, "button[phx-value-slot_id='#{slot.id}']")
+
+      {:ok, %{session: professional}} = Sessions.create_session(prof_id)
+
+      assert {:ok, _} =
+               Booking.cancel_appointment(professional, reservation.appointment_id,
+                 reason: "Cambio operativo",
+                 now: DateTime.utc_now()
+               )
+
+      send(view.pid, :refresh)
+      assert has_element?(view, "button[phx-value-slot_id='#{slot.id}']")
+    end
+
     test "changing consultation type recalculates slot availability", %{
       conn: conn,
       prof_id: prof_id
