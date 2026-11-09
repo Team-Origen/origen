@@ -143,6 +143,20 @@ human request, fixing only scratch ownership setup and exact DOWN assertions.
 The previous global pass remains valid and was not repeated. No approval,
 publication or issue closure is inferred.
 
+The subsequently authorized bounded continuation prepared a corrected scratch
+probe but omitted creation/migration of its new database. Its sole `mix run`
+exited 1 at application startup (`3D000`, database does not exist): **zero of the
+two remaining cases ran**. The parent then created/migrated only that isolated
+database, confirming UTF-8, the appointments table and 22 migrations; no probe
+was rerun. Static inspection identified two further probe assertions requiring
+correction: a redundant allowance already granted by `start_owner!/2`, and an
+incorrect three-element DOWN reason match instead of `{exception, stacktrace}`.
+The prior one-correction/one-execution bound is exhausted. A new explicit bounded
+continuation must cover those scratch-only fixes and the two remaining checks
+against the already prepared database, without production changes or repeated
+passing tests. This remains verifier preparation/probe failure, not observed
+application regression or completed independent proof.
+
 ## Verification record — #377
 
 Observed on the isolated `origen_test_377_lifecycle` database:

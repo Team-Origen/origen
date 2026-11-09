@@ -320,3 +320,27 @@ cambios de producción ni repetición de la suite global ya aprobada. Una
 continuación acotada debe corregir sólo el setup y las aserciones del probe y
 ejecutar únicamente esas dos fases, con autorización explícita. Los resultados
 anteriores y las limitaciones de navegador/nube/aprobación se conservan.
+
+### Continuación acotada — preparación reparada, dos casos aún pendientes
+
+El usuario indicó «Prosigue con lo que me dijiste de la continuación acotada con
+gentle-ai-verify». El verificador preparó una versión scratch-only del probe y
+consumió su única ejecución. No había creado ni migrado la base de su nueva
+partición: el arranque falló con `3D000`, base inexistente, y terminó con exit 1.
+**Ninguno de los dos casos pendientes se ejecutó.** No se repitieron las 13
+pruebas focales, la prueba sin ownership ni la suite global.
+
+El padre creó y migró únicamente `origen_test378runtimeverify3` en el PostgreSQL
+UTF-8 aislado de `55439`: exit 0, tabla `appointments` presente y 22 migraciones.
+No ejecutó el probe después. Una revisión estática detectó además dos aserciones
+incorrectas en el nuevo probe: vuelve a exigir `:ok` para una autorización del
+caller que `start_owner!(shared: false)` ya concedió, y exige un motivo `DOWN`
+de tres elementos en lugar de `{exception, stacktrace}`. No se tocaron esas
+aserciones fuera del límite autorizado ni se presentan como fallos observados
+del backend; necesitan una nueva autorización de corrección del probe.
+
+La continuación propuesta queda limitada a una tanda para esas dos aserciones
+y una ejecución de los dos casos, con `gentle-ai-verify`, reutilizando la base
+ya creada y migrada. No requiere otra suite global, fixtures de otras bases,
+cambios de producción ni publicación. La evidencia previa sigue válida, pero
+la verificación independiente del runtime continúa incompleta.
