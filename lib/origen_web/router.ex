@@ -81,6 +81,12 @@ defmodule OrigenWeb.Router do
     post "/provider-events", ProviderEventController, :create
   end
 
+  scope "/", OrigenWeb do
+    pipe_through :api
+
+    get "/health", HealthController, :index
+  end
+
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:origen, :dev_routes) do
     # If you want to use the LiveDashboard in production, you should put
