@@ -176,13 +176,13 @@ defmodule Origen.Appointments.BookingService do
       {:ok, %{slots: slots}} ->
         expected_end = DateTime.add(start_datetime, duration_minutes, :minute)
 
+        timezone = Application.fetch_env!(:origen, :organization_timezone)
+
         available? =
           Enum.any?(slots, fn slot ->
-            DateTime.compare(
-              DateTime.new!(date, slot.start_time, "Etc/UTC"),
-              start_datetime
-            ) == :eq and
-              DateTime.compare(DateTime.new!(date, slot.end_time, "Etc/UTC"), expected_end) ==
+            DateTime.compare(local_slot_datetime(date, slot.start_time, timezone), start_datetime) ==
+              :eq and
+              DateTime.compare(local_slot_datetime(date, slot.end_time, timezone), expected_end) ==
                 :eq
           end)
 
@@ -307,12 +307,20 @@ defmodule Origen.Appointments.BookingService do
       fetch_param(slot, :start_time) ||
         fetch_param(slot, :start_formatted)
 
+    timezone = Application.fetch_env!(:origen, :organization_timezone)
+
     with {:ok, time} <- parse_slot_time(time_value),
-         {:ok, datetime} <- DateTime.new(date, time, "Etc/UTC") do
-      {:ok, datetime}
+         {:ok, datetime} <- DateTime.new(date, time, timezone) do
+      {:ok, DateTime.shift_zone!(datetime, "Etc/UTC")}
     else
       _ -> {:error, :invalid_slot_time}
     end
+  end
+
+  defp local_slot_datetime(date, time, timezone) do
+    date
+    |> DateTime.new!(time, timezone)
+    |> DateTime.shift_zone!("Etc/UTC")
   end
 
   defp parse_slot_time(%Time{} = time), do: {:ok, time}

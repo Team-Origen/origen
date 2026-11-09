@@ -61,9 +61,13 @@ defmodule Origen.Appointments.DatabaseCalendar do
 
   @impl true
   def get_daily_schedule(professional_id, %Date{} = date, opts) do
+    timezone =
+      Keyword.get(opts, :timezone, Application.fetch_env!(:origen, :organization_timezone))
+
     with {:ok, owner_id} <- parse_owner_id(professional_id),
          {:ok, settings} <- fetch_agenda_settings(owner_id),
-         {:ok, occupancies} <- fetch_occupancies(owner_id, date, opts),
+         {:ok, occupancies} <-
+           fetch_occupancies(owner_id, date, Keyword.put(opts, :timezone, timezone)),
          {:ok, identity} <- fetch_professional_identity(owner_id) do
       day_key = Map.fetch!(@weekday_map, Date.day_of_week(date))
       week = decode_week(settings.weekly_availability)
@@ -85,7 +89,7 @@ defmodule Origen.Appointments.DatabaseCalendar do
           min_lead_time_minutes: settings.minimum_lead_minutes,
           booking_horizon_days: settings.booking_horizon_days,
           now: Keyword.get(opts, :now, DateTime.utc_now()),
-          timezone: Keyword.get(opts, :timezone, "Etc/UTC")
+          timezone: timezone
         )
 
       {:ok,
@@ -140,13 +144,17 @@ defmodule Origen.Appointments.DatabaseCalendar do
   end
 
   defp fetch_occupancies(owner_id, date, opts) do
+    timezone = Keyword.fetch!(opts, :timezone)
+
     with {:ok, _result} <- Expiry.expire_due_requested(now: Keyword.get(opts, :now)) do
       case Keyword.fetch(opts, :occupancies) do
         {:ok, occupancies} ->
           {:ok, occupancies}
 
         :error ->
-          start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
+          start_day =
+            DateTime.new!(date, ~T[00:00:00], timezone) |> DateTime.shift_zone!("Etc/UTC")
+
           end_day = DateTime.add(start_day, 1, :day)
 
           query = """
@@ -160,7 +168,7 @@ defmodule Origen.Appointments.DatabaseCalendar do
 
           case Repo.query(query, [owner_id, end_day, start_day]) do
             {:ok, %{rows: rows}} ->
-              {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day))}
+              {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day, timezone))}
 
             _error ->
               {:error, :unavailable}
@@ -171,16 +179,16 @@ defmodule Origen.Appointments.DatabaseCalendar do
     end
   end
 
-  defp occupancy_for_day([start_datetime, end_datetime], start_day, end_day) do
+  defp occupancy_for_day([start_datetime, end_datetime], start_day, end_day, timezone) do
     start_time =
       if DateTime.compare(start_datetime, start_day) == :lt,
         do: ~T[00:00:00],
-        else: DateTime.to_time(start_datetime)
+        else: DateTime.shift_zone!(start_datetime, timezone) |> DateTime.to_time()
 
     end_time =
       if DateTime.compare(end_datetime, end_day) != :lt,
         do: ~T[23:59:59.999999],
-        else: DateTime.to_time(end_datetime)
+        else: DateTime.shift_zone!(end_datetime, timezone) |> DateTime.to_time()
 
     {start_time, end_time}
   end
