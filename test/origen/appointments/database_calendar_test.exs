@@ -232,5 +232,61 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
       assert {:error, :invalid_professional} =
                DatabaseCalendar.get_daily_schedule("invalid_id", friday)
     end
+
+    test "rejects the schedule of a deactivated professional (contract #372, #373)", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1",
+        [account_id]
+      )
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25], now: @fixed_now)
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(to_string(account_id), ~D[2026-09-25],
+                 now: @fixed_now
+               )
+    end
+
+    test "rejects the schedule of a pending_activation professional", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        """
+        UPDATE internal_accounts
+        SET state = 'pending_activation', password_hash = NULL, totp_secret = NULL, activated_at = NULL
+        WHERE id = $1
+        """,
+        [account_id]
+      )
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25], now: @fixed_now)
+    end
+
+    test "restores the schedule after reactivation without erasing settings", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1",
+        [account_id]
+      )
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25], now: @fixed_now)
+
+      Repo.query!("UPDATE internal_accounts SET state = 'active' WHERE id = $1", [account_id])
+
+      assert {:ok, schedule} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25],
+                 now: @fixed_now,
+                 duration_minutes: 30
+               )
+
+      assert Enum.map(schedule.slots, & &1.start_formatted) ==
+               ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30"]
+    end
   end
 end

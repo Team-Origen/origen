@@ -72,6 +72,15 @@ defmodule Origen.Audit.Events do
   def internal_login_succeeded(actor, ref) when is_binary(ref),
     do: lifecycle(actor, "internal_login", ref, "succeeded")
 
+  def internal_account_updated(actor, ref),
+    do: lifecycle(actor, "internal_account_updated", ref, "succeeded")
+
+  def internal_account_deactivated(actor, ref),
+    do: lifecycle(actor, "internal_account_deactivated", ref, "succeeded")
+
+  def internal_account_reactivated(actor, ref),
+    do: lifecycle(actor, "internal_account_reactivated", ref, "succeeded")
+
   def internal_login_failed(actor, ref) when is_binary(ref),
     do: lifecycle(actor, "internal_login", ref, "failed")
 

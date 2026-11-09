@@ -35,20 +35,22 @@ defmodule Origen.Appointments.AssistedBooking do
   @spec get_daily_schedule(String.t() | integer(), Date.t(), keyword()) ::
           {:ok, map()} | {:error, term()}
   def get_daily_schedule(professional_id, %Date{} = date, opts \\ []) do
-    adapter = Keyword.get(opts, :calendar_adapter) || Calendar
+    with {:ok, owner_id} <- parse_id(professional_id),
+         :ok <- ensure_active_professional(owner_id) do
+      adapter = Keyword.get(opts, :calendar_adapter) || Calendar
 
-    opts =
-      case parse_id(professional_id) do
-        {:ok, owner_id} ->
-          existing_occ = Keyword.get(opts, :occupancies, [])
-          db_occ = fetch_daily_occupancies(owner_id, date)
-          Keyword.put(opts, :occupancies, existing_occ ++ db_occ)
+      opts =
+        Keyword.put(
+          opts,
+          :occupancies,
+          Keyword.get(opts, :occupancies, []) ++ fetch_daily_occupancies(owner_id, date)
+        )
 
-        _ ->
-          opts
-      end
-
-    adapter.get_daily_schedule(to_string(professional_id), date, opts)
+      adapter.get_daily_schedule(to_string(professional_id), date, opts)
+    else
+      {:error, :invalid_id} -> {:error, :invalid_professional}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @doc """
@@ -56,7 +58,8 @@ defmodule Origen.Appointments.AssistedBooking do
   """
   @spec list_consultation_types(integer() | String.t()) :: {:ok, [map()]} | {:error, term()}
   def list_consultation_types(professional_id) do
-    with {:ok, owner_id} <- parse_id(professional_id) do
+    with {:ok, owner_id} <- parse_id(professional_id),
+         :ok <- ensure_active_professional(owner_id) do
       query = """
       SELECT ct.id, ct.name, ct.exact_price_ars, ct.color, ct.interval_count, ct.status,
              COALESCE(s.interval_minutes, 30) AS agenda_interval
