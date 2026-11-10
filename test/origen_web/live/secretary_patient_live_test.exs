@@ -39,9 +39,16 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       assert {:ok, view, html} = live(conn, @path)
       assert html =~ "Búsqueda de pacientes"
       assert html =~ "Buscar persona"
-      assert has_element?(view, "#secretary-navigation")
-      assert has_element?(view, "a[href='/secretaria/agenda']", "Agenda del centro")
-      assert has_element?(view, "a[href='/secretaria/pacientes']", "Pacientes")
+      assert has_element?(view, "#role-navigation[data-role='secretary']")
+      assert has_element?(view, "#nav-agenda[href='/secretaria/agenda']", "Agenda")
+
+      assert has_element?(
+               view,
+               "#nav-patients[href='/secretaria/pacientes'][aria-current='page']",
+               "Pacientes"
+             )
+
+      assert has_element?(view, "#navigation-account-menu form[action='/logout']")
     end
   end
 
