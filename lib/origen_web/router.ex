@@ -55,6 +55,7 @@ defmodule OrigenWeb.Router do
 
     live "/administrador/cuentas", AdminInternalLive, :index
     live "/secretaria/pacientes", SecretaryPatientLive, :index
+    live "/secretaria/agenda", SecretaryAgendaLive, :index
     live "/paciente/acceso", PatientAccessLive, :index
     get "/paciente/acceso/verificar", PatientAccessController, :verify
     post "/paciente/cerrar-sesion", PatientAccessController, :delete
@@ -68,6 +69,7 @@ defmodule OrigenWeb.Router do
     live_session :patient_access,
       on_mount: [{OrigenWeb.PatientSessionAuthLive, :ensure_authenticated}] do
       live "/paciente/telefono/verificar", PatientPhoneVerificationLive, :index
+      live "/paciente/turnos", PatientAppointmentsLive, :index
       live "/paciente/turnos/reservar", PatientBookingCalendarLive, :index
     end
 

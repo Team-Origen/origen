@@ -181,7 +181,7 @@ defmodule OrigenWeb.RoleNavigation do
 
   defp items(:patient) do
     [
-      {"turns", "Mis turnos", nil},
+      {"turns", "Mis turnos", ~p"/paciente/turnos"},
       {"book", "Reservar turno", ~p"/paciente/turnos/reservar"}
     ]
   end
@@ -197,7 +197,7 @@ defmodule OrigenWeb.RoleNavigation do
 
   defp items(:secretary) do
     [
-      {"agenda", "Agenda", nil},
+      {"agenda", "Agenda", ~p"/secretaria/agenda"},
       {"patients", "Pacientes", ~p"/secretaria/pacientes"},
       {"summary", "Resumen económico", ~p"/secretaria/resumen-economico"}
     ]

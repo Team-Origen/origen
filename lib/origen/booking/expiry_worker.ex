@@ -1,6 +1,7 @@
 defmodule Origen.Booking.ExpiryWorker do
   @moduledoc "Runtime backstop for requested appointment expiry."
 
+  require Logger
   use GenServer
 
   alias Origen.Booking.Expiry
@@ -13,16 +14,24 @@ defmodule Origen.Booking.ExpiryWorker do
 
   @impl true
   def init(opts) do
-    _ = Expiry.sweep()
+    _ = safe_sweep()
     schedule_sweep(Keyword.get(opts, :interval_ms, @default_interval_ms))
     {:ok, %{interval_ms: Keyword.get(opts, :interval_ms, @default_interval_ms)}}
   end
 
   @impl true
   def handle_info(:sweep, state) do
-    _ = Expiry.sweep()
+    _ = safe_sweep()
     schedule_sweep(state.interval_ms)
     {:noreply, state}
+  end
+
+  defp safe_sweep do
+    Expiry.sweep()
+  rescue
+    error in DBConnection.OwnershipError ->
+      Logger.warning("appointment expiry sweep deferred: #{Exception.message(error)}")
+      {:error, :sandbox_ownership}
   end
 
   defp schedule_sweep(interval_ms), do: Process.send_after(self(), :sweep, interval_ms)

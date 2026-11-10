@@ -59,27 +59,38 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     assert_logout(view, "Profesional")
   end
 
-  test "secretary navigation retains patients and only offers notices for future sections", %{
+  test "secretary navigation connects agenda, retains patients, and keeps future notices", %{
     conn: conn
   } do
-    {:ok, view, _html} = live(internal_conn(conn, "secretary"), "/secretaria/pacientes")
-    assert_sticky_nav(view, "secretary")
-    assert has_element?(view, "#nav-patients[href='/secretaria/pacientes'][aria-current='page']")
-    assert has_element?(view, "#nav-agenda[phx-click]", "Agenda")
+    conn = internal_conn(conn, "secretary")
 
-    assert has_element?(
-             view,
-             "#nav-summary[href='/secretaria/resumen-economico']",
-             "Resumen económico"
-           )
+    for {path, active} <- [
+          {"/secretaria/agenda", "agenda"},
+          {"/secretaria/pacientes", "patients"}
+        ] do
+      {:ok, view, _html} = live(conn, path)
+      assert_sticky_nav(view, "secretary")
+      assert has_element?(view, "#nav-agenda[href='/secretaria/agenda']", "Agenda")
+      assert has_element?(view, "#nav-patients[href='/secretaria/pacientes']", "Pacientes")
+      assert has_element?(view, "#nav-#{active}[aria-current='page']")
 
-    refute has_element?(view, "#role-navigation a[href='/administrador/cuentas']")
-    assert has_element?(view, "#persona-search-form")
-    assert has_element?(view, "#navigation-secretary-avatar", "S")
-    assert has_element?(view, "#navigation-secretary-role", "Secretaría")
-    assert has_element?(view, "#navigation-secretary-name", "Secretaría")
-    assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
-    assert_logout(view, "Secretaría")
+      assert has_element?(
+               view,
+               "#nav-summary[href='/secretaria/resumen-economico']",
+               "Resumen económico"
+             )
+
+      refute has_element?(view, "#role-navigation a[href='/administrador/cuentas']")
+      assert has_element?(view, "#navigation-secretary-avatar", "S")
+      assert has_element?(view, "#navigation-secretary-role", "Secretaría")
+      assert has_element?(view, "#navigation-secretary-name", "Secretaría")
+      assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
+      assert_logout(view, "Secretaría")
+
+      if path == "/secretaria/pacientes" do
+        assert has_element?(view, "#persona-search-form")
+      end
+    end
   end
 
   test "secretary session is denied and redirected away from administrator accounts screen", %{
@@ -142,15 +153,22 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
       })
 
     for {path, active} <- [
-          {"/paciente/turnos/reservar", true},
-          {"/paciente/telefono/verificar", false}
+          {"/paciente/turnos", "turns"},
+          {"/paciente/turnos/reservar", "book"},
+          {"/paciente/telefono/verificar", nil}
         ] do
       {:ok, view, _html} = live(conn, path)
       assert_sticky_nav(view, "patient")
+      assert has_element?(view, "#nav-turns[href='/paciente/turnos']", "Mis turnos")
       assert has_element?(view, "#nav-book[href='/paciente/turnos/reservar']", "Reservar turno")
-      assert has_element?(view, "#nav-turns[phx-click]", "Mis turnos")
-      assert has_element?(view, "#nav-book[aria-current='page']") == active
-      refute has_element?(view, "#role-navigation a[href='/paciente/turnos']")
+
+      if active do
+        assert has_element?(view, "#nav-#{active}[aria-current='page']")
+      else
+        refute has_element?(view, "#nav-turns[aria-current='page']")
+        refute has_element?(view, "#nav-book[aria-current='page']")
+      end
+
       refute has_element?(view, "#role-navigation form[action='/logout']")
 
       assert has_element?(

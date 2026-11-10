@@ -46,6 +46,18 @@ La franja «Datos ficticios» permanece visible. Los ejemplos se generan en el m
 
 ## Verificación y límites
 
+### Actualización del PR #464 con develop
+
+Se integró `origin/develop` en `feat/390-resumen-economico-ui` para resolver el conflicto del PR #464. El único conflicto textual estaba en la prueba de navegación de Secretaría: se conserva la cobertura de Agenda y Pacientes incorporada en develop, junto al enlace a Resumen económico. No se descarta ninguna de esas secciones.
+
+- Pruebas enfocadas tras la resolución: 17 aprobadas.
+- Suite completa: `MIX_TEST_PARTITION=_issue390_merge mix test`, salida 0: 1088 aprobadas, 32 omitidas y 8 excluidas.
+- `mix assets.build`, `mix format --check-formatted` y `git diff --check --cached`: salida 0.
+- Se observaron advertencias de uso de una función obsoleta y un barrido diferido de `ExpiryWorker` por ownership del SQL Sandbox; no hubo pruebas fallidas. No se presenta esa salida como ausencia de advertencias.
+- Esta actualización de la rama del PR no equivale a fusionar el PR en develop.
+
+### Evidencia previa del mock
+
 - RED observado: cinco pruebas nuevas fallaron antes de añadir las rutas y la pantalla.
 - GREEN observado: 14 pruebas enfocadas de LiveView y navegación pasaron tras la implementación inicial, usando `MIX_TEST_PARTITION=_issue390`.
 - Las pruebas de LiveView usan fixtures de autenticación aislados y datos financieros ficticios del prototipo. No prueban cálculos contra pagos reales ni el cierre de #288.

@@ -36,9 +36,19 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
         build_conn()
         |> log_in_internal_account(insert_active_internal_account!(:secretary))
 
-      assert {:ok, _view, html} = live(conn, @path)
+      assert {:ok, view, html} = live(conn, @path)
       assert html =~ "Búsqueda de pacientes"
       assert html =~ "Buscar persona"
+      assert has_element?(view, "#role-navigation[data-role='secretary']")
+      assert has_element?(view, "#nav-agenda[href='/secretaria/agenda']", "Agenda")
+
+      assert has_element?(
+               view,
+               "#nav-patients[href='/secretaria/pacientes'][aria-current='page']",
+               "Pacientes"
+             )
+
+      assert has_element?(view, "#navigation-account-menu form[action='/logout']")
     end
   end
 

@@ -310,12 +310,23 @@ defmodule Origen.Appointments.AssistedBooking do
 
   defp build_datetime(date, time_str) when is_binary(time_str) do
     case Time.from_iso8601(time_str <> ":00") do
-      {:ok, time} -> DateTime.new(date, time, "Etc/UTC")
-      _ -> {:error, :invalid_time_format}
+      {:ok, time} ->
+        timezone = Application.fetch_env!(:origen, :organization_timezone)
+
+        date
+        |> DateTime.new(time, timezone)
+        |> shift_to_utc()
+
+      _ ->
+        {:error, :invalid_time_format}
     end
   end
 
   defp build_datetime(_date, _time), do: {:error, :invalid_time_format}
+
+  defp shift_to_utc({:ok, datetime}), do: {:ok, DateTime.shift_zone!(datetime, "Etc/UTC")}
+  defp shift_to_utc({:ambiguous, _first, _second}), do: {:error, :invalid_time_format}
+  defp shift_to_utc({:gap, _before, _after}), do: {:error, :invalid_time_format}
 
   defp get_account_role(account_id) when is_integer(account_id) do
     case SQL.query(Repo, "SELECT role FROM public.internal_accounts WHERE id = $1", [account_id]) do
@@ -327,8 +338,11 @@ defmodule Origen.Appointments.AssistedBooking do
   defp get_account_role(_), do: {:error, :not_found}
 
   defp fetch_daily_occupancies(owner_id, %Date{} = date) when is_integer(owner_id) do
-    start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-    end_day = DateTime.add(start_day, 1, :day)
+    timezone = Application.fetch_env!(:origen, :organization_timezone)
+    local_start = DateTime.new!(date, ~T[00:00:00], timezone)
+    local_end = DateTime.add(local_start, 1, :day)
+    start_day = DateTime.shift_zone!(local_start, "Etc/UTC")
+    end_day = DateTime.shift_zone!(local_end, "Etc/UTC")
 
     appointments =
       Repo.all(
@@ -342,12 +356,12 @@ defmodule Origen.Appointments.AssistedBooking do
       s =
         if DateTime.compare(a.start_time, start_day) == :lt,
           do: ~T[00:00:00],
-          else: DateTime.to_time(a.start_time)
+          else: DateTime.shift_zone!(a.start_time, timezone) |> DateTime.to_time()
 
       e =
         if DateTime.compare(a.end_time, end_day) != :lt,
           do: ~T[23:59:59.999999],
-          else: DateTime.to_time(a.end_time)
+          else: DateTime.shift_zone!(a.end_time, timezone) |> DateTime.to_time()
 
       {s, e}
     end)
@@ -356,7 +370,8 @@ defmodule Origen.Appointments.AssistedBooking do
   defp validate_slot_availability(prof_id, patient_id, consultation_type_id, start_time, opts) do
     with {:ok, types} <- list_consultation_types(prof_id),
          %{duration_minutes: duration} <- Enum.find(types, &(&1.id == consultation_type_id)) do
-      date = DateTime.to_date(start_time)
+      timezone = Application.fetch_env!(:origen, :organization_timezone)
+      date = DateTime.shift_zone!(start_time, timezone) |> DateTime.to_date()
       now = Keyword.get(opts, :now, DateTime.utc_now())
 
       schedule_opts = [
@@ -367,7 +382,9 @@ defmodule Origen.Appointments.AssistedBooking do
 
       case get_daily_schedule(prof_id, date, schedule_opts) do
         {:ok, %{slots: slots}} ->
-          if Enum.any?(slots, &(Time.compare(&1.start_time, DateTime.to_time(start_time)) == :eq)) do
+          local_start_time = DateTime.shift_zone!(start_time, timezone) |> DateTime.to_time()
+
+          if Enum.any?(slots, &(Time.compare(&1.start_time, local_start_time) == :eq)) do
             :ok
           else
             case Booking.check_overlaps(%{

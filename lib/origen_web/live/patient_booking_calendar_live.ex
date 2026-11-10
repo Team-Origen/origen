@@ -5,6 +5,7 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
 
   @generic_booking_error "No se pudo completar la reserva. Volvé a intentar más tarde."
   @stale_slot_error "Ese horario ya no está disponible. Actualizamos la disponibilidad; elegí otro horario."
+  @refresh_interval_ms 5_000
 
   @impl true
   def mount(_params, session, socket) do
@@ -37,7 +38,19 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
        booking_result: nil,
        booking_in_progress?: false
      )
-     |> load_schedule()}
+     |> load_schedule()
+     |> schedule_refresh()}
+  end
+
+  @impl true
+  def handle_info(:refresh, socket) do
+    socket =
+      socket
+      |> load_schedule()
+      |> reconcile_selected_slot()
+      |> schedule_refresh()
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -62,7 +75,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            booking_result: nil,
            booking_in_progress?: false
          )
-         |> load_schedule()}
+         |> load_schedule()
+         |> clear_flash(:error)}
     end
   end
 
@@ -80,7 +94,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            booking_result: nil,
            booking_in_progress?: false
          )
-         |> load_schedule()}
+         |> load_schedule()
+         |> clear_flash(:error)}
     end
   end
 
@@ -94,7 +109,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            booking_result: nil,
            booking_in_progress?: false
          )
-         |> load_schedule()}
+         |> load_schedule()
+         |> clear_flash(:error)}
 
       _ ->
         {:noreply, socket}
@@ -111,7 +127,8 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            booking_result: nil,
            booking_in_progress?: false
          )
-         |> load_schedule()}
+         |> load_schedule()
+         |> clear_flash(:error)}
 
       :error ->
         {:noreply, socket}
@@ -132,14 +149,19 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
            selected_slot: slot,
            booking_result: nil,
            booking_in_progress?: false
-         )}
+         )
+         |> clear_flash(:error)}
     end
   end
 
   def handle_event("clear_slot", _params, socket) do
     refresh_schedule? = not is_nil(socket.assigns.booking_result)
 
-    socket = assign(socket, selected_slot: nil, booking_result: nil, booking_in_progress?: false)
+    socket =
+      socket
+      |> assign(selected_slot: nil, booking_result: nil, booking_in_progress?: false)
+      |> clear_flash(:error)
+
     socket = if refresh_schedule?, do: load_schedule(socket), else: socket
 
     {:noreply, socket}
@@ -231,6 +253,23 @@ defmodule OrigenWeb.PatientBookingCalendarLive do
       {:error, _reason} ->
         assign(socket, schedule: nil, error: :unavailable)
     end
+  end
+
+  defp schedule_refresh(socket) do
+    if connected?(socket), do: Process.send_after(self(), :refresh, @refresh_interval_ms)
+    socket
+  end
+
+  defp reconcile_selected_slot(%{assigns: %{selected_slot: nil}} = socket), do: socket
+
+  defp reconcile_selected_slot(socket) do
+    selected_slot =
+      Enum.find(
+        (socket.assigns.schedule && socket.assigns.schedule.slots) || [],
+        &same_id?(&1.id, socket.assigns.selected_slot.id)
+      )
+
+    assign(socket, selected_slot: selected_slot)
   end
 
   defp booking_selection(%{assigns: assigns}) do
