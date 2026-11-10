@@ -79,8 +79,8 @@ defmodule OrigenWeb.PatientAppointmentsLiveTest do
     assert html =~ "Cancelado"
     assert html =~ "Profesional"
     assert html =~ "Guardia reprogramada"
-    refute html =~ "#{foreign.id}"
-    assert html =~ "#{own_expired.id}"
+    refute has_element?(view, "#patient-appointment-#{foreign.id}")
+    assert has_element?(view, "#patient-appointment-#{own_expired.id}")
 
     assert {:ok, history} = Booking.list_appointment_history(principal)
     assert Enum.map(history, & &1.id) == [own_expired.id, own_cancelled.id]
