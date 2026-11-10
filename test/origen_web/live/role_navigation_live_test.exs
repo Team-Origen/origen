@@ -28,7 +28,13 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
       assert has_element?(view, "#role-navigation a[href='/profesional/ajustes']", "Ajustes")
       assert has_element?(view, "#nav-#{active}[aria-current='page']")
       assert has_element?(view, "#nav-requests[phx-click]", "Solicitudes")
-      assert has_element?(view, "#nav-summary[phx-click]", "Resumen económico")
+
+      assert has_element?(
+               view,
+               "#nav-summary[href='/profesional/resumen-economico']",
+               "Resumen económico"
+             )
+
       refute has_element?(view, "#role-navigation a[href*='solicitudes']")
 
       assert has_element?(
@@ -67,7 +73,13 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
       assert has_element?(view, "#nav-agenda[href='/secretaria/agenda']", "Agenda")
       assert has_element?(view, "#nav-patients[href='/secretaria/pacientes']", "Pacientes")
       assert has_element?(view, "#nav-#{active}[aria-current='page']")
-      assert has_element?(view, "#nav-summary[phx-click]", "Resumen económico")
+
+      assert has_element?(
+               view,
+               "#nav-summary[href='/secretaria/resumen-economico']",
+               "Resumen económico"
+             )
+
       refute has_element?(view, "#role-navigation a[href='/administrador/cuentas']")
       assert has_element?(view, "#navigation-secretary-avatar", "S")
       assert has_element?(view, "#navigation-secretary-role", "Secretaría")

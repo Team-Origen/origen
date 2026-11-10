@@ -190,7 +190,7 @@ defmodule OrigenWeb.RoleNavigation do
     [
       {"agenda", "Agenda", ~p"/profesional/agenda"},
       {"requests", "Solicitudes", nil},
-      {"summary", "Resumen económico", nil},
+      {"summary", "Resumen económico", ~p"/profesional/resumen-economico"},
       {"settings", "Ajustes", ~p"/profesional/ajustes"}
     ]
   end
@@ -199,7 +199,7 @@ defmodule OrigenWeb.RoleNavigation do
     [
       {"agenda", "Agenda", ~p"/secretaria/agenda"},
       {"patients", "Pacientes", ~p"/secretaria/pacientes"},
-      {"summary", "Resumen económico", nil}
+      {"summary", "Resumen económico", ~p"/secretaria/resumen-economico"}
     ]
   end
 
