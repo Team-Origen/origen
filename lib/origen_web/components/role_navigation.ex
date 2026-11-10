@@ -181,7 +181,7 @@ defmodule OrigenWeb.RoleNavigation do
 
   defp items(:patient) do
     [
-      {"turns", "Mis turnos", nil},
+      {"turns", "Mis turnos", ~p"/paciente/turnos"},
       {"book", "Reservar turno", ~p"/paciente/turnos/reservar"}
     ]
   end
