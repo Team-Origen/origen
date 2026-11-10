@@ -55,6 +55,7 @@ defmodule OrigenWeb.Router do
 
     live "/administrador/cuentas", AdminInternalLive, :index
     live "/secretaria/pacientes", SecretaryPatientLive, :index
+    live "/secretaria/agenda", SecretaryAgendaLive, :index
     live "/paciente/acceso", PatientAccessLive, :index
     get "/paciente/acceso/verificar", PatientAccessController, :verify
     post "/paciente/cerrar-sesion", PatientAccessController, :delete

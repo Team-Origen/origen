@@ -3,11 +3,13 @@ defmodule OrigenWeb.Components.AppointmentLifecycle do
 
   attr :appointment, :map, required: true
   attr :timezone, :string, required: true
+  attr :id_prefix, :string, default: "professional-history-appointment"
+  attr :professional_name, :string, default: nil
 
   def history(assigns) do
     ~H"""
     <article
-      id={"professional-history-appointment-#{@appointment.id}"}
+      id={"#{@id_prefix}-#{@appointment.id}"}
       class="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -23,6 +25,9 @@ defmodule OrigenWeb.Components.AppointmentLifecycle do
             )} hs
           </p>
           <p class="mt-1 text-xs text-stone-500">Turno #{@appointment.id}</p>
+          <p :if={@professional_name} class="mt-1 text-xs text-stone-500">
+            Agenda: {@professional_name}
+          </p>
         </div>
 
         <span class={"inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold #{status_class(@appointment.status)}"}>

@@ -71,8 +71,8 @@ Pruebas de interfaz con resultados observados y evidencia visual/funcional aplic
 ## Tasks
 
 - T1 [S1,S2] Patient persistent appointments/history, navigation and own cancellation; route: gentle-ai-worker (context backstop); status: done; commit: 491e29b; checks: 9 focused tests passed, format/whitespace passed; independent feature verification pending T4.
-- T2 [S1,S2] Professional own-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: in_progress; commit: pending; checks: RED/GREEN LiveView and request-resolution regression.
-- T3 [S1,S2] Secretary center-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: pending; commit: pending; checks: RED/GREEN LiveView and authorization regressions.
+- T2 [S1,S2] Professional own-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: done; commit: 2ff45e3; checks: RED 6 failures then GREEN 50 tests; format/whitespace passed.
+- T3 [S1,S2] Secretary center-agenda lifecycle controls/history; route: gentle-ai-worker (context backstop); status: in_progress; commit: pending; checks: RED/GREEN LiveView and authorization regressions.
 - T4 [S1,S2] Integrated regression, independent privacy/security verification, evidence and approval status; route: parent + gentle-ai-verify; status: pending; commit: pending; Risk: item 2 (private history, server authorization boundaries).
 
 ## Log
@@ -86,3 +86,5 @@ L3: Read-only explorer mw8cy7df-1-vokg mapped approved #376 contract, backend Or
 L4: T1 implemented and self-verified: required focused patient/navigation/booking command passed 9 tests on isolated PostgreSQL 127.0.0.1:55438/origen_378_test. Initial attempts failed setup at default port 5433 and then database creation (zero tests); observed behavioral RED 6 failures, corrected to GREEN. Compile, format and whitespace passed. Uses real backend with synthetic DB fixtures, not browser/cloud integration. Exact-at-start enforcement relies on #377 deterministic backend tests; forged foreign cancellation and patient attendance events preserve public history.
 
 L5: Slice 1 = 491e29b (674 authored lines including feature tracking; coherent patient route/navigation/history/cancel behavior with tests and docs exceeds advisory 400-line target). Delivery auto-chain / stacked-to-main retains this as first future review slice; slice 2 starts after 491e29b for professional workflow. No PR/publication. Risk: item 2 (private patient history, session principal). Independent verification planned at T4 before delivery.
+
+L6: T2 completed in 2ff45e3: professional cancellation with reason, confirmed-only attendance/absence, scoped history with origin/reason. RED six new failing lifecycle tests, GREEN 50 focused tests including request-resolution and date navigation regressions. Format and whitespace passed. Synthetic DB fixtures exercise real backend; no browser/cloud verification claimed. Slice 2 = 2ff45e3, 630 authored lines (cohesive behavior + tests/docs); cumulative 1304. Slice 3 starts after 2ff45e3 for secretary workflow. Risk: item 2 (professional agenda scope and private history). No publishing.

@@ -53,21 +53,32 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     assert_logout(view, "Profesional")
   end
 
-  test "secretary navigation retains patients and only offers notices for future sections", %{
+  test "secretary navigation connects agenda, retains patients, and keeps future notices", %{
     conn: conn
   } do
-    {:ok, view, _html} = live(internal_conn(conn, "secretary"), "/secretaria/pacientes")
-    assert_sticky_nav(view, "secretary")
-    assert has_element?(view, "#nav-patients[href='/secretaria/pacientes'][aria-current='page']")
-    assert has_element?(view, "#nav-agenda[phx-click]", "Agenda")
-    assert has_element?(view, "#nav-summary[phx-click]", "Resumen económico")
-    refute has_element?(view, "#role-navigation a[href='/administrador/cuentas']")
-    assert has_element?(view, "#persona-search-form")
-    assert has_element?(view, "#navigation-secretary-avatar", "S")
-    assert has_element?(view, "#navigation-secretary-role", "Secretaría")
-    assert has_element?(view, "#navigation-secretary-name", "Secretaría")
-    assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
-    assert_logout(view, "Secretaría")
+    conn = internal_conn(conn, "secretary")
+
+    for {path, active} <- [
+          {"/secretaria/agenda", "agenda"},
+          {"/secretaria/pacientes", "patients"}
+        ] do
+      {:ok, view, _html} = live(conn, path)
+      assert_sticky_nav(view, "secretary")
+      assert has_element?(view, "#nav-agenda[href='/secretaria/agenda']", "Agenda")
+      assert has_element?(view, "#nav-patients[href='/secretaria/pacientes']", "Pacientes")
+      assert has_element?(view, "#nav-#{active}[aria-current='page']")
+      assert has_element?(view, "#nav-summary[phx-click]", "Resumen económico")
+      refute has_element?(view, "#role-navigation a[href='/administrador/cuentas']")
+      assert has_element?(view, "#navigation-secretary-avatar", "S")
+      assert has_element?(view, "#navigation-secretary-role", "Secretaría")
+      assert has_element?(view, "#navigation-secretary-name", "Secretaría")
+      assert has_element?(view, "#navigation-secretary-email", "nav-secretary@example.test")
+      assert_logout(view, "Secretaría")
+
+      if path == "/secretaria/pacientes" do
+        assert has_element?(view, "#persona-search-form")
+      end
+    end
   end
 
   test "secretary session is denied and redirected away from administrator accounts screen", %{
