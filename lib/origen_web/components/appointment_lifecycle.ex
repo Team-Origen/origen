@@ -37,7 +37,7 @@ defmodule OrigenWeb.Components.AppointmentLifecycle do
 
       <div
         :if={@appointment.cancellation_origin || @appointment.cancellation_reason}
-        class="mt-3 border-t border-stone-100 pt-3 text-sm"
+        class="mt-3 border-t border-stone-100 pt-3 text-sm text-stone-900"
       >
         <p :if={@appointment.cancellation_origin}>
           <span class="font-semibold text-stone-600">Origen:</span>

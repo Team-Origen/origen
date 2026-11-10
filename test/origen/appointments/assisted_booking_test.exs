@@ -71,6 +71,42 @@ defmodule Origen.Appointments.AssistedBookingTest do
       assert rel.first_appointment_id == appt.id
     end
 
+    test "reserva asistida conserva la hora local de Buenos Aires", ctx do
+      previous_timezone = Application.get_env(:origen, :organization_timezone)
+      Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+      on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous_timezone) end)
+
+      Repo.query!(
+        """
+        UPDATE agenda_settings
+        SET weekly_availability = $2::jsonb, minimum_lead_minutes = 0
+        WHERE owner_account_id = $1
+        """,
+        [ctx.professional_id, ~s({"thursday":[{"start":"08:00","end":"12:00"}]})]
+      )
+
+      start_time = ~U[2026-10-15 12:00:00Z]
+
+      assert {:ok, result} =
+               AssistedBooking.reserve(
+                 ctx.secretary_id,
+                 ctx.patient_profile_id,
+                 %{
+                   professional_id: ctx.professional_id,
+                   consultation_type_id: @consultation_type_id,
+                   start_time: start_time
+                 },
+                 now: @fixed_now
+               )
+
+      assert DateTime.compare(result.start_time, start_time) == :eq
+
+      assert DateTime.compare(
+               Repo.get!(Appointment, result.appointment_id).start_time,
+               start_time
+             ) == :eq
+    end
+
     test "C2: modo de aprobación automática del profesional confirma el turno directamente desde settings",
          ctx do
       start_time = ~U[2026-10-15 10:00:00Z]

@@ -18,6 +18,58 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
     %{fixture: fixture, conn: conn, principal: professional}
   end
 
+  @tag :timezone_integrity
+  test "daily agenda and history show the same organization-local appointment time", %{
+    fixture: fixture,
+    conn: conn,
+    principal: principal
+  } do
+    previous_timezone = Application.fetch_env!(:origen, :organization_timezone)
+    on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous_timezone) end)
+
+    agenda_date = ~D[2026-11-10]
+    stored_start = ~U[2026-11-10 15:30:00Z]
+
+    appointment =
+      Fixtures.appointment!(fixture,
+        start_time: stored_start,
+        status: "requested"
+      )
+
+    assert {:ok, before_history} = Booking.list_appointment_history(principal)
+    assert [%{id: appointment_id, start_time: persisted_start}] = before_history
+    assert appointment_id == appointment.id
+    assert DateTime.compare(persisted_start, stored_start) == :eq
+
+    for {timezone, expected_start, expected_end} <- [
+          {"Etc/UTC", "15:30", "16:00"},
+          {"America/Argentina/Buenos_Aires", "12:30", "13:00"}
+        ] do
+      Application.put_env(:origen, :organization_timezone, timezone)
+
+      {:ok, view, _html} =
+        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(agenda_date)}")
+
+      daily_card = view |> element("#appointment-#{appointment.id}") |> render()
+
+      history_card =
+        view |> element("#professional-history-appointment-#{appointment.id}") |> render()
+
+      assert daily_card =~ "#{expected_start} - #{expected_end}"
+      assert history_card =~ expected_start
+      assert history_card =~ expected_end
+
+      if timezone == "America/Argentina/Buenos_Aires" do
+        refute daily_card =~ "15:30 - 16:00"
+        refute history_card =~ "15:30"
+      end
+    end
+
+    assert {:ok, after_history} = Booking.list_appointment_history(principal)
+    assert after_history == before_history
+  end
+
+  @tag :cancellation_details_contrast
   test "renders own lifecycle history with expiry, origin and reason", %{
     fixture: fixture,
     conn: conn,
@@ -44,7 +96,15 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
                now: now
              )
 
-    {:ok, _view, html} = live(conn, ~p"/profesional/agenda")
+    {:ok, view, html} = live(conn, ~p"/profesional/agenda")
+
+    for text <- ["Origen:", "Profesional", "Motivo:", "Guardia reprogramada"] do
+      assert has_element?(
+               view,
+               "#professional-history-appointment-#{cancelled.id} > div.text-stone-900",
+               text
+             )
+    end
 
     assert html =~ "Historial operativo"
     assert html =~ "Vencido"
@@ -138,6 +198,63 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
              {requested.id, "professional", "Paciente reubicado"},
              {confirmed.id, "professional", "Corte de luz"}
            ]
+  end
+
+  test "renders cancellation reasons with explicit light control colors for professional and secretary",
+       %{
+         fixture: fixture,
+         conn: conn
+       } do
+    professional_date = Date.utc_today()
+
+    professional_appointment =
+      Fixtures.appointment!(fixture,
+        start_time: DateTime.new!(professional_date, ~T[09:00:00], "Etc/UTC"),
+        status: "requested"
+      )
+
+    {:ok, professional_view, _html} = live(conn, "/profesional/agenda")
+
+    professional_view
+    |> element("#cancel-appointment-#{professional_appointment.id}")
+    |> render_click()
+
+    professional_html = render(professional_view)
+
+    assert professional_html =~
+             ~r/id="cancellation-reason-#{professional_appointment.id}"[^>]*class="[^\"]*bg-white[^\"]*text-stone-900[^\"]*placeholder:text-stone-500/s
+
+    secretary_date =
+      DateTime.now!(Application.fetch_env!(:origen, :organization_timezone)) |> DateTime.to_date()
+
+    secretary_appointment =
+      Fixtures.appointment!(fixture,
+        start_time:
+          DateTime.new!(
+            secretary_date,
+            ~T[11:00:00],
+            Application.fetch_env!(:origen, :organization_timezone)
+          ),
+        status: "requested"
+      )
+
+    secretary = Fixtures.secretary_principal(fixture)
+
+    secretary_conn =
+      build_conn()
+      |> Phoenix.ConnTest.init_test_session(%{})
+      |> Plug.Conn.put_session(:internal_session_token, secretary.token)
+
+    {:ok, secretary_view, _html} = live(secretary_conn, "/secretaria/agenda")
+
+    secretary_view
+    |> element("#cancel-appointment-#{secretary_appointment.id}")
+    |> render_click()
+
+    secretary_html = render(secretary_view)
+
+    assert secretary_html =~
+             ~r/id="cancellation-reason-#{secretary_appointment.id}"[^>]*class="[^\"]*bg-white[^\"]*text-stone-900[^\"]*placeholder:text-stone-500/s
   end
 
   test "records attended and no-show only for confirmed appointments", %{

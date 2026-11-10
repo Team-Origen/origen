@@ -190,6 +190,30 @@ defmodule Origen.Appointments.BookingServiceTest do
       assert persisted.snapshot_duration_minutes == 60
     end
 
+    test "stores a reservation at the organization-local slot time", ctx do
+      previous_timezone = Application.get_env(:origen, :organization_timezone)
+      Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+
+      on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous_timezone) end)
+
+      params = %{
+        professional_id: ctx.prof_id,
+        consultation_type_id: ctx.type_id,
+        date: ~D[2026-09-28],
+        slot: %{start_time: ~T[09:00:00], start_formatted: "09:00"},
+        now: @fixed_now
+      }
+
+      assert {:ok, result} = BookingService.reserve(ctx.profile, params)
+      assert DateTime.compare(result.start_time, ~U[2026-09-28 12:00:00Z]) == :eq
+      assert DateTime.compare(result.end_time, ~U[2026-09-28 13:00:00Z]) == :eq
+
+      assert DateTime.compare(
+               Repo.get!(Appointment, result.appointment_id).start_time,
+               ~U[2026-09-28 12:00:00Z]
+             ) == :eq
+    end
+
     test "automatic approval is confirmed regardless of D-1 proximity", ctx do
       # Tomorrow (D-1 relative to @fixed_now which is 2026-09-25)
       tomorrow = ~D[2026-09-26]

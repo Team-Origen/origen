@@ -289,7 +289,7 @@ defmodule OrigenWeb.SecretaryAgendaLive do
                   type="date"
                   name="date"
                   value={Date.to_iso8601(@date)}
-                  class="rounded-lg border-stone-300 px-3 py-2 text-sm"
+                  class="rounded-lg border-stone-300 bg-white px-3 py-2 text-sm text-stone-900 [color-scheme:light]"
                 />
               </form>
               <button
@@ -414,7 +414,8 @@ defmodule OrigenWeb.SecretaryAgendaLive do
                   name="cancellation[reason]"
                   rows="2"
                   required
-                  class="w-full rounded-md border-rose-200 text-sm"
+                  placeholder="Escribí el motivo de la cancelación"
+                  class="w-full rounded-md border-rose-200 bg-white text-stone-900 placeholder:text-stone-500 text-sm"
                 ></textarea>
                 <p class="text-xs text-rose-800">
                   El motivo queda visible en el historial autorizado del paciente.
