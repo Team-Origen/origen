@@ -24,6 +24,13 @@ deterministic tests may inject `now` through the explicit infrastructure
 option. Request resolution locks the appointment row and expires a due request
 before confirmation can succeed.
 
+`Origen.Booking.ExpiryWorker` keeps its supervised process alive when a test SQL
+Sandbox temporarily has no ownership for the worker process. That narrowly
+recognized `DBConnection.OwnershipError` is logged and the next periodic sweep
+is still scheduled; other database failures are not rescued. Test-owned process
+isolation explicitly allows the worker and observes a due request becoming
+`expired` through the real database, so this is not a disabled-expiry test path.
+
 No cancellation, attendance, absence, notification, fine, or direct
 rescheduling behavior is introduced by T1.
 
@@ -104,6 +111,81 @@ Appointment snapshots, patient/professional/type identity, `start_time`, and
 type change is therefore represented by cancelling the original appointment and
 creating a new one through an existing authorized reservation function. There is
 no reschedule operation.
+
+## Runtime follow-up — #378
+
+The authorized runtime correction reproduced the periodic sandbox crash (RED,
+exit 2). Focused worker and existing backend lifecycle tests then passed:
+`13 passed`, exit 0, `--seed 0`. The expiration assertion reads the persisted
+appointment after an explicitly sent worker sweep; it does not use a history
+query that could itself expire the request.
+
+The global suite against the corrected working tree also passed:
+`mix test --seed 232781`, exit 0, **990 passed, 32 skipped, 8 excluded**.
+The isolated UTF-8 database used port `55439` and partition
+`378runtimeglobal1`; these results are separate from the #377 database below.
+Existing OTP 28.0 regex, deprecated helper and migration-redefinition warnings
+remain, along with the expected sandbox ownership deferral warning.
+
+The first independent runtime attempt used the old worker, so its 13 failures
+are not evidence against this fix. A newly authorized attempt archived the
+committed corrected source and verified source/test bytes before execution.
+Its focused command passed **13 tests**, exit 0, seed 0. A scratch-only probe
+also observed initialization and two timer-driven sweeps surviving without
+ownership, with rescheduling preserved.
+
+That probe then failed at `Sandbox.allow/3` with `:not_found`, exit 1: switching
+from shared to manual mode had checked in its owner's connection. This is a
+probe setup error, not an observed production regression. Timer-driven owned
+expiration and unexpected-error DOWN were not reached and remain **unverified**.
+No automatic rerun occurred; a bounded continuation needs a fresh explicit
+human request, fixing only scratch ownership setup and exact DOWN assertions.
+The previous global pass remains valid and was not repeated. No approval,
+publication or issue closure is inferred.
+
+The subsequently authorized bounded continuation prepared a corrected scratch
+probe but omitted creation/migration of its new database. Its sole `mix run`
+exited 1 at application startup (`3D000`, database does not exist): **zero of the
+two remaining cases ran**. The parent then created/migrated only that isolated
+database, confirming UTF-8, the appointments table and 22 migrations; no probe
+was rerun. Static inspection identified two further probe assertions requiring
+correction: a redundant allowance already granted by `start_owner!/2`, and an
+incorrect three-element DOWN reason match instead of `{exception, stacktrace}`.
+The prior one-correction/one-execution bound is exhausted. A new explicit bounded
+continuation must cover those scratch-only fixes and the two remaining checks
+against the already prepared database, without production changes or repeated
+passing tests. This remains verifier preparation/probe failure, not observed
+application regression or completed independent proof at that stage.
+
+### Completed independent runtime verification
+
+The next explicitly authorized batch corrected only the duplicate allowance and
+DOWN tuple assertions in a new scratch helper. The parent confirmed the existing
+UTF-8 verifier database, appointments table and 22 migrations before execution,
+and inspected the complete corrected helper. Static syntax validation passed.
+The single independent `mix run` then exited **0**, with both remaining cases
+actually executed and passed:
+
+- `timer_owned_expiry=expired`: persisted status was `requested` before granting
+  worker ownership, then became `expired` after a traced real timer delivery and
+  synchronized sweep. No manual sweep or lazy-expiry history read caused it.
+- Unexpected-error DOWN matched exactly
+  `{%RuntimeError{message: exact_missing_repo_message}, stacktrace}` with a list
+  stacktrace. The deliberate unavailable-repo error terminated the anonymous
+  worker rather than being swallowed.
+
+Together with the previous independent 13 tests and initialization/two periodic
+no-ownership sweeps, this completes the required runtime proof. Earlier failed
+attempts remain in the record. A redundant child metadata query failed on the
+nonexistent `pg_database_encoding()` function and was not retried; it is not
+claimed as passing. The parent's valid metadata query had already passed, and
+both runtime cases used the correct prepared database. OTP/ownership warnings
+and the intentional RuntimeError termination log are retained.
+
+No production code, tests or dependencies changed during verification. Neither
+passing tests nor the global suite were repeated. Technical verification is
+complete; human feature acceptance, browser/cloud validation, publication and
+issue closure are not claimed.
 
 ## Verification record — #377
 

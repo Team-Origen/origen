@@ -87,6 +87,39 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
     assert has_element?(view, "#navigation-secretary-name", "Secretaría")
     assert has_element?(view, "#navigation-secretary-email")
     assert has_element?(view, "#navigation-account-menu form[action='/logout'][method='post']")
+    assert html =~ "Paciente ##{fixture.patient_id}"
+  end
+
+  test "groups agenda entries and today by the organization timezone", %{
+    fixture: fixture,
+    conn: conn
+  } do
+    timezone = Application.fetch_env!(:origen, :organization_timezone)
+    organization_date = DateTime.now!(timezone) |> DateTime.to_date()
+
+    local_start = DateTime.new!(organization_date, ~T[23:30:00], timezone)
+    utc_start = DateTime.shift_zone!(local_start, "Etc/UTC")
+
+    appointment = Fixtures.appointment!(fixture, start_time: utc_start)
+
+    {:ok, view, _html} = live(conn, @path)
+
+    assert has_element?(
+             view,
+             "#secretary-agenda-date-form input[value='#{Date.to_iso8601(organization_date)}']"
+           )
+
+    assert has_element?(
+             view,
+             "#secretary-agenda-list #secretary-appointment-#{appointment.id}"
+           )
+
+    render_click(view, "today")
+
+    assert has_element?(
+             view,
+             "#secretary-agenda-list #secretary-appointment-#{appointment.id}"
+           )
   end
 
   test "cancels requested and confirmed appointments across agendas with a mandatory reason", %{
@@ -108,7 +141,19 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
     {:ok, view, _html} = live(conn, @path)
     {:ok, before} = Booking.list_appointment_history(principal)
 
+    assert has_element?(
+             view,
+             "#secretary-history-appointment-#{requested.id}-wrapper",
+             "Paciente ##{fixture.patient_id}"
+           )
+
     view |> element("#cancel-appointment-#{requested.id}") |> render_click()
+
+    assert has_element?(
+             view,
+             "#appointment-cancellation-form-#{requested.id} #cancellation-patient-#{requested.id}",
+             "Paciente ##{fixture.patient_id}"
+           )
 
     html =
       view
