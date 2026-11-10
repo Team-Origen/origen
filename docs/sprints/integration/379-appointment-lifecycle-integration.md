@@ -126,19 +126,22 @@ El falso positivo de CSS se corrigió sólo en
 global de texto. No se modificó producción, UI, permisos ni el helper. El parche
 se propagó desde el primer corte por merges locales de ancestría hacia los
 siguientes; no se reescribió historia ni se mergeó ningún PR a `develop`.
-Los checks de los heads corregidos se verifican antes de la entrega final.
+Los tres heads corregidos pasaron todos los checks remotos: #460 `78c17ba`,
+#461 `2b4b3be` y #462 `b18f0a4`. GitHub informó `OPEN`, `MERGEABLE` y `CLEAN`.
+El cierre documental final no altera tests ni producción; también se comprueba
+su último head antes de entregar.
 
 ## Entrega publicada y CI observado
 
-Las ejecuciones de la tabla son las observadas inicialmente; no sustituyen los
-checks del head actual, disponibles en cada PR. La cronología conserva también
-el fallo posterior y su corrección.
+La tabla registra el CI verde posterior a la corrección de privacidad. La
+cronología conserva tanto los éxitos anteriores como el fallo posterior y su
+corrección; el cierre documental posterior no cambia los tests verificados.
 
 | Orden | PR | Base | Resultado observado |
 | --- | --- | --- | --- |
-| 1 | [#460 — Paciente → Profesional](https://github.com/Team-Origen/origen/pull/460) | `develop` | CI verde, head `a79ef07`; [run](https://github.com/Team-Origen/origen/actions/runs/42808628330). |
-| 2 | [#461 — Operaciones del ciclo](https://github.com/Team-Origen/origen/pull/461) | rama de #460 | CI verde, head `2523d37`; [run](https://github.com/Team-Origen/origen/actions/runs/42808631859). |
-| 3 | [#462 — Evidencia y trazabilidad](https://github.com/Team-Origen/origen/pull/462) | rama de #461 | CI verde en `b34e7f3`; [run](https://github.com/Team-Origen/origen/actions/runs/42808636042). La actualización documental final también se verifica antes de entregar. |
+| 1 | [#460 — Paciente → Profesional](https://github.com/Team-Origen/origen/pull/460) | `develop` | CI verde, head `78c17ba`; [run](https://github.com/Team-Origen/origen/actions/runs/42812256460). |
+| 2 | [#461 — Operaciones del ciclo](https://github.com/Team-Origen/origen/pull/461) | rama de #460 | CI verde, head `2b4b3be`; [run](https://github.com/Team-Origen/origen/actions/runs/42812258747). |
+| 3 | [#462 — Evidencia y trazabilidad](https://github.com/Team-Origen/origen/pull/462) | rama de #461 | CI verde en `b18f0a4`; [run](https://github.com/Team-Origen/origen/actions/runs/42812261690). La actualización documental final también se verifica antes de entregar. |
 
 Se verificaron bases, heads exactos, `type:feature`, referencias `Refs #379` y
 estado `OPEN`, `MERGEABLE`, `CLEAN` en los tres PRs después de CI. La actualización
