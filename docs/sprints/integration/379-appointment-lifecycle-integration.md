@@ -116,11 +116,21 @@ anteriores se conservan en la cronología, no sustituyen esta nueva observación
 la continuación autorizada del parent, con `data_directory` y socket de proyecto
 ya validados; el runtime del propietario no se modificó.
 
-## Estado de entrega
+## Entrega publicada y CI observado
 
-T2/T3 tienen evidencia técnica verde posterior a L24. T4 permanece en manos
-del parent: reconciliar commits y slices, crear la cadena a `develop`, verificar
-CI remoto y registrar limitaciones. La cadena propuesta conserva el contexto
-`develop ← slice 1 ← slice 2 ← bookkeeping opcional`; los PR numbers y enlaces
-anterior/siguiente son placeholders hasta que existan. No hay aceptación humana
-final, aprobación inventada, cierre de #285 ni referencia de cierre automática.
+| Orden | PR | Base | Resultado observado |
+| --- | --- | --- | --- |
+| 1 | [#460 — Paciente → Profesional](https://github.com/Team-Origen/origen/pull/460) | `develop` | CI verde, head `a79ef07`; [run](https://github.com/Team-Origen/origen/actions/runs/42808628330). |
+| 2 | [#461 — Operaciones del ciclo](https://github.com/Team-Origen/origen/pull/461) | rama de #460 | CI verde, head `2523d37`; [run](https://github.com/Team-Origen/origen/actions/runs/42808631859). |
+| 3 | [#462 — Evidencia y trazabilidad](https://github.com/Team-Origen/origen/pull/462) | rama de #461 | CI verde en `b34e7f3`; [run](https://github.com/Team-Origen/origen/actions/runs/42808636042). La actualización documental final también se verifica antes de entregar. |
+
+Se verificaron bases, heads exactos, `type:feature`, referencias `Refs #379` y
+estado `OPEN`, `MERGEABLE`, `CLEAN` en los tres PRs después de CI. La actualización
+final es sólo documental: no modifica los tests ni el helper verificados.
+
+**No se mergeó ningún PR ni se cerró ninguna issue.** Para integrar la cadena,
+corresponde revisar #460 primero; después de su merge, retargetear #461 a
+`develop` y comprobar nuevamente CI. Repetir con #462. Es una guía para el
+responsable humano, no una operación ejecutada ni una autorización de merge.
+La aceptación funcional final y el cierre de #379/#285 no se infieren de la
+etiqueta de aprobación de implementación ni de los resultados técnicos.
