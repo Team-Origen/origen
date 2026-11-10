@@ -349,8 +349,9 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
         status: "confirmed"
       )
 
-    {:ok, view, html} = live(conn, ~p"/profesional/agenda")
-    refute html =~ "##{foreign.id}"
+    {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+    refute has_element?(view, "#appointment-#{foreign.id}")
+    refute has_element?(view, "#professional-history-appointment-#{foreign.id}")
     {:ok, before} = Booking.list_appointment_history(principal)
 
     html =
