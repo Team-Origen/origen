@@ -101,6 +101,7 @@ All items below belong to Sprint 3 (milestone 5). Integration is gated by every 
 - Parent [#285](https://github.com/Team-Origen/origen/issues/285): [Contract #376](https://github.com/Team-Origen/origen/issues/376), implementation slice 10 of 17 / contract. [Operational lifecycle contract](../../../docs/sprints/sprint-4/contrato-285-ciclo-operativo-turno.md): documentation only; explicitly approved by the user, not implementation or integration evidence.
 - Parent [#285](https://github.com/Team-Origen/origen/issues/285): [Backend #377](https://github.com/Team-Origen/origen/issues/377), implementation slice 10 of 17 / backend. [Domain operations and verification evidence](../../../docs/booking/APPOINTMENT_LIFECYCLE.md) cover expiry, scoped cancellation, attendance and private operational history. Human implementation approval and complete parent integration remain separate.
 - [#378 — Appointment lifecycle frontend](https://github.com/Team-Origen/origen/issues/378): Change `health-center-beta-core`; Path `openspec/changes/health-center-beta-core/`; Scope Sprint 4 / parent #285 / implementation slice 10 of 17 / frontend.
+- [#379 — Appointment lifecycle integration and verification](https://github.com/Team-Origen/origen/issues/379): Change `health-center-beta-core`; Path `openspec/changes/health-center-beta-core/`; Scope Sprint 4 / parent #285 / implementation slice 10 of 17 / integration and verification.
 
 ## Success criteria
 
