@@ -87,6 +87,8 @@ El helper completo tiene 258 líneas después de la corrección L24.
 | L22 | El primer slice independiente falló 0/1 por `String.to_existing_atom("requested")` en el helper; la suite completa previa lo ocultaba por orden de carga. El árbol final fue restaurado sin cambios. |
 | L24 | Una única corrección authored sustituyó ambos `String.to_existing_atom/1` por mapas finitos canónicos (`manual`/`automatic` y `requested`/`confirmed`). Stage1 independiente: 1/1. Focused exacto: 62/62. |
 | Posterior a L24 | Parent job 5: fullsuite 1080 passed, 32 skipped, 8 excluded, seed 0, exit 0; formato y `mix compile --warnings-as-errors` pasaron. |
+| CI final previo | #460 y #462 verdes; un run adicional de #461 en el mismo head falló 1079/1080, seed 211923. La búsqueda textual `#125` coincidió con el color CSS público `#12566B`; no era una fuga de turnos. Se conserva [el run fallido](https://github.com/Team-Origen/origen/actions/runs/42810290672). |
+| Corrección acotada T5 | La regresión existente ahora comprueba ausencia del nodo de agenda y de historial del turno ajeno, preservando rechazo, estados e historial inmutables. Focalizadas: 12 passed; fullsuite del parent con la semilla CI 211923: 1080 passed, 32 skipped, 8 excluded, exit 0. |
 
 ## Runtime y trazabilidad
 
@@ -116,7 +118,21 @@ anteriores se conservan en la cronología, no sustituyen esta nueva observación
 la continuación autorizada del parent, con `data_directory` y socket de proyecto
 ya validados; el runtime del propietario no se modificó.
 
+## Corrección de la regresión de CI
+
+El falso positivo de CSS se corrigió sólo en
+`professional_agenda_lifecycle_live_test.exs`: los selectores
+`#appointment-ID` y `#professional-history-appointment-ID` sustituyen la búsqueda
+global de texto. No se modificó producción, UI, permisos ni el helper. El parche
+se propagó desde el primer corte por merges locales de ancestría hacia los
+siguientes; no se reescribió historia ni se mergeó ningún PR a `develop`.
+Los checks de los heads corregidos se verifican antes de la entrega final.
+
 ## Entrega publicada y CI observado
+
+Las ejecuciones de la tabla son las observadas inicialmente; no sustituyen los
+checks del head actual, disponibles en cada PR. La cronología conserva también
+el fallo posterior y su corrección.
 
 | Orden | PR | Base | Resultado observado |
 | --- | --- | --- | --- |
