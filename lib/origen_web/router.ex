@@ -60,6 +60,11 @@ defmodule OrigenWeb.Router do
     post "/paciente/cerrar-sesion", PatientAccessController, :delete
     get "/access/verify", PatientAccessController, :verify
 
+    live_session :secretary_summary,
+      on_mount: [{OrigenWeb.InternalAuthLive, :ensure_authenticated}] do
+      live "/secretaria/resumen-economico", EconomicSummaryLive, :secretary
+    end
+
     live_session :patient_access,
       on_mount: [{OrigenWeb.PatientSessionAuthLive, :ensure_authenticated}] do
       live "/paciente/telefono/verificar", PatientPhoneVerificationLive, :index
@@ -77,6 +82,7 @@ defmodule OrigenWeb.Router do
 
     live_session :professional_agenda,
       on_mount: [{OrigenWeb.InternalAuthLive, :ensure_professional}] do
+      live "/resumen-economico", EconomicSummaryLive, :professional
       live "/agenda", ProfessionalAgendaLive, :index
       live "/agenda/crear", ProfessionalPatientSelectionLive, :index
     end
