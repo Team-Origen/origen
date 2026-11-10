@@ -73,8 +73,18 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
 
     refute html =~ "Aceptar solicitud"
     refute html =~ "Rechazar solicitud"
-    assert has_element?(view, "#secretary-navigation")
-    assert has_element?(view, "a[href='/secretaria/pacientes']", "Pacientes")
+    assert has_element?(view, "#role-navigation[data-role='secretary']")
+    assert has_element?(
+             view,
+             "#nav-agenda[href='/secretaria/agenda'][aria-current='page']",
+             "Agenda"
+           )
+    assert has_element?(view, "#nav-patients[href='/secretaria/pacientes']", "Pacientes")
+    assert has_element?(view, "#navigation-secretary-avatar", "S")
+    assert has_element?(view, "#navigation-secretary-role", "Secretaría")
+    assert has_element?(view, "#navigation-secretary-name", "Secretaría")
+    assert has_element?(view, "#navigation-secretary-email")
+    assert has_element?(view, "#navigation-account-menu form[action='/logout'][method='post']")
   end
 
   test "cancels requested and confirmed appointments across agendas with a mandatory reason", %{

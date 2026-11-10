@@ -14,15 +14,22 @@ defmodule OrigenWeb.SecretaryAgendaLive do
   alias Origen.Appointments.Calendar, as: AppointmentCalendar
   alias Origen.Booking
   alias OrigenWeb.Components.AppointmentLifecycle
-  alias OrigenWeb.Navigation
 
   @lifecycle_statuses ~w(requested confirmed)
+
+  defp secretary_identity(principal) do
+    case Origen.Accounts.get_own_navigation_identity(principal) do
+      {:ok, identity} -> identity
+      {:error, _} -> nil
+    end
+  end
 
   @impl true
   def mount(_params, _session, socket) do
     if socket.assigns.current_role == :secretary do
       {:ok,
        socket
+       |> assign(:secretary_identity, secretary_identity(socket.assigns.current_internal_session))
        |> assign(
          page_title: "Agenda del centro",
          date: Date.utc_today(),
@@ -206,7 +213,11 @@ defmodule OrigenWeb.SecretaryAgendaLive do
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-[#F6F6F4] font-inter">
-      <Navigation.secretary_navigation current={:agenda} />
+      <OrigenWeb.RoleNavigation.navbar
+        role={:secretary}
+        active="agenda"
+        secretary_identity={@secretary_identity}
+      />
 
       <main class="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
         <header class="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">

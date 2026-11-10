@@ -105,9 +105,12 @@ identifica la agenda en la presentación.
   multas ni otras operaciones fuera del contrato. Los identificadores inválidos,
   sesiones vencidas y denegaciones del servidor se manejan sin mutar la vista.
 
-La navegación de Secretaría conserva el enlace funcional a `/secretaria/pacientes`
-y agrega la entrada a `/secretaria/agenda`, de acuerdo con
-`docs/navigation/URL_CONVENTIONS.md`. La prueba
+La navegación de Secretaría usa la navbar compartida de `RoleNavigation`: conserva
+el enlace funcional a `/secretaria/pacientes`, marca como activa la agenda actual y
+habilita la entrada a `/secretaria/agenda`, de acuerdo con
+`docs/navigation/URL_CONVENTIONS.md`. El menú de cuenta conserva el cierre de sesión
+interno y muestra la identidad de Secretaría obtenida por
+`Origen.Accounts.get_own_navigation_identity/1`, sin cambiar autorización. La prueba
 `test/origen_web/live/secretary_agenda_live_test.exs` usa PostgreSQL real y
 fixtures persistentes para verificar autorización, los seis estados, cancelación
 en múltiples agendas, motivo en blanco sin mutación, asistencia/ausencia,

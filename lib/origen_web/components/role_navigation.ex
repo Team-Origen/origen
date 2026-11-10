@@ -197,7 +197,7 @@ defmodule OrigenWeb.RoleNavigation do
 
   defp items(:secretary) do
     [
-      {"agenda", "Agenda", nil},
+      {"agenda", "Agenda", ~p"/secretaria/agenda"},
       {"patients", "Pacientes", ~p"/secretaria/pacientes"},
       {"summary", "Resumen económico", nil}
     ]
