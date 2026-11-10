@@ -287,28 +287,40 @@ defmodule OrigenWeb.AdminInternalLive do
   end
 
   defp accounts_context do
-    Application.get_env(:origen, :admin_internal_accounts_context, Accounts)
+    context = Application.get_env(:origen, :admin_internal_accounts_context, Accounts)
+    Code.ensure_loaded?(context)
+    context
   end
 
   defp load_accounts(actor_id) when is_integer(actor_id) do
     context = accounts_context()
 
-    cond do
-      function_exported?(context, :list_internal_accounts, 1) ->
-        case context.list_internal_accounts(actor_id) do
-          {:ok, accounts} when is_list(accounts) -> Enum.map(accounts, &normalize_account_row/1)
-          accounts when is_list(accounts) -> Enum.map(accounts, &normalize_account_row/1)
-          _ -> []
-        end
+    result =
+      cond do
+        function_exported?(context, :list_internal_accounts, 1) ->
+          context.list_internal_accounts(actor_id)
 
-      function_exported?(context, :list_staff_accounts, 1) ->
-        case context.list_staff_accounts(actor_id) do
-          {:ok, accounts} when is_list(accounts) -> Enum.map(accounts, &normalize_account_row/1)
-          accounts when is_list(accounts) -> Enum.map(accounts, &normalize_account_row/1)
-          _ -> []
-        end
+        function_exported?(context, :list_internal_accounts, 2) ->
+          context.list_internal_accounts(actor_id, [])
 
-      true ->
+        function_exported?(context, :list_staff_accounts, 1) ->
+          context.list_staff_accounts(actor_id)
+
+        function_exported?(context, :list_staff_accounts, 2) ->
+          context.list_staff_accounts(actor_id, [])
+
+        true ->
+          Accounts.list_internal_accounts(actor_id)
+      end
+
+    case result do
+      {:ok, accounts} when is_list(accounts) ->
+        Enum.map(accounts, &normalize_account_row/1)
+
+      accounts when is_list(accounts) ->
+        Enum.map(accounts, &normalize_account_row/1)
+
+      _ ->
         []
     end
   end
@@ -387,31 +399,44 @@ defmodule OrigenWeb.AdminInternalLive do
       function_exported?(context, :update_internal_account, 3) ->
         context.update_internal_account(actor_id, target_id, attrs)
 
+      function_exported?(context, :update_internal_account, 4) ->
+        context.update_internal_account(actor_id, target_id, attrs, [])
+
       function_exported?(context, :update_staff_account_email, 3) ->
         context.update_staff_account_email(actor_id, target_id, attrs.email)
 
       true ->
-        {:error, :unavailable}
+        Accounts.update_internal_account(actor_id, target_id, attrs)
     end
   end
 
   defp invoke_deactivate_account(actor_id, target_id) do
     context = accounts_context()
 
-    if function_exported?(context, :deactivate_internal_account, 2) do
-      context.deactivate_internal_account(actor_id, target_id)
-    else
-      {:error, :unavailable}
+    cond do
+      function_exported?(context, :deactivate_internal_account, 2) ->
+        context.deactivate_internal_account(actor_id, target_id)
+
+      function_exported?(context, :deactivate_internal_account, 3) ->
+        context.deactivate_internal_account(actor_id, target_id, [])
+
+      true ->
+        Accounts.deactivate_internal_account(actor_id, target_id)
     end
   end
 
   defp invoke_reactivate_account(actor_id, target_id) do
     context = accounts_context()
 
-    if function_exported?(context, :reactivate_internal_account, 2) do
-      context.reactivate_internal_account(actor_id, target_id)
-    else
-      {:error, :unavailable}
+    cond do
+      function_exported?(context, :reactivate_internal_account, 2) ->
+        context.reactivate_internal_account(actor_id, target_id)
+
+      function_exported?(context, :reactivate_internal_account, 3) ->
+        context.reactivate_internal_account(actor_id, target_id, [])
+
+      true ->
+        Accounts.reactivate_internal_account(actor_id, target_id)
     end
   end
 
