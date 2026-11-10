@@ -59,6 +59,7 @@ defmodule OrigenWeb.PatientAppointmentsLiveTest do
     {:ok, view, html} = live(conn, ~p"/paciente/turnos")
 
     assert html =~ "Mis turnos"
+
     assert has_element?(
              view,
              "#nav-turns[href='/paciente/turnos'][aria-current='page']",
@@ -72,6 +73,7 @@ defmodule OrigenWeb.PatientAppointmentsLiveTest do
              view,
              "#navigation-account-menu form[action='/paciente/cerrar-sesion'][method='post']"
            )
+
     refute has_element?(view, "#navigation-account-menu form[action='/logout']")
     assert html =~ "Vencido"
     assert html =~ "Cancelado"
