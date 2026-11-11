@@ -38,6 +38,14 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
 
       assert {:ok, view, html} = live(conn, @path)
       assert html =~ "Búsqueda de pacientes"
+      assert has_element?(view, "main[data-theme='light'].bg-surface")
+
+      assert has_element?(
+               view,
+               "#patient-search-title.text-3xl.sm\\:text-4xl.lg\\:text-5xl",
+               "Búsqueda de pacientes"
+             )
+
       assert html =~ "Buscar persona"
       assert has_element?(view, "#role-navigation[data-role='secretary']")
       assert has_element?(view, "#nav-agenda[href='/secretaria/agenda']", "Agenda")
@@ -94,7 +102,9 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       assert html =~ "Carlos López"
       assert has_element?(view, "#patient-summary-document", "DNI 35987654")
       assert has_element?(view, "#patient-summary-profile-state", "Completado")
-      assert has_element?(view, "#patient-summary-phone", "+5491144332211")
+      refute has_element?(view, "#patient-summary-phone")
+      refute html =~ "+5491144332211"
+      refute has_element?(view, "#btn-open-replace-access")
       assert has_element?(view, "#patient-summary-phone-verified", "Teléfono no verificado")
 
       assert has_element?(
@@ -253,7 +263,8 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       assert html =~ "Persona registrada correctamente."
       assert has_element?(view, "#patient-summary-document", "DNI 37000111")
       assert has_element?(view, "#patient-summary-profile-state", "Completado")
-      assert has_element?(view, "#patient-summary-phone", "+5491155554444")
+      refute has_element?(view, "#patient-summary-phone")
+      refute html =~ "+5491155554444"
       assert has_element?(view, "#patient-summary-email", "No declarado")
       refute has_element?(view, "#assisted-registration-form")
 

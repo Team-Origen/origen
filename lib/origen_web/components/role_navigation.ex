@@ -189,7 +189,7 @@ defmodule OrigenWeb.RoleNavigation do
   defp items(:professional) do
     [
       {"agenda", "Agenda", ~p"/profesional/agenda"},
-      {"requests", "Solicitudes", nil},
+      {"requests", "Solicitudes", ~p"/profesional/solicitudes"},
       {"summary", "Resumen económico", ~p"/profesional/resumen-economico"},
       {"settings", "Ajustes", ~p"/profesional/ajustes"}
     ]

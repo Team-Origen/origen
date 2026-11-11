@@ -3,6 +3,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
   on_mount {OrigenWeb.InternalAuthLive, :ensure_professional}
 
+  alias Origen.Booking
   alias Origen.ConsultationTypes
   alias OrigenWeb.TimeGrid
   alias OrigenWeb.ProfessionalProfileForm
@@ -31,6 +32,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     socket =
       assign(socket,
         page_title: "Configuración",
+        approval_config: load_approval_config(socket.assigns.current_internal_session),
         profile_summary: profile_summary(socket.assigns.current_internal_session),
         current_interval: nil,
         selected_interval: nil,
@@ -66,6 +68,31 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
     end
   end
 
+  defp load_approval_config(%{account_id: account_id}) when is_integer(account_id) do
+    case Booking.get_approval_configuration(account_id) do
+      {:ok, config} -> config
+      _ -> %{approval_mode: :automatic, secretary_approval_mode: :confirmed}
+    end
+  end
+
+  defp load_approval_config(_),
+    do: %{approval_mode: :automatic, secretary_approval_mode: :confirmed}
+
+  # Los motivos de error se mapean a mensajes claros en español; nunca se filtra
+  # el término interno (`inspect/1`) hacia la interfaz.
+
+  defp resolution_error_message(:unauthorized),
+    do: "No tenés permiso para resolver esta solicitud."
+
+  defp resolution_error_message(:invalid_approval_mode),
+    do: "La modalidad de aprobación seleccionada no es válida."
+
+  defp resolution_error_message(:invalid_secretary_approval_mode),
+    do: "La subconfiguración de Secretaría seleccionada no es válida."
+
+  defp resolution_error_message(_other),
+    do: "No se pudo procesar la solicitud."
+
   defp profile_summary(principal) do
     case ProfessionalProfileForm.context().get_own_profile(principal) do
       {:ok, profile} ->
@@ -79,6 +106,32 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
 
       {:error, _reason} ->
         nil
+    end
+  end
+
+  @impl true
+  def handle_event("update_approval_config", params, socket) do
+    actor = socket.assigns.current_internal_session
+
+    attrs = %{
+      approval_mode: Map.get(params, "approval_mode"),
+      secretary_approval_mode: Map.get(params, "secretary_approval_mode")
+    }
+
+    case Booking.update_approval_configuration(actor, attrs) do
+      {:ok, config} ->
+        {:noreply,
+         socket
+         |> assign(:approval_config, config)
+         |> put_flash(
+           :info,
+           "Configuración de aprobación actualizada. Las solicitudes pendientes existentes conservan su estado."
+         )}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, resolution_error_message(reason))}
     end
   end
 
@@ -454,6 +507,25 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
             </div>
           </header>
 
+          <div
+            :if={Phoenix.Flash.get(@flash, :error)}
+            id="approval-flash-error"
+            role="alert"
+            class="p-4 rounded-xl bg-red-50 text-red-800 text-sm flex items-center gap-2 border border-red-200"
+          >
+            <.icon name="hero-exclamation-circle" class="w-5 h-5 text-red-600 shrink-0" />
+            <span>{Phoenix.Flash.get(@flash, :error)}</span>
+          </div>
+          <div
+            :if={Phoenix.Flash.get(@flash, :info)}
+            id="approval-flash-info"
+            role="status"
+            class="p-4 rounded-xl bg-emerald-50 text-emerald-800 text-sm flex items-center gap-2 border border-emerald-200"
+          >
+            <.icon name="hero-check-circle" class="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>{Phoenix.Flash.get(@flash, :info)}</span>
+          </div>
+
           <section
             id="professional-profile-entry"
             aria-labelledby="professional-profile-entry-heading"
@@ -700,6 +772,86 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
                   </.card_content>
                 </.card>
               </section>
+
+              <!-- Configuración de modalidad de aprobación y regla de Secretaría (#323) -->
+              <div
+                id="approval-config-panel"
+                class="bg-white rounded-xl shadow-sm border border-stone-200 p-5 sm:p-6 space-y-4"
+              >
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <h2 class="text-base font-bold text-[#0A3847]">
+                      Modalidad de aprobación de reservas
+                    </h2>
+                    <p
+                      id="approval-mode-notice"
+                      class="text-xs text-stone-500 mt-0.5"
+                    >
+                      El cambio de modalidad aplica únicamente a reservas nuevas y no resuelve automáticamente las solicitudes pendientes existentes.
+                    </p>
+                  </div>
+                </div>
+
+                <form
+                  id="approval-config-form"
+                  phx-change="update_approval_config"
+                  class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                >
+                  <div>
+                    <label
+                      for="select-approval-mode"
+                      class="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      Modalidad general
+                    </label>
+                    <select
+                      id="select-approval-mode"
+                      name="approval_mode"
+                      class="w-full text-xs sm:text-sm rounded-lg border-stone-300 py-2 px-3 text-stone-800 focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847] transition"
+                    >
+                      <option
+                        value="automatic"
+                        selected={@approval_config.approval_mode == :automatic}
+                      >
+                        Automática (confirma nuevas reservas)
+                      </option>
+                      <option
+                        value="manual"
+                        selected={@approval_config.approval_mode == :manual}
+                      >
+                        Manual (solicitudes requieren aprobación)
+                      </option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      for="select-secretary-approval-mode"
+                      class="block text-xs font-semibold text-stone-700 mb-1"
+                    >
+                      Regla para Secretaría (en modo manual)
+                    </label>
+                    <select
+                      id="select-secretary-approval-mode"
+                      name="secretary_approval_mode"
+                      class="w-full text-xs sm:text-sm rounded-lg border-stone-300 py-2 px-3 text-stone-800 focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847] transition"
+                    >
+                      <option
+                        value="confirmed"
+                        selected={@approval_config.secretary_approval_mode == :confirmed}
+                      >
+                        Secretaría confirma directamente
+                      </option>
+                      <option
+                        value="requested"
+                        selected={@approval_config.secretary_approval_mode == :requested}
+                      >
+                        Secretaría deja pendiente de aprobación
+                      </option>
+                    </select>
+                  </div>
+                </form>
+              </div>
 
               <section aria-labelledby="agenda-interval-heading">
                 <.card variant="basic">

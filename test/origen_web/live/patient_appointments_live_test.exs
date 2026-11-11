@@ -82,6 +82,10 @@ defmodule OrigenWeb.PatientAppointmentsLiveTest do
     refute has_element?(view, "#patient-appointment-#{foreign.id}")
     assert has_element?(view, "#patient-appointment-#{own_expired.id}")
 
+    # Presentation is newest-first without changing the shared history contract.
+    assert Regex.scan(~r/id="patient-appointment-(\d+)"/, html, capture: :all_but_first)
+           |> List.flatten() == [to_string(own_cancelled.id), to_string(own_expired.id)]
+
     assert {:ok, history} = Booking.list_appointment_history(principal)
     assert Enum.map(history, & &1.id) == [own_expired.id, own_cancelled.id]
   end

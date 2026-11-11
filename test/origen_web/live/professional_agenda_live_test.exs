@@ -454,7 +454,9 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       assert html =~ "Consulta General"
       assert html =~ "Reservado"
       assert html =~ "Confirmado"
-      assert html =~ "Tel: +5491144445555"
+      refute html =~ "Tel:"
+      refute html =~ "+5491144445555"
+      refute has_element?(view, "[phx-click=open_replace_access]")
       assert html =~ "DNI: 35111222"
 
       # Validar orden cronológico: 09:00 debe aparecer antes que 11:00 en el HTML
@@ -466,7 +468,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       assert has_element?(view, "#agenda-appointments-list")
     end
 
-    test "profesional puede vincular y reemplazar el correo desde la agenda", %{
+    test "link and replace capabilities remain available without the replace card button", %{
       conn: conn,
       prof_token: prof_token,
       professional_id: prof_id,
@@ -502,7 +504,8 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
                "Pendiente de verificación"
              )
 
-      view |> element("#btn-open-replace-access-#{patient.profile_id}") |> render_click()
+      refute has_element?(view, "#btn-open-replace-access-#{patient.profile_id}")
+      render_click(view, "open_replace_access", %{"patient-id" => to_string(patient.profile_id)})
 
       view
       |> form("#patient-access-form-fields-#{patient.profile_id}",
@@ -522,12 +525,13 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
              )
     end
 
-    test "muestra estado de acceso verificado cuando el paciente consumió el enlace", %{
-      conn: conn,
-      prof_token: prof_token,
-      professional_id: prof_id,
-      patient_1: patient
-    } do
+    test "verified access is hidden on the card but possession and patient details remain intact",
+         %{
+           conn: conn,
+           prof_token: prof_token,
+           professional_id: prof_id,
+           patient_1: patient
+         } do
       email = "mario.verificado@example.test"
       Repo.query!("UPDATE patient_profiles SET email = NULL WHERE id = $1", [patient.profile_id])
       profile = Origen.Repo.get!(Origen.Patients.PatientProfile, patient.profile_id)
@@ -552,11 +556,22 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       {:ok, view, _html} =
         live(put_internal_session(conn, prof_token), ~p"/profesional/agenda?date=2026-10-15")
 
-      assert has_element?(
-               view,
-               "#patient-access-status-#{patient.profile_id}",
-               "Acceso verificado"
-             )
+      refute has_element?(view, "#patient-access-status-#{patient.profile_id}")
+      refute has_element?(view, "[phx-click=open_replace_access]")
+      refute render(view) =~ "Acceso verificado"
+      refute render(view) =~ "+5491144445555"
+      assert render(view) =~ "Mario Bros"
+      assert render(view) =~ "DNI: 35111222"
+      assert render(view) =~ "Acceso: #{email}"
+      assert render(view) =~ "09:00 - 09:30"
+      assert render(view) =~ "Consulta General"
+      assert Origen.PatientAccess.access_status(email) == :verified
+
+      assert {:ok, %{appointments: [%{patient: %{phone: "+5491144445555", email: ^email}}]}} =
+               Origen.Booking.get_professional_agenda(
+                 Sessions.fetch_session(prof_token) |> elem(1),
+                 %{date: ~D[2026-10-15]}
+               )
     end
 
     test "muestra estado de agenda vacía cuando no hay turnos", %{
@@ -693,15 +708,15 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       )
 
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/solicitudes")
 
       # El turno solicitado muestra badge Solicitado y botones de acción
       assert has_element?(view, ".border-indigo-200", "Solicitado")
       assert has_element?(view, "button[phx-click='accept_request']", "Aceptar")
       assert has_element?(view, "button[phx-click='reject_request']", "Rechazar")
 
-      # El turno confirmado muestra badge Confirmado
-      assert has_element?(view, ".border-emerald-200", "Confirmado")
+      refute has_element?(view, ".border-emerald-200", "Confirmado")
+      assert has_element?(view, "#nav-requests[aria-current=page]")
     end
 
     test "C12: al hacer clic en Aceptar, confirma la solicitud reactivamente", ctx do
@@ -720,13 +735,18 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       conn = put_internal_session(ctx.conn, ctx.prof_token)
 
       {:ok, view, _html} =
-        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(appointment_date)}")
+        live(conn, ~p"/profesional/solicitudes?date=#{Date.to_iso8601(appointment_date)}")
 
       view
       |> element("button[phx-click='accept_request']", "Aceptar")
       |> render_click()
 
-      assert has_element?(view, ".border-emerald-200", "Confirmado")
+      assert has_element?(view, "#requests-empty-state")
+
+      {:ok, agenda, _} =
+        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(appointment_date)}")
+
+      assert has_element?(agenda, ".border-emerald-200", "Confirmado")
       refute has_element?(view, "button[phx-click='accept_request']")
     end
 
@@ -746,20 +766,25 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       conn = put_internal_session(ctx.conn, ctx.prof_token)
 
       {:ok, view, _html} =
-        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(appointment_date)}")
+        live(conn, ~p"/profesional/solicitudes?date=#{Date.to_iso8601(appointment_date)}")
 
       view
       |> element("button[phx-click='reject_request']", "Rechazar")
       |> render_click()
 
-      assert has_element?(view, ".border-rose-200", "Cancelado")
+      assert has_element?(view, "#requests-empty-state")
+
+      {:ok, agenda, _} =
+        live(conn, ~p"/profesional/agenda?date=#{Date.to_iso8601(appointment_date)}")
+
+      assert render(agenda) =~ "Cancelado"
       refute has_element?(view, "button[phx-click='reject_request']")
     end
 
     test "C13: un ID malformado no tumba la vista y muestra un error claro sin filtrar términos internos",
          ctx do
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/solicitudes")
 
       html = render_click(view, "accept_request", %{"id" => "invalid-id"})
 
@@ -768,19 +793,19 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       refute html =~ ":invalid_id"
 
       # El proceso LiveView sigue vivo y operativo
-      assert render(view) =~ "Agenda Diaria"
+      assert render(view) =~ "Solicitudes"
     end
 
     test "C14: un error de resolución mapea a mensaje claro y recarga la agenda", ctx do
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/solicitudes")
 
       html = render_click(view, "reject_request", %{"id" => "999999"})
 
       assert html =~ "El turno solicitado no fue encontrado."
       refute html =~ "inspect"
       refute html =~ ":appointment_not_found"
-      assert render(view) =~ "Agenda Diaria"
+      assert render(view) =~ "Solicitudes"
     end
 
     test "C15: permite configurar modalidad y subconfiguración de Secretaría preservando pendientes y mostrando el aviso de alcance",
@@ -798,7 +823,17 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       )
 
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/ajustes")
+
+      assert has_element?(
+               view,
+               "section[aria-labelledby='consultation-types-heading'] + #approval-config-panel"
+             )
+
+      assert has_element?(
+               view,
+               "#approval-config-panel + section[aria-labelledby='agenda-interval-heading']"
+             )
 
       assert has_element?(view, "#approval-config-panel")
       assert has_element?(view, "#approval-config-form")
@@ -825,7 +860,8 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       assert {:ok, %{approval_mode: :manual, secretary_approval_mode: :requested}} =
                Origen.Booking.get_approval_configuration(ctx.professional_id)
 
-      # La solicitud pendiente previa sigue en estado Solicitado sin resolverse automáticamente
+      {:ok, view, _} = live(conn, ~p"/profesional/solicitudes")
+      # Existing pending requests are not resolved by a configuration change.
       assert has_element?(view, ".border-indigo-200", "Solicitado")
       assert has_element?(view, "button[phx-click='accept_request']", "Aceptar")
     end
@@ -833,7 +869,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     test "C16: un valor inválido en la configuración de aprobación muestra un error claro sin romper la vista",
          ctx do
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/ajustes")
 
       html =
         render_change(view, "update_approval_config", %{
@@ -845,6 +881,162 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       refute html =~ "inspect"
       refute html =~ ":invalid_approval_mode"
     end
+  end
+
+  test "agenda retains pending states and operations but no moved controls", ctx do
+    today = Date.utc_today()
+
+    insert_appointment!(
+      ctx.professional_id,
+      ctx.patient_1.profile_id,
+      DateTime.new!(today, ~T[09:00:00], "Etc/UTC"),
+      DateTime.new!(today, ~T[09:30:00], "Etc/UTC"),
+      "requested"
+    )
+
+    {:ok, view, _} = live(put_internal_session(ctx.conn, ctx.prof_token), ~p"/profesional/agenda")
+    assert has_element?(view, ".border-indigo-200", "Solicitado")
+    assert has_element?(view, "[phx-click=open_cancellation]")
+    assert has_element?(view, "#create-professional-appointment")
+    refute has_element?(view, "#approval-config-panel")
+    refute has_element?(view, "[phx-click=accept_request]")
+    refute has_element?(view, "[phx-click=reject_request]")
+  end
+
+  test "requests list all pending days in chronological order with local dates and times", ctx do
+    today = Date.utc_today()
+
+    for {offset, time, status} <- [
+          {3, ~T[11:00:00], "requested"},
+          {1, ~T[10:00:00], "requested"},
+          {1, ~T[09:00:00], "requested"},
+          {2, ~T[09:00:00], "confirmed"}
+        ] do
+      start_time = DateTime.new!(Date.add(today, offset), time, "Etc/UTC")
+
+      insert_appointment!(
+        ctx.professional_id,
+        ctx.patient_1.profile_id,
+        start_time,
+        DateTime.add(start_time, 1800, :second),
+        status
+      )
+    end
+
+    conn = put_internal_session(ctx.conn, ctx.prof_token)
+    # A legacy date parameter must not narrow the new general list.
+    {:ok, view, html} = live(conn, "/profesional/solicitudes?date=#{today}")
+    assert length(Regex.scan(~r/phx-click="accept_request"/, html)) == 3
+    refute has_element?(view, "#requests-date-form")
+    refute has_element?(view, "[phx-click=next_day]")
+    timezone = Application.fetch_env!(:origen, :organization_timezone)
+
+    expected =
+      for {offset, time} <- [{1, ~T[09:00:00]}, {1, ~T[10:00:00]}, {3, ~T[11:00:00]}] do
+        DateTime.new!(Date.add(today, offset), time, "Etc/UTC")
+        |> DateTime.shift_zone!(timezone)
+        |> Calendar.strftime("%d/%m/%Y %H:%M")
+      end
+
+    assert Regex.scan(~r/<time[^>]*>([^<]+)<\/time>/, html, capture: :all_but_first)
+           |> List.flatten()
+           |> Enum.map(&String.trim/1) == expected
+
+    refute html =~ "Confirmado"
+
+    assert Regex.scan(~r/<time[^>]*>([^<]+)<\/time>/, render_click(view, "retry"),
+             capture: :all_but_first
+           )
+           |> List.flatten()
+           |> Enum.map(&String.trim/1) == expected
+
+    {:ok, agenda, _} = live(conn, "/profesional/agenda?date=#{Date.add(today, 1)}")
+    assert has_element?(agenda, "#agenda-date-form")
+  end
+
+  test "general requests retains empty state even with a legacy invalid date", ctx do
+    {:ok, view, _} =
+      live(
+        put_internal_session(ctx.conn, ctx.prof_token),
+        "/profesional/solicitudes?date=invalida"
+      )
+
+    assert has_element?(view, "#requests-empty-state")
+    refute has_element?(view, "#requests-error-state")
+    refute render(view) =~ "para esta fecha"
+  end
+
+  test "requests and settings remain inaccessible to other roles", ctx do
+    for token <- [ctx.sec_token, ctx.admin_token],
+        path <- ["/profesional/solicitudes", "/profesional/ajustes"] do
+      conn = get(put_internal_session(build_conn(), token), path)
+      assert conn.status == 403
+    end
+
+    assert get(build_conn(), "/profesional/solicitudes").status == 401
+  end
+
+  test "stale requests cannot be resolved twice and refresh the pending list", ctx do
+    date = Date.add(Date.utc_today(), 1)
+
+    insert_appointment!(
+      ctx.professional_id,
+      ctx.patient_1.profile_id,
+      DateTime.new!(date, ~T[09:00:00], "Etc/UTC"),
+      DateTime.new!(date, ~T[09:30:00], "Etc/UTC"),
+      "requested"
+    )
+
+    conn = put_internal_session(ctx.conn, ctx.prof_token)
+    path = "/profesional/solicitudes?date=#{date}"
+    {:ok, first, _} = live(conn, path)
+    {:ok, stale, _} = live(conn, path)
+    first |> element("[phx-click=accept_request]") |> render_click()
+    html = stale |> element("[phx-click=reject_request]") |> render_click()
+    assert html =~ "La solicitud ya fue procesada o cambió de estado."
+    assert has_element?(stale, "#requests-empty-state")
+    {:ok, agenda, _} = live(conn, "/profesional/agenda?date=#{date}")
+    assert has_element?(agenda, ".border-emerald-200", "Confirmado")
+    refute render(agenda) =~ "Cancelado"
+  end
+
+  test "requests hide another professional's patients and reject forged resolution events", ctx do
+    date = Date.add(Date.utc_today(), 1)
+
+    insert_appointment!(
+      ctx.professional_id,
+      ctx.patient_1.profile_id,
+      DateTime.new!(date, ~T[09:00:00], "Etc/UTC"),
+      DateTime.new!(date, ~T[09:30:00], "Etc/UTC"),
+      "requested"
+    )
+
+    own_conn = put_internal_session(ctx.conn, ctx.prof_token)
+    {:ok, own, _} = live(own_conn, "/profesional/solicitudes?date=#{date}")
+
+    button = own |> element("[phx-click=accept_request]") |> render()
+    [_, id] = Regex.run(~r/phx-value-id="(\d+)"/, button)
+    other = insert_internal_account("other472@example.test", "professional")
+    insert_agenda_settings(other)
+    {:ok, %{token: token}} = Sessions.create_session(other)
+
+    {:ok, view, html} =
+      live(put_internal_session(build_conn(), token), "/profesional/solicitudes?date=#{date}")
+
+    assert has_element?(view, "#requests-empty-state")
+    refute html =~ "Mario"
+    refute html =~ "35111222"
+
+    for event <- ["accept_request", "reject_request"] do
+      assert render_click(view, event, %{"id" => id}) =~
+               "No tenés permiso para resolver esta solicitud."
+
+      assert has_element?(view, "#requests-empty-state")
+    end
+
+    {:ok, unchanged, _} = live(own_conn, "/profesional/solicitudes?date=#{date}")
+    assert has_element?(unchanged, "#accept-request-#{id}")
+    assert has_element?(unchanged, ".border-indigo-200", "Solicitado")
   end
 
   # Helpers para fixtures

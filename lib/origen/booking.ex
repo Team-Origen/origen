@@ -104,6 +104,11 @@ defmodule Origen.Booking do
           | {:error, :unauthorized | :invalid_date}
   defdelegate get_professional_agenda(principal, params \\ %{}), to: Agenda
 
+  @doc "Lists every pending request for the revalidated professional, earliest appointment first."
+  @spec list_professional_pending_requests(map() | Origen.Sessions.InternalSession.t()) ::
+          {:ok, [map()]} | {:error, :unauthorized}
+  defdelegate list_professional_pending_requests(principal), to: Agenda
+
   @doc """
   Registra un paciente inexistente y reserva un turno confirmado para el
   Profesional autenticado en una única transacción atómica (Issue #318).

@@ -66,11 +66,28 @@ defmodule OrigenWeb.AppointmentLifecycleIntegrationTest do
              "Agenda"
            )
 
-    assert has_element?(professional_view, "#accept-request-#{appointment.id}", "Aceptar")
+    refute has_element?(professional_view, "#accept-request-#{appointment.id}")
 
-    professional_view
+    {:ok, requests_view, _} =
+      live(
+        Helpers.internal_conn(ctx.professional.token),
+        "/profesional/solicitudes?date=#{Date.to_iso8601(ctx.date)}"
+      )
+
+    assert has_element?(requests_view, "#nav-requests[aria-current='page']", "Solicitudes")
+    assert has_element?(requests_view, "#accept-request-#{appointment.id}", "Aceptar")
+
+    requests_view
     |> element("#accept-request-#{appointment.id}")
     |> render_click()
+
+    refute has_element?(requests_view, "#appointment-#{appointment.id}")
+
+    {:ok, professional_view, _} =
+      live(
+        Helpers.internal_conn(ctx.professional.token),
+        "/profesional/agenda?date=#{Date.to_iso8601(ctx.date)}"
+      )
 
     assert has_element?(professional_view, "#appointment-#{appointment.id}", "Confirmado")
     assert Repo.get!(Appointment, appointment.id).status == "confirmed"

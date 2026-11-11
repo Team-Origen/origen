@@ -128,7 +128,12 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
                "Agenda"
              )
 
-      assert has_element?(prof_agenda_view, "#approval-config-panel")
+      refute has_element?(prof_agenda_view, "#approval-config-panel")
+
+      {:ok, prof_settings_view, _} =
+        live(internal_conn(ctx.conn, ctx.prof_owner.token), ~p"/profesional/ajustes")
+
+      assert has_element?(prof_settings_view, "#approval-config-panel")
 
       assert has_element?(
                prof_agenda_view,
@@ -156,7 +161,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # =========================================================================
       # COMBINACIÓN 1: Modalidad AUTOMÁTICA (Paciente -> confirmed, Secretaría -> confirmed, Profesional -> confirmed)
       # =========================================================================
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "automatic",
         "secretary_approval_mode" => "confirmed"
@@ -205,7 +210,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       # 1d. En modo automático, aunque secretary_approval_mode quede en requested,
       # Secretaría y Paciente siguen confirmando directamente.
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "automatic",
         "secretary_approval_mode" => "requested"
@@ -228,7 +233,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # COMBINACIÓN 2: Modalidad MANUAL + Secretaría CONFIRMED (C1, C9)
       # Paciente -> requested, Secretaría -> confirmed, Profesional -> confirmed
       # =========================================================================
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "manual",
         "secretary_approval_mode" => "confirmed"
@@ -284,7 +289,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # COMBINACIÓN 3: Modalidad MANUAL + Secretaría REQUESTED (C1, C10)
       # Paciente -> requested, Secretaría -> requested, Profesional (existente e inexistente) -> confirmed
       # =========================================================================
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "manual",
         "secretary_approval_mode" => "requested"
@@ -341,14 +346,22 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
           ~p"/profesional/agenda?date=#{date_iso}"
         )
 
+      {:ok, requests_view, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/solicitudes?date=#{date_iso}"
+        )
+
       for req_id <- [
             appt_man_conf_patient.id,
             appt_man_req_patient.id,
             appt_man_req_sec.id
           ] do
         assert has_element?(agenda_day_view, "#appointment-#{req_id}", "Solicitado")
-        assert has_element?(agenda_day_view, "#accept-request-#{req_id}", "Aceptar")
-        assert has_element?(agenda_day_view, "#reject-request-#{req_id}", "Rechazar")
+        refute has_element?(agenda_day_view, "#accept-request-#{req_id}")
+        refute has_element?(agenda_day_view, "#reject-request-#{req_id}")
+        assert has_element?(requests_view, "#accept-request-#{req_id}", "Aceptar")
+        assert has_element?(requests_view, "#reject-request-#{req_id}", "Rechazar")
       end
 
       for conf_id <- [
@@ -500,7 +513,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, other_prof_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_other.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/solicitudes?date=#{date_iso}"
         )
 
       refute has_element?(other_prof_view, "#appointment-#{req_0900.id}")
@@ -515,7 +528,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, owner_agenda_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/solicitudes?date=#{date_iso}"
         )
 
       owner_agenda_view
@@ -524,11 +537,19 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       assert has_element?(
                owner_agenda_view,
-               "#agenda-flash-info",
+               "#requests-flash-info",
                "Solicitud aceptada y turno confirmado."
              )
 
-      assert has_element?(owner_agenda_view, "#appointment-#{req_0900.id}", "Confirmado")
+      refute has_element?(owner_agenda_view, "#appointment-#{req_0900.id}")
+
+      {:ok, refreshed_agenda, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/agenda?date=#{date_iso}"
+        )
+
+      assert has_element?(refreshed_agenda, "#appointment-#{req_0900.id}", "Confirmado")
       refute has_element?(owner_agenda_view, "#accept-request-#{req_0900.id}")
       refute has_element?(owner_agenda_view, "#reject-request-#{req_0900.id}")
       assert Repo.get!(Appointment, req_0900.id).status == "confirmed"
@@ -556,11 +577,19 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       assert has_element?(
                owner_agenda_view,
-               "#agenda-flash-info",
+               "#requests-flash-info",
                "Solicitud rechazada y horario liberado."
              )
 
-      assert has_element?(owner_agenda_view, "#appointment-#{req_1000.id}", "Cancelado")
+      refute has_element?(owner_agenda_view, "#appointment-#{req_1000.id}")
+
+      {:ok, refreshed_agenda, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/agenda?date=#{date_iso}"
+        )
+
+      assert render(refreshed_agenda) =~ "Cancelado"
       refute has_element?(owner_agenda_view, "#accept-request-#{req_1000.id}")
       refute has_element?(owner_agenda_view, "#reject-request-#{req_1000.id}")
       assert Repo.get!(Appointment, req_1000.id).status == "cancelled"
@@ -623,8 +652,11 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/solicitudes?date=#{date_iso}"
         )
+
+      {:ok, settings_view, _} =
+        live(internal_conn(ctx.conn, ctx.prof_owner.token), ~p"/profesional/ajustes")
 
       # Revocar la sesión activa del profesional mientras la vista está abierta
       SQL.query!(
@@ -642,7 +674,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       assert Repo.get!(Appointment, req.id).status == "requested"
 
       html_cfg =
-        render_change(view, "update_approval_config", %{
+        render_change(settings_view, "update_approval_config", %{
           "approval_mode" => "automatic",
           "secretary_approval_mode" => "confirmed"
         })
@@ -658,12 +690,11 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
     test "cambiar modalidad o regla de Secretaría afecta sólo reservas nuevas",
          ctx do
       date = ctx.future_date
-      date_iso = Date.to_iso8601(date)
 
       {:ok, prof_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/ajustes"
         )
 
       # 1. En modo manual + secretaría requested, crear solicitud de Paciente (15:00) y Secretaría (15:30)
@@ -700,7 +731,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, prof_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/ajustes"
         )
 
       html_change =
@@ -717,6 +748,13 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # Las solicitudes previas permanecen intactas en requested y siguen ocupando sus horarios
       assert Repo.get!(Appointment, pending_pat.id).status == "requested"
       assert Repo.get!(Appointment, pending_sec.id).status == "requested"
+
+      {:ok, prof_view, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/solicitudes?date=#{Date.to_iso8601(date)}"
+        )
+
       assert has_element?(prof_view, "#appointment-#{pending_pat.id}", "Solicitado")
       assert has_element?(prof_view, "#appointment-#{pending_sec.id}", "Solicitado")
       assert has_element?(prof_view, "#accept-request-#{pending_pat.id}")
@@ -780,16 +818,14 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       assert has_element?(view, "#patient-access-status-#{ctx.patient_1.id}")
       assert has_element?(view, "#patient-access-status-#{ctx.patient_1.id}-#{r2.appointment_id}")
-      assert has_element?(view, "#btn-open-replace-access-#{ctx.patient_1.id}")
+      refute has_element?(view, "#btn-open-replace-access-#{ctx.patient_1.id}")
 
-      assert has_element?(
+      refute has_element?(
                view,
                "#btn-open-replace-access-#{ctx.patient_1.id}-#{r2.appointment_id}"
              )
 
-      view
-      |> element("#btn-open-replace-access-#{ctx.patient_1.id}-#{r2.appointment_id}")
-      |> render_click()
+      render_click(view, "open_replace_access", %{"patient-id" => to_string(ctx.patient_1.id)})
 
       assert has_element?(view, "#patient-access-form-#{ctx.patient_1.id}")
       refute has_element?(view, "#patient-access-form-#{ctx.patient_1.id}-#{r2.appointment_id}")

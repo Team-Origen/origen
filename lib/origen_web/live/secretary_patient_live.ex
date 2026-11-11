@@ -858,11 +858,18 @@ defmodule OrigenWeb.SecretaryPatientLive do
       active="patients"
       secretary_identity={@secretary_identity}
     />
-    <main class="min-h-screen bg-page dark:bg-gray-950 py-6 text-text dark:text-gray-100 sm:py-10">
+    <main data-theme="light" class="min-h-screen bg-surface py-6 text-text sm:py-10">
       <.container max_width="xl">
         <div class="flex flex-col gap-6 sm:gap-8">
           <header class="space-y-2">
-            <.h1 color_class="text-text dark:text-gray-100" no_margin>Búsqueda de pacientes</.h1>
+            <.h1
+              id="patient-search-title"
+              class="text-3xl sm:text-4xl lg:text-5xl"
+              color_class="text-text"
+              no_margin
+            >
+              Búsqueda de pacientes
+            </.h1>
 
             <.text_muted class="text-text-muted dark:text-gray-300">
               Buscá una persona por documento para reutilizar su identidad o registrarla para una reserva asistida.
@@ -1099,11 +1106,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     {profile_state_label(@search_result.profile && @search_result.profile.state)}
                   </dd>
 
-                  <dt class="font-medium text-text-muted dark:text-gray-300">Teléfono</dt>
-                  <dd id="patient-summary-phone" class="text-text dark:text-gray-200">
-                    {(@search_result.profile && @search_result.profile.phone) || "—"}
-                  </dd>
-
                   <dt class="font-medium text-text-muted dark:text-gray-300">Correo de contacto</dt>
                   <dd id="patient-summary-email" class="text-text dark:text-gray-200">
                     {(@search_result.profile &&
@@ -1129,13 +1131,16 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     </span>
 
                     <% access_state = PatientAccess.access_status(@search_result.profile) %>
+                    <% access_label = access_status_label(access_state) %>
+                    <% access_color = access_status_badge_color(access_state) %>
                     <.badge
+                      :if={access_state != :verified}
                       id="patient-summary-access-status"
-                      color={access_status_badge_color(access_state)}
+                      color={access_color}
                       variant="soft"
                       size="sm"
                       dot
-                      label={access_status_label(access_state)}
+                      label={access_label}
                       role="status"
                     />
 
@@ -1151,20 +1156,6 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       phx-click="open_link_access"
                     >
                       Vincular correo de acceso
-                    </.button>
-
-                    <.button
-                      :if={
-                        @search_result.profile && not is_nil(@search_result.profile.email) &&
-                          is_nil(@access_action)
-                      }
-                      id="btn-open-replace-access"
-                      color="secondary"
-                      variant="outline"
-                      size="xs"
-                      phx-click="open_replace_access"
-                    >
-                      Reemplazar correo de acceso
                     </.button>
                   </dd>
 

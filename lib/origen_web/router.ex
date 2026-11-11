@@ -85,6 +85,7 @@ defmodule OrigenWeb.Router do
     live_session :professional_agenda,
       on_mount: [{OrigenWeb.InternalAuthLive, :ensure_professional}] do
       live "/resumen-economico", EconomicSummaryLive, :professional
+      live "/solicitudes", ProfessionalRequestsLive, :index
       live "/agenda", ProfessionalAgendaLive, :index
       live "/agenda/crear", ProfessionalPatientSelectionLive, :index
     end

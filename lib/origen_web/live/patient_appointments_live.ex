@@ -53,7 +53,12 @@ defmodule OrigenWeb.PatientAppointmentsLive do
     case Booking.list_appointment_history(socket.assigns.principal) do
       {:ok, appointments} ->
         assign(socket,
-          appointments: appointments,
+          appointments:
+            Enum.sort_by(
+              appointments,
+              &{DateTime.to_unix(&1.start_time, :microsecond), &1.id},
+              :desc
+            ),
           history_error: nil,
           professional_names: professional_names()
         )

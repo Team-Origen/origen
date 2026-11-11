@@ -20,7 +20,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   @impl true
   def mount(_params, _session, socket) do
     date = Date.utc_today()
-    approval_config = load_approval_config(socket.assigns[:current_internal_session])
 
     {:ok,
      socket
@@ -30,7 +29,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
        loading: false,
        error: nil,
        appointments: [],
-       approval_config: approval_config,
        access_action: nil,
        access_patient_id: nil,
        access_form: nil,
@@ -181,64 +179,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   end
 
   @impl true
-  def handle_event("accept_request", %{"id" => id_str}, socket) do
-    case parse_appointment_id(id_str) do
-      {:ok, appt_id} ->
-        actor = socket.assigns.current_internal_session
-
-        case Booking.accept_request(actor, appt_id) do
-          {:ok, _updated} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Solicitud aceptada y turno confirmado.")
-             |> load_agenda(socket.assigns.date)
-             |> load_history()}
-
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, resolution_error_message(reason))
-             |> load_agenda(socket.assigns.date)}
-        end
-
-      :error ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "El identificador del turno no es válido.")
-         |> load_agenda(socket.assigns.date)}
-    end
-  end
-
-  @impl true
-  def handle_event("reject_request", %{"id" => id_str}, socket) do
-    case parse_appointment_id(id_str) do
-      {:ok, appt_id} ->
-        actor = socket.assigns.current_internal_session
-
-        case Booking.reject_request(actor, appt_id) do
-          {:ok, _updated} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Solicitud rechazada y horario liberado.")
-             |> load_agenda(socket.assigns.date)
-             |> load_history()}
-
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, resolution_error_message(reason))
-             |> load_agenda(socket.assigns.date)}
-        end
-
-      :error ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "El identificador del turno no es válido.")
-         |> load_agenda(socket.assigns.date)}
-    end
-  end
-
-  @impl true
   def handle_event("open_cancellation", %{"appointment_id" => id_str}, socket) do
     case parse_appointment_id(id_str) do
       {:ok, appointment_id} ->
@@ -324,42 +264,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
     end
   end
 
-  @impl true
-  def handle_event("update_approval_config", params, socket) do
-    actor = socket.assigns.current_internal_session
-
-    attrs = %{
-      approval_mode: Map.get(params, "approval_mode"),
-      secretary_approval_mode: Map.get(params, "secretary_approval_mode")
-    }
-
-    case Booking.update_approval_configuration(actor, attrs) do
-      {:ok, config} ->
-        {:noreply,
-         socket
-         |> assign(:approval_config, config)
-         |> put_flash(
-           :info,
-           "Configuración de aprobación actualizada. Las solicitudes pendientes existentes conservan su estado."
-         )}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, resolution_error_message(reason))}
-    end
-  end
-
-  defp load_approval_config(%{account_id: account_id}) when is_integer(account_id) do
-    case Booking.get_approval_configuration(account_id) do
-      {:ok, config} -> config
-      _ -> %{approval_mode: :automatic, secretary_approval_mode: :confirmed}
-    end
-  end
-
-  defp load_approval_config(_),
-    do: %{approval_mode: :automatic, secretary_approval_mode: :confirmed}
-
   # Un ID malformado nunca debe tumbar el proceso LiveView: se parsea de forma
   # segura y ante fallo se informa con un mensaje claro y se recarga la agenda
   # para refrescar botones obsoletos.
@@ -376,27 +280,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
       _other -> :error
     end
   end
-
-  # Los motivos de error se mapean a mensajes claros en español; nunca se filtra
-  # el término interno (`inspect/1`) hacia la interfaz.
-
-  defp resolution_error_message(:invalid_status_transition),
-    do: "La solicitud ya fue procesada o cambió de estado."
-
-  defp resolution_error_message(:appointment_not_found),
-    do: "El turno solicitado no fue encontrado."
-
-  defp resolution_error_message(:unauthorized),
-    do: "No tenés permiso para resolver esta solicitud."
-
-  defp resolution_error_message(:invalid_approval_mode),
-    do: "La modalidad de aprobación seleccionada no es válida."
-
-  defp resolution_error_message(:invalid_secretary_approval_mode),
-    do: "La subconfiguración de Secretaría seleccionada no es válida."
-
-  defp resolution_error_message(_other),
-    do: "No se pudo procesar la solicitud."
 
   defp load_history(socket) do
     case Booking.list_appointment_history(socket.assigns.current_internal_session) do
@@ -552,86 +435,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
           </div>
         </div>
 
-        <!-- Configuración de modalidad de aprobación y regla de Secretaría (#323) -->
-        <div
-          id="approval-config-panel"
-          class="bg-white rounded-xl shadow-sm border border-stone-200 p-5 sm:p-6 space-y-4"
-        >
-          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <h2 class="text-base font-bold text-[#0A3847]">
-                Modalidad de aprobación de reservas
-              </h2>
-              <p
-                id="approval-mode-notice"
-                class="text-xs text-stone-500 mt-0.5"
-              >
-                El cambio de modalidad aplica únicamente a reservas nuevas y no resuelve automáticamente las solicitudes pendientes existentes.
-              </p>
-            </div>
-          </div>
-
-          <form
-            id="approval-config-form"
-            phx-change="update_approval_config"
-            class="grid grid-cols-1 sm:grid-cols-2 gap-4"
-          >
-            <div>
-              <label
-                for="select-approval-mode"
-                class="block text-xs font-semibold text-stone-700 mb-1"
-              >
-                Modalidad general
-              </label>
-              <select
-                id="select-approval-mode"
-                name="approval_mode"
-                class="w-full text-xs sm:text-sm rounded-lg border-stone-300 py-2 px-3 text-stone-800 focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847] transition"
-              >
-                <option
-                  value="automatic"
-                  selected={@approval_config.approval_mode == :automatic}
-                >
-                  Automática (confirma nuevas reservas)
-                </option>
-                <option
-                  value="manual"
-                  selected={@approval_config.approval_mode == :manual}
-                >
-                  Manual (solicitudes requieren aprobación)
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label
-                for="select-secretary-approval-mode"
-                class="block text-xs font-semibold text-stone-700 mb-1"
-              >
-                Regla para Secretaría (en modo manual)
-              </label>
-              <select
-                id="select-secretary-approval-mode"
-                name="secretary_approval_mode"
-                class="w-full text-xs sm:text-sm rounded-lg border-stone-300 py-2 px-3 text-stone-800 focus:ring-2 focus:ring-[#0A3847] focus:border-[#0A3847] transition"
-              >
-                <option
-                  value="confirmed"
-                  selected={@approval_config.secretary_approval_mode == :confirmed}
-                >
-                  Secretaría confirma directamente
-                </option>
-                <option
-                  value="requested"
-                  selected={@approval_config.secretary_approval_mode == :requested}
-                >
-                  Secretaría deja pendiente de aprobación
-                </option>
-              </select>
-            </div>
-          </form>
-        </div>
-
         <div
           :if={@access_feedback}
           id="professional-access-feedback"
@@ -737,31 +540,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                   </p>
 
                   <div
-                    :if={to_string(appt.status) == "requested"}
-                    id={"request-actions-#{appt.id}"}
-                    class="pt-2 flex items-center gap-2"
-                  >
-                    <button
-                      type="button"
-                      id={"accept-request-#{appt.id}"}
-                      phx-click="accept_request"
-                      phx-value-id={appt.id}
-                      class="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
-                    >
-                      Aceptar
-                    </button>
-                    <button
-                      type="button"
-                      id={"reject-request-#{appt.id}"}
-                      phx-click="reject_request"
-                      phx-value-id={appt.id}
-                      class="px-2.5 py-1 text-xs font-semibold rounded border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 shadow-sm transition"
-                    >
-                      Rechazar
-                    </button>
-                  </div>
-
-                  <div
                     :if={to_string(appt.status) in @lifecycle_statuses}
                     id={"lifecycle-actions-#{appt.id}"}
                     class="pt-2 flex flex-wrap items-center gap-2"
@@ -852,11 +630,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       {format_document_type(appt.patient.document_type)}: {appt.patient.document_number}
                     </div>
                   <% end %>
-                  <%= if appt.patient.phone do %>
-                    <div class="text-xs text-stone-500">
-                      Tel: {appt.patient.phone}
-                    </div>
-                  <% end %>
 
                   <div :if={appt.patient.email} class="text-xs text-stone-500">
                     Acceso: {appt.patient.email}
@@ -864,6 +637,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
                   <% {access_label, access_classes} = access_badge(appt.patient.access_status) %>
                   <div
+                    :if={appt.patient.access_status != :verified}
                     id={"patient-access-status-#{patient_dom_key}"}
                     class={"mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold " <> access_classes}
                     role="status"
@@ -881,16 +655,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
                     >
                       Vincular correo
-                    </button>
-                    <button
-                      :if={appt.patient.access_status != :unlinked}
-                      type="button"
-                      id={"btn-open-replace-access-#{patient_dom_key}"}
-                      phx-click="open_replace_access"
-                      phx-value-patient-id={appt.patient.id}
-                      class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
-                    >
-                      Reemplazar correo
                     </button>
                   </div>
 
