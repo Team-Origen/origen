@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# Starts the web server. Migrations run separately through bin/migrate
+# (Render preDeployCommand), so a failed migration stops the deploy
+# before the new version replaces the running one.
+RELEASE_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+PHX_SERVER=true exec "$RELEASE_ROOT/origen" start

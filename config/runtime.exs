@@ -111,7 +111,10 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
+  # Render exposes the public hostname as RENDER_EXTERNAL_HOSTNAME; PHX_HOST
+  # still wins when a custom domain is configured.
+  host =
+    System.get_env("PHX_HOST") || System.get_env("RENDER_EXTERNAL_HOSTNAME") || "example.com"
 
   config :origen, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
