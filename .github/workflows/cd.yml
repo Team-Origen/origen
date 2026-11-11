@@ -18,9 +18,9 @@ jobs:
     name: Deploy a Render
     runs-on: ubuntu-latest
     environment: production
-    # contents: write lets the job create the deploy tag below.
-    permissions:
-      contents: write
+    # This job only calls the deploy hook with its own secret; the GitHub
+    # token gets no permissions here.
+    permissions: {}
     steps:
       - name: Trigger Render deploy for this commit
         env:
@@ -43,19 +43,32 @@ jobs:
           # results are visible in the Render dashboard, not in this run.
           echo "Deploy queued in Render for ${COMMIT_SHA}."
 
-      # Tags each deployed commit as v<date>-<run number> (UTC), e.g.
-      # v2026.11.11-12. The tag means "deploy requested", not "deploy live":
-      # check the Render dashboard for the result. A commit that already has
-      # a deploy tag (manual re-run) is not tagged again.
-      - name: Tag the deployed commit
+  # Tags each deployed commit as v<YYYY.MM.DD>-<run number> (UTC), e.g.
+  # v2026.11.11-12. The tag means "deploy requested", not "deploy live":
+  # check the Render dashboard for the result.
+  # Separate job: it alone gets contents: write, never sees the deploy hook
+  # secret, and if it fails, "Re-run failed jobs" retries only the tag
+  # without calling the deploy hook again.
+  tag:
+    name: Tag the deployed commit
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create the deploy tag unless the commit already has one
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: |
-          EXISTING=$(gh api "repos/${REPO}/git/matching-refs/tags/v" \
-            --jq "[.[] | select(.object.sha == \"${COMMIT_SHA}\") | .ref] | first // empty")
+          # Only tags in the deploy format count, so a manual release tag such
+          # as v1.0.0 on the same commit does not suppress the deploy tag.
+          EXISTING=$(gh api "repos/${REPO}/git/matching-refs/tags/v" --jq "
+            [.[] | select(.object.sha == \"${COMMIT_SHA}\")
+                 | select(.ref | test(\"^refs/tags/v[0-9]{4}[.][0-9]{2}[.][0-9]{2}-[0-9]+$\"))
+                 | .ref] | first // empty")
           if [ -n "$EXISTING" ]; then
             echo "Commit already tagged as ${EXISTING#refs/tags/}; skipping."
             exit 0
