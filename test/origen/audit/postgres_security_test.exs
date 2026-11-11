@@ -59,15 +59,24 @@ defmodule Origen.Audit.PostgresSecurityTest do
     assert query!(
              verifier,
              """
-             SELECT member.rolname, parent.rolname, membership.inherit_option,
-                    membership.set_option
+              SELECT member.rolname, parent.rolname, membership.inherit_option,
+                     membership.set_option, membership.admin_option, member.rolcreaterole,
+                     member.rolcreatedb
              FROM pg_auth_members membership
              JOIN pg_roles member ON member.oid = membership.member
              JOIN pg_roles parent ON parent.oid = membership.roleid
              WHERE parent.rolname = $1
              """,
              [roles.owner]
-           ).rows == [[roles.migrator, roles.owner, false, true]]
+           ).rows
+           |> Enum.sort() ==
+             Enum.sort(
+               [[roles.migrator, roles.owner, false, true, false, false, false]] ++
+                 case System.get_env("ORIGEN_PROVISIONER_ROLE") do
+                   nil -> []
+                   provisioner -> [[provisioner, roles.owner, false, false, true, true, true]]
+                 end
+             )
 
     assert scalar!(
              verifier,
