@@ -5,6 +5,10 @@ defmodule OrigenWeb.Components.AppointmentLifecycle do
   attr :timezone, :string, required: true
   attr :id_prefix, :string, default: "professional-history-appointment"
   attr :professional_name, :string, default: nil
+  attr :professional_history, :boolean, default: false
+  attr :hide_appointment_number, :boolean, default: false
+  attr :professional_label, :string, default: "Agenda"
+  slot :actions
 
   def history(assigns) do
     ~H"""
@@ -12,10 +16,17 @@ defmodule OrigenWeb.Components.AppointmentLifecycle do
       id={"#{@id_prefix}-#{@appointment.id}"}
       class="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
     >
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div class={
+        if @professional_history,
+          do: "flex flex-row items-start justify-between gap-3",
+          else: "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+      }>
         <div>
           <h3 class="font-semibold text-stone-900">
             {@appointment.consultation_type_name}
+            <%= if @professional_history do %>
+              — {@appointment.patient_name}
+            <% end %>
           </h3>
           <p class="mt-1 text-sm text-stone-600">
             {local_time(@appointment.start_time, @timezone, "%d/%m/%Y · %H:%M")} a {local_time(
@@ -24,9 +35,17 @@ defmodule OrigenWeb.Components.AppointmentLifecycle do
               "%H:%M"
             )} hs
           </p>
-          <p class="mt-1 text-xs text-stone-500">Turno #{@appointment.id}</p>
+          <div :if={@actions != []} class="mt-2 flex justify-start">
+            {render_slot(@actions)}
+          </div>
+          <p
+            :if={not @professional_history and not @hide_appointment_number}
+            class="mt-1 text-xs text-stone-500"
+          >
+            Turno #{@appointment.id}
+          </p>
           <p :if={@professional_name} class="mt-1 text-xs text-stone-500">
-            Agenda: {@professional_name}
+            {@professional_label}: {@professional_name}
           </p>
         </div>
 

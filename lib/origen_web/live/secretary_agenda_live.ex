@@ -31,6 +31,7 @@ defmodule OrigenWeb.SecretaryAgendaLive do
        socket
        |> assign(:secretary_identity, secretary_identity(socket.assigns.current_internal_session))
        |> assign(
+         selected_appointment: nil,
          page_title: "Agenda del centro",
          date: organization_today(),
          appointments: [],
@@ -47,6 +48,20 @@ defmodule OrigenWeb.SecretaryAgendaLive do
     else
       {:ok, redirect(socket, to: "/")}
     end
+  end
+
+  @impl true
+  def handle_event("open_turn_detail", %{"appointment_id" => id}, socket) do
+    appointment =
+      Enum.find(socket.assigns.appointments ++ socket.assigns.history, fn appointment ->
+        to_string(appointment.id) == id
+      end)
+
+    {:noreply, assign(socket, selected_appointment: appointment)}
+  end
+
+  def handle_event("close_turn_detail", _params, socket) do
+    {:noreply, assign(socket, selected_appointment: nil)}
   end
 
   @impl true
@@ -173,16 +188,17 @@ defmodule OrigenWeb.SecretaryAgendaLive do
 
   defp organization_timezone, do: Application.fetch_env!(:origen, :organization_timezone)
 
+  defp professional_name(%{professional_name: name}, _names), do: name
+
   defp professional_name(appointment, names),
     do:
       Map.get(
         names,
         to_string(appointment.professional_account_id),
-        "Profesional ##{appointment.professional_account_id}"
+        "Profesional no identificado"
       )
 
-  defp patient_identifier(%{patient_profile_id: id}) when is_integer(id),
-    do: "Paciente ##{id}"
+  defp patient_identifier(%{patient_name: name}), do: name
 
   defp patient_identifier(_appointment), do: "Paciente no identificado"
 
@@ -355,17 +371,15 @@ defmodule OrigenWeb.SecretaryAgendaLive do
                     )} hs
                   </p>
                   <p class="mt-1 text-xs text-stone-500">
-                    {professional_name(appointment, @professional_names)} · Turno #{appointment.id}
+                    Profesional: {professional_name(appointment, @professional_names)}
                   </p>
                 </div>
                 <span class={"inline-flex w-fit rounded-full border px-3 py-1 text-xs font-semibold " <> classes}>{label}</span>
               </div>
 
-              <div
-                :if={to_string(appointment.status) in @lifecycle_statuses}
-                class="mt-4 flex flex-wrap gap-2 border-t border-stone-100 pt-4"
-              >
+              <div class="mt-4 flex flex-wrap gap-2 border-t border-stone-100 pt-4">
                 <button
+                  :if={to_string(appointment.status) in @lifecycle_statuses}
                   type="button"
                   id={"cancel-appointment-#{appointment.id}"}
                   phx-click="open_cancellation"
@@ -388,6 +402,10 @@ defmodule OrigenWeb.SecretaryAgendaLive do
                   phx-value-outcome="no_show"
                   class="rounded-md border border-amber-300 px-3 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50"
                 >Marcar ausencia</button>
+                <OrigenWeb.AppointmentPaymentComponent.detail_button
+                  id={"view-turn-#{appointment.id}"}
+                  appointment_id={appointment.id}
+                />
               </div>
 
               <.form
@@ -472,10 +490,25 @@ defmodule OrigenWeb.SecretaryAgendaLive do
                 timezone={@organization_timezone}
                 id_prefix="secretary-history-appointment"
                 professional_name={professional_name(appointment, @professional_names)}
+                hide_appointment_number={true}
+                professional_label="Profesional"
+              />
+              <OrigenWeb.AppointmentPaymentComponent.detail_button
+                id={"history-view-turn-#{appointment.id}"}
+                appointment_id={appointment.id}
               />
             </div>
           </div>
         </section>
+        <.live_component
+          :if={@selected_appointment}
+          module={OrigenWeb.AppointmentPaymentComponent}
+          id={"payment-#{@selected_appointment.id}"}
+          appointment={@selected_appointment}
+          principal={@current_internal_session}
+          timezone={@organization_timezone}
+          professional_name={professional_name(@selected_appointment, @professional_names)}
+        />
       </main>
     </div>
     """

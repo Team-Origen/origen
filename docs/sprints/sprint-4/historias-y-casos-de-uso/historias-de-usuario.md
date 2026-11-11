@@ -1,472 +1,378 @@
-# Historias de usuario implementadas hasta Sprint 4
+# Historias de usuario
 
-Corte: `develop` @ `0c38d8a` (2026-11-11). Método y criterio en el [README](./README.md).
+Historias de usuario del sistema de gestión de turnos Origen, agrupadas por módulo. La numeración coincide con la del [diagrama de casos de uso](./casos-de-uso.md).
 
-**Convenciones**
+## Escala de estimación
 
-- Identificador `HU-<rol>-<n>`. La columna «HU original» indica la historia de `docs/Origen_Documentacion.md` de la que parte, cuando existe.
-- «Sprint» es el *milestone* de GitHub de las issues que la entregan.
-- Los criterios describen el comportamiento implementado. Lo que el documento original pedía y la beta no incluye está en la [sección 6](#6-pendiente-o-excluido-no-disponible-en-esta-entrega) o en [discrepancias.md](./discrepancias.md).
-
-## Índice
-
-| ID | Historia | Rol | Sprint |
-| --- | --- | --- | --- |
-| HU-INT-01 | Activar cuenta interna con invitación | Profesional, Secretaría, Administrador | 0, 1 |
-| HU-INT-02 | Iniciar y cerrar sesión interna | Profesional, Secretaría, Administrador | 1, 4 |
-| HU-PAC-01 | Solicitar enlace de acceso e ingresar | Paciente | 1, 3 |
-| HU-PAC-02 | Reservar un turno propio | Paciente | 1, 3, 4 |
-| HU-PAC-03 | Consultar «Mis turnos» | Paciente | 4 |
-| HU-PAC-04 | Cancelar un turno propio | Paciente | 4 |
-| HU-PRO-01 | Completar el perfil profesional | Profesional | 3 |
-| HU-PRO-02 | Configurar la agenda y los tipos de consulta | Profesional | 1, 3 |
-| HU-PRO-03 | Elegir la modalidad de aprobación | Profesional | 3, 4 |
-| HU-PRO-04 | Resolver solicitudes de turno | Profesional | 3, 4 |
-| HU-PRO-05 | Consultar la agenda propia | Profesional | 1, 3, 4 |
-| HU-PRO-06 | Crear un turno para un paciente registrado | Profesional | 3 |
-| HU-PRO-07 | Registrar un paciente nuevo y agendarlo | Profesional | 3 |
-| HU-SEC-01 | Buscar un paciente por documento | Secretaría | 1, 3 |
-| HU-SEC-02 | Registrar un paciente | Secretaría | 3 |
-| HU-SEC-03 | Agendar un turno asistido | Secretaría | 3 |
-| HU-SEC-04 | Consultar las agendas del centro | Secretaría | 4 |
-| HU-OPE-01 | Cancelar un turno con motivo | Profesional, Secretaría | 4 |
-| HU-OPE-02 | Registrar asistencia o ausencia | Profesional, Secretaría | 4 |
-| HU-OPE-03 | Vincular el correo de acceso de un paciente | Profesional, Secretaría | 3, 4 |
-| HU-ADM-01 | Incorporar al primer Administrador | Administrador (con operador de despliegue) | 0, 1 |
-| HU-ADM-02 | Crear cuentas internas e invitar | Administrador | 1 |
-| HU-ADM-03 | Reemitir una invitación | Administrador | 1 |
-| HU-ADM-04 | Editar el correo de una cuenta interna | Administrador | 4 |
-| HU-ADM-05 | Desactivar y reactivar cuentas internas | Administrador | 4 |
-| HU-SIS-01 | Vencer solicitudes no resueltas | Sistema | 3, 4 |
-
-## 0. Reglas transversales
-
-Aplican a todas las historias y se consideran parte de sus criterios de aceptación.
-
-1. **Roles.** Hay cuatro roles: Administrador, Profesional y Secretaría (cuentas internas con contraseña y TOTP) y Paciente (acceso sin contraseña por enlace al correo vinculado). Referencia: `lib/origen/authorization/rules.ex:6`.
-2. **Denegación por defecto.** Toda operación no autorizada expresamente se deniega, y el Administrador no hereda permisos operativos. La autorización se valida en el servidor; ocultar un botón no es un control de seguridad. Referencias: `openspec/specs/default-deny-authorization/`, `docs/security/AUTHORIZATION_MATRIX.md`.
-3. **Privacidad.** El Profesional ve solo su agenda y sus pacientes, sin la actividad de esos pacientes con otros Profesionales. La Secretaría opera todo el centro. El Administrador no accede a pacientes, agendas, turnos ni datos económicos. El Paciente ve solo lo propio. Referencias: contrato #313, contrato #285 §3.
-4. **Estados del turno.** `Solicitado` (requested), `Confirmado` (confirmed), `Vencido` (expired), `Cancelado` (cancelled), `Asistió` (attended) y `No asistió` (no_show). Solicitado y Confirmado ocupan el horario. Confirmado significa aprobado, no asistencia. No existe reprogramación directa: cambiar fecha, hora o tipo es cancelar y crear otro turno. Referencias: `docs/sprints/sprint-4/contrato-285-ciclo-operativo-turno.md`, `docs/booking/APPOINTMENT_LIFECYCLE.md`.
-5. **Relación Profesional–Paciente.** Se crea en la misma operación que el primer turno Solicitado o Confirmado; buscar o seleccionar sin confirmar no la crea. Referencias: contratos #305, #313, #321.
-6. **Datos históricos del turno.** Cada turno guarda copia inmutable del nombre, la duración y el precio de lista del tipo de consulta. Referencia: contrato #305.
-7. **Auditoría.** Las operaciones sensibles generan eventos de auditoría de solo agregado y sin secretos. Referencia: `openspec/specs/append-only-audit/`.
-
-## 1. Acceso al sistema
-
-### HU-INT-01 · Activar cuenta interna con invitación
-
-**Como** Profesional, Secretaría o Administrador con una cuenta pendiente de activación, **quiero** definir mi contraseña y enrolar un autenticador TOTP con mi invitación, **para** poder ingresar al sistema de forma segura.
-
-Criterios de aceptación:
-
-- La invitación es de un solo uso, está vinculada a la cuenta y vence a las 24 horas según la hora del servidor.
-- La cuenta pasa a Activa solo después de definir la contraseña **y** confirmar un código TOTP válido.
-- Una invitación vencida, usada o reemplazada por una reemisión es rechazada.
-
-| HU original | Referencias | Sprint |
+| Atributo | Rango / Escala | Descripción |
 | --- | --- | --- |
-| 4.2, 7 | #55, #56, #121; `openspec/specs/admin-invitation-activation/`; matriz B-02, INV-01 | 0, 1 |
+| Valor | 1-34 | Secuencia de Fibonacci. 1: Simple, 34: Muy grande |
+| Prioridad | 1 - 5 | 1: Postergable, 3: Normal, 5: Inmediato. |
+| Estimación | 1h - 48h | Tiempo de desarrollo activo. Si > 48h, se fragmenta. |
 
-### HU-INT-02 · Iniciar y cerrar sesión interna
+## 1. Gestión de Pacientes
 
-**Como** usuario interno con cuenta Activa, **quiero** ingresar con mi correo, contraseña y código TOTP, **para** acceder a las funciones de mi rol.
+### HISTORIA DE USUARIO Núm: 1.1 | Alta paciente
 
-Criterios de aceptación:
+| Historia | Estimación |
+| --- | --- |
+| **Como** Secretaria,<br>**quiero** registrar un nuevo paciente ingresando sus datos personales,<br>**para** poder incorporarlo al sistema y permitir la gestión de sus turnos. | **Valor:** 8<br>**Prioridad:** 5<br>**Estimación:** 12 h |
 
-- Se exigen contraseña y TOTP válidos; las cuentas pendientes de activación o desactivadas son rechazadas.
-- La sesión dura como máximo 12 horas y se bloquea tras 15 minutos de inactividad (valores por defecto).
-- Al ingresar, cada rol ve solo su navegación: Profesional (Agenda, Solicitudes, Ajustes), Secretaría (Agenda, Pacientes) y Administrador (Cuentas).
-- El usuario puede cerrar sesión desde el menú de cuenta.
+**Validación:**
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 7 | #52, #53, #54, #368–#371, #409; matriz S1-01, AUTH-01 | 1, 4 |
+- Comprobar que nombre, apellido, tipo y número de documento, fecha de nacimiento (pasada) y teléfono sean obligatorios, y que el correo de contacto sea opcional.
+- Comprobar que el número de documento se normalice (sin puntos, guiones ni espacios) y que un documento ya registrado sea rechazado como duplicado.
+- Comprobar que, antes de registrar, la Secretaria deba buscar al paciente por documento (ver 1.4).
+- Comprobar que, tras el alta, el perfil quede listo para reservar turnos; el acceso del paciente al portal se habilita al vincular su correo (ver 1.3).
+- Comprobar que el Profesional también pueda registrar a un paciente inexistente en el mismo paso en que le asigna un turno (ver 2.2).
+- Dado que los datos son válidos y el documento no existe, cuando la Secretaria confirma el alta, entonces el sistema registra al paciente y deja la operación auditada.
 
-## 2. Paciente
+**HECHO POR:** Lucca Giordana
 
-### HU-PAC-01 · Solicitar enlace de acceso e ingresar
+### HISTORIA DE USUARIO Núm: 1.3 | Modificación paciente (correo de acceso)
 
-**Como** Paciente con un correo de acceso vinculado por el centro, **quiero** recibir un enlace de acceso en mi correo, **para** ingresar sin contraseña.
+| Historia | Estimación |
+| --- | --- |
+| **Como** Secretaria o Profesional,<br>**quiero** vincular un correo de acceso a un paciente después de verificar su identidad fuera del sistema,<br>**para** que pueda ingresar al portal con un enlace enviado a su correo. | **Valor:** 8<br>**Prioridad:** 3<br>**Estimación:** 12 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- La respuesta en pantalla es la misma exista o no el correo, para no revelar qué correos están registrados.
-- Solo se envía el enlace si el correo está vinculado a un perfil de Paciente. No hay registro público ni ingreso con Google.
-- El enlace vence a los 15 minutos, se usa una sola vez y cada nueva solicitud invalida los enlaces anteriores sin usar.
-- Si el personal reemplaza el correo de acceso, las sesiones anteriores del Paciente quedan invalidadas.
-- El Paciente puede cerrar la sesión de su navegador.
+- Comprobar que solo se pueda vincular un correo a pacientes que todavía no tienen correo de acceso.
+- Comprobar que el correo no pueda estar en uso por otro paciente.
+- Comprobar que el sistema envíe un enlace que prueba la posesión del correo y que la operación quede auditada.
+- Comprobar que la operación no modifique la identidad del paciente ni su historial de turnos.
+- Comprobar que el Administrador no pueda realizar esta operación.
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 8.2 | #85, #86, #277, contrato #297 | 1, 3 |
+**HECHO POR:** Lucca Giordana
 
-### HU-PAC-02 · Reservar un turno propio
+### HISTORIA DE USUARIO Núm: 1.4 | Listar pacientes (búsqueda)
 
-**Como** Paciente, **quiero** reservar un turno eligiendo profesional, tipo de consulta, fecha y horario disponible, **para** asegurar mi atención sin depender de la secretaría.
+| Historia | Estimación |
+| --- | --- |
+| **Como** Secretaria/Profesional,<br>**quiero** encontrar a un paciente registrado en el sistema,<br>**para** poder consultar su información y gestionar sus turnos. | **Valor:** 5<br>**Prioridad:** 3<br>**Estimación:** 8 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- La reserva es siempre para el propio Paciente; no se puede reservar para terceros.
-- Solo se ofrecen Profesionales con cuenta activa y perfil completo, y tipos de consulta activos.
-- Los horarios se calculan en el servidor según la disponibilidad semanal, el intervalo de agenda, la duración del tipo, la anticipación mínima, el horizonte de reserva y los turnos ya ocupados.
-- El perfil del Paciente debe estar completo. La verificación del teléfono no es requisito.
-- El turno queda Confirmado si el Profesional aprueba automáticamente, o Solicitado si aprueba manualmente. En ambos casos el horario queda ocupado.
-- Si otro usuario ocupa el horario en simultáneo, la reserva se rechaza por superposición.
+- Comprobar que la Secretaria pueda buscar a un paciente por tipo y número de documento y que la búsqueda quede auditada.
+- Comprobar que el Profesional solo vea a los pacientes con los que ya tiene relación y pueda buscar a otro únicamente por DNI exacto, sin listado global ni búsqueda parcial.
+- Comprobar que al Profesional solo se le muestren nombre, apellido y DNI.
+- Comprobar que el Administrador no tenga acceso a pacientes.
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.5.1 | #42, #91–#93, #280, #305–#308, #434; contrato #305 | 1, 3, 4 |
+**HECHO POR:** Lucca Giordana
 
-### HU-PAC-03 · Consultar «Mis turnos»
+## 2. Gestión de Turnos
 
-**Como** Paciente, **quiero** ver todos mis turnos, próximos y pasados, con su estado, **para** llevar el control de mis citas.
+### HISTORIA DE USUARIO Núm: 2.1 | Visualizar Turnos
 
-Criterios de aceptación:
+| Historia | Estimación |
+| --- | --- |
+| **Como** profesional de la salud,<br>**quiero** visualizar mis turnos por día con su estado, el paciente, el tipo de consulta y el horario,<br>**para** disponer de una visión completa de mi jornada y registrar el resultado de cada atención. | **Valor:** 13<br>**Prioridad:** 5<br>**Estimación:** 24 h |
 
-- Se muestran solo los turnos del Paciente autenticado, en cualquiera de los seis estados, del más reciente al más antiguo.
-- Si el personal canceló un turno, se ve quién lo canceló (Profesional o Secretaría) y el motivo.
-- No se muestran datos clínicos.
+**Validación:**
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.9 | #285, #378, #472; contrato #285 (E6, E13); matriz LIFE-04 | 4 |
+- Comprobar que el Profesional vea solo los turnos de su propia agenda, en la zona horaria de la organización, y que cambiar identificadores en la URL no amplíe el alcance.
+- Comprobar que se muestren los estados Solicitado, Confirmado, Vencido, Cancelado, Asistió y No asistió.
+- Comprobar que el Profesional no vea la actividad de sus pacientes con otros profesionales.
+- Comprobar que la Secretaria pueda ver los turnos de todas las agendas del centro agrupados por fecha, y que el Administrador no tenga acceso.
+- Dado que un turno está Confirmado, cuando el Profesional (en su agenda) o la Secretaria registran el resultado, entonces el turno pasa a Asistió o No asistió; las solicitudes y los turnos vencidos, cancelados o ya cerrados no admiten este cambio.
 
-### HU-PAC-04 · Cancelar un turno propio
+**HECHO POR:** Said Quioto
 
-**Como** Paciente, **quiero** cancelar un turno o una solicitud propia antes de su inicio, **para** liberar el horario si no puedo asistir.
+### HISTORIA DE USUARIO Núm: 2.2 | Crear Turno (paciente nuevo)
 
-Criterios de aceptación:
+| Historia | Estimación |
+| --- | --- |
+| **Como** profesional de la salud,<br>**quiero** registrar a un paciente que no existe en el sistema y asignarle un turno en mi agenda en el mismo paso,<br>**para** atender una primera consulta sin depender de la secretaría. | **Valor:** 8<br>**Prioridad:** 4<br>**Estimación:** 12 h |
 
-- Solo se pueden cancelar turnos propios en estado Solicitado o Confirmado y estrictamente antes de su hora de inicio.
-- No se exige motivo y no hay multa. El horario queda libre.
-- A partir de la hora de inicio, el servidor rechaza la cancelación aunque se intente fuera de la interfaz.
+**Validación:**
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.4 (adaptada) | #377, #378; contrato #285 (E3–E5); matriz LIFE-01 | 4 |
+- Comprobar que la opción solo aparezca después de buscar el DNI exacto y no encontrarlo.
+- Comprobar que nombre, apellido, DNI, fecha de nacimiento y teléfono sean obligatorios y el correo de contacto opcional.
+- Comprobar que el alta, el turno Confirmado, la relación con el Profesional y la auditoría se guarden en una sola operación: si algo falla, no queda nada guardado.
+- Comprobar que el horario elegido esté disponible y pertenezca a la agenda del Profesional autenticado.
+- Comprobar que, si otro usuario registró ese DNI mientras tanto, el sistema rechace el duplicado.
 
-## 3. Profesional
+**HECHO POR:** Said Quioto
 
-### HU-PRO-01 · Completar el perfil profesional
+### HISTORIA DE USUARIO Núm: 2.4 | Cancelar Turno
 
-**Como** Profesional, **quiero** cargar mi nombre, apellido, especialidad, tipo y número de matrícula, **para** aparecer como opción de reserva ante pacientes y secretaría.
+| Historia | Estimación |
+| --- | --- |
+| **Como** profesional de la salud o Secretaria,<br>**quiero** cancelar un turno indicando el motivo,<br>**para** liberar el bloque horario y que el paciente sepa por qué se canceló. | **Valor:** 5<br>**Prioridad:** 3<br>**Estimación:** 16 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- Los cinco datos son obligatorios para que el Profesional sea reservable; se puede guardar un perfil parcial y seguir configurando la agenda.
-- La matrícula es texto libre, sin catálogo ni verificación.
-- Al Paciente solo se le muestran nombre y especialidad.
-- Solo el propio Profesional accede a su perfil; Secretaría y Administrador no.
+- Comprobar que solo se puedan cancelar turnos en estado Solicitado o Confirmado y que el motivo sea obligatorio.
+- Comprobar que el Profesional solo cancele turnos de su agenda y la Secretaria, de cualquier agenda.
+- Comprobar que el turno no se elimine: pasa a Cancelado y conserva su historial.
+- Comprobar que el horario quede libre de inmediato y que el paciente vea quién canceló (Profesional o Secretaría) y el motivo.
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 4.3.2 (adaptada) | #278, #301–#304; contrato #301 | 3 |
+**HECHO POR:** Said Quioto
 
-### HU-PRO-02 · Configurar la agenda y los tipos de consulta
+### HISTORIA DE USUARIO Núm: 2.5.1 | Reservar turno (Paciente)
 
-**Como** Profesional, **quiero** configurar mi intervalo de agenda, mis tipos de consulta, mi disponibilidad semanal, la anticipación mínima y el horizonte de reserva, **para** que solo se ofrezcan horarios reales y compatibles con cada prestación.
+| Historia | Estimación |
+| --- | --- |
+| **Como** Paciente,<br>**quiero** reservar un turno seleccionando un profesional, tipo de consulta, fecha y horario disponible,<br>**para** asegurar mi atención sin necesidad de asistencia administrativa. | **Valor:** 21<br>**Prioridad:** 5<br>**Estimación:** 24 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- El intervalo de agenda va de 5 a 240 minutos en pasos de 5 (30 por defecto); cambiarlo pide confirmación, se aplica de forma atómica y no mueve ni cancela turnos existentes.
-- Cada tipo de consulta tiene nombre (hasta 32 caracteres), precio en ARS mayor o igual a 0, color y cantidad de intervalos entre 1 y `min(10, 240 / intervalo)`; la duración no supera 240 minutos.
-- Los tipos inactivos no se editan y dejan de ofrecerse solo para reservas nuevas; pueden reactivarse si su duración no supera 240 minutos.
-- Los turnos ya creados conservan el nombre, la duración y el precio que tenían al reservarse.
-- Solo el Profesional dueño modifica su configuración.
+- Comprobar que la reserva sea siempre para el propio paciente autenticado.
+- Comprobar que solo se ofrezcan profesionales con cuenta activa y perfil completo, y tipos de consulta activos.
+- Comprobar que se muestren únicamente horarios disponibles, calculados según la disponibilidad semanal, el intervalo de agenda, la duración, la anticipación mínima, el horizonte de reserva y los turnos ocupados.
+- Comprobar que el perfil del paciente deba estar completo para reservar.
+- Comprobar que el turno quede Confirmado si el profesional aprueba automáticamente, o Solicitado si aprueba manualmente; en ambos casos el horario queda ocupado.
+- Comprobar que una reserva simultánea sobre el mismo horario sea rechazada.
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 3.1, 3.2, 3.3 | #39, #40, #73–#78, #303; `openspec/specs/consultation-type-catalog/`, `openspec/specs/agenda-interval/`; matriz S1-09, S1-10 | 1, 3 |
+**HECHO POR:** Lucca Giordana
 
-### HU-PRO-03 · Elegir la modalidad de aprobación
+### HISTORIA DE USUARIO Núm: 2.5.2 | Reservar turno (Secretaria)
 
-**Como** Profesional, **quiero** elegir si apruebo las reservas de forma automática o manual, y cómo nacen las reservas que hace la Secretaría, **para** controlar qué turnos entran a mi agenda.
+| Historia | Estimación |
+| --- | --- |
+| **Como** Secretaria,<br>**quiero** reservar un turno para un paciente registrado seleccionando el profesional, el tipo de consulta, la fecha y el horario,<br>**para** asistir a los pacientes cuando no puedan reservar por sus propios medios. | **Valor:** 13<br>**Prioridad:** 4<br>**Estimación:** 12 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- Estado inicial de cada reserva según la modalidad:
+- Comprobar que la Secretaria pueda elegir cualquier profesional activo con perfil completo, un tipo de consulta activo y un horario disponible.
+- Comprobar que el estado inicial dependa de la modalidad de aprobación del profesional (ver 2.7): Confirmado o Solicitado.
+- Comprobar que el turno, la relación Profesional–Paciente y la auditoría se guarden en una sola operación.
+- Comprobar que la Secretaria pueda reservar aunque el paciente no tenga correo de acceso vinculado.
+- Comprobar que no sea posible reservar un horario ya ocupado.
 
-  | Canal | Automática | Manual, Secretaría confirma | Manual, Secretaría solicita |
-  | --- | --- | --- | --- |
-  | Paciente | Confirmado | Solicitado | Solicitado |
-  | Secretaría | Confirmado | Confirmado | Solicitado |
-  | Profesional | Confirmado | Confirmado | Confirmado |
+**HECHO POR:** Lucca Giordana
 
-- El cambio de modalidad afecta solo a reservas nuevas; las solicitudes pendientes no cambian.
-- Solo el Profesional dueño puede cambiarla.
+### HISTORIA DE USUARIO Núm: 2.5.3 | Reservar turno (Profesional)
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.7 (adaptada) | #284, #321–#324, #472; contrato #321 | 3, 4 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** Profesional de la salud,<br>**quiero** reservar un turno en mi agenda para un paciente con el que ya tengo relación o que encuentro por su DNI exacto,<br>**para** coordinar consultas de seguimiento. | **Valor:** 13<br>**Prioridad:** 4<br>**Estimación:** 12 h |
 
-### HU-PRO-04 · Resolver solicitudes de turno
+**Validación:**
 
-**Como** Profesional con aprobación manual, **quiero** aceptar o rechazar las solicitudes pendientes, **para** decidir qué turnos atiendo.
+- Comprobar que el Profesional solo pueda reservar dentro de su propia agenda.
+- Comprobar que pueda elegir entre sus pacientes relacionados o buscar uno por DNI exacto, sin listado global.
+- Comprobar que el turno nazca Confirmado aun cuando el profesional usa aprobación manual.
+- Comprobar que el horario deba estar disponible y que la reserva cree o reutilice la relación en la misma operación.
+- Comprobar que buscar o seleccionar un paciente sin confirmar no cree ninguna relación.
 
-Criterios de aceptación:
+**HECHO POR:** Lucca Giordana
 
-- Solo el Profesional dueño de la agenda resuelve sus solicitudes; Secretaría, Administrador, Paciente y otros Profesionales no pueden.
-- Aceptar pasa la solicitud a Confirmado y mantiene ocupado el horario. Rechazar la pasa a Cancelado y libera el horario.
-- Un turno que no está Solicitado no puede aceptarse ni rechazarse.
-- Las solicitudes se listan por fecha, sin filtro diario.
+### HISTORIA DE USUARIO Núm: 2.6 | Desocupar turno (Paciente)
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.7 | #284, #321–#324, #472; contrato #321 | 3, 4 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** Paciente,<br>**quiero** cancelar un turno o una solicitud propia antes de su inicio,<br>**para** liberar el horario si no voy a poder asistir. | **Valor:** 3<br>**Prioridad:** 3<br>**Estimación:** 12 h |
 
-### HU-PRO-05 · Consultar la agenda propia
+**Validación:**
 
-**Como** Profesional, **quiero** ver mi agenda por día con el estado de cada turno, **para** organizar mi jornada.
+- Comprobar que solo se puedan cancelar turnos propios en estado Solicitado o Confirmado y estrictamente antes de su hora de inicio.
+- Comprobar que no se exija motivo.
+- Comprobar que el horario quede disponible de inmediato para otros pacientes.
+- Comprobar que, desde la hora de inicio, el sistema rechace la cancelación aunque se intente fuera de la interfaz.
 
-Criterios de aceptación:
+**HECHO POR:** Said Quioto
 
-- Se muestran solo los turnos de la agenda del Profesional autenticado, en los seis estados y en la zona horaria de la organización.
-- Cambiar identificadores en la URL o en la petición no amplía el alcance.
-- No se muestra la actividad de esos pacientes con otros Profesionales.
+### HISTORIA DE USUARIO Núm: 2.7 | Aceptar turno (Profesional)
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.1, 2.8 (adaptadas) | #43, #79–#81, #282, #378; contrato #313; matriz S1-14, AGENDA-01, LIFE-05 | 1, 3, 4 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** Profesional de la salud,<br>**quiero** elegir si apruebo las reservas de forma automática o manual, y aceptar o rechazar las solicitudes pendientes,<br>**para** decidir qué turnos entran en mi agenda. | **Valor:** 8<br>**Prioridad:** 4<br>**Estimación:** 8 h |
 
-### HU-PRO-06 · Crear un turno para un paciente registrado
+**Validación:**
 
-**Como** Profesional, **quiero** crear un turno en mi agenda para un paciente con el que ya tengo relación o que encuentro por su DNI exacto, **para** coordinar consultas de seguimiento.
+- Comprobar que el Profesional pueda configurar la modalidad automática o manual, y en modalidad manual si las reservas de la Secretaria nacen Confirmadas o Solicitadas; el cambio solo afecta reservas nuevas.
+- Comprobar que únicamente los turnos en estado Solicitado puedan aceptarse o rechazarse.
+- Comprobar que aceptar pase el turno a Confirmado y mantenga ocupado el horario, y que rechazar lo pase a Cancelado y libere el horario.
+- Comprobar que solo el Profesional dueño de la agenda resuelva sus solicitudes; Secretaria, Administrador y Paciente no pueden.
+- Comprobar que una solicitud no resuelta pase a Vencido al llegar su hora de inicio y libere el horario (ver caso 6).
 
-Criterios de aceptación:
+**HECHO POR:** Lucca Giordana
 
-- El Profesional elige entre sus pacientes relacionados o busca por DNI exacto; no hay listado global ni búsqueda parcial.
-- Se muestran solo nombre, apellido y DNI del paciente.
-- El turno se crea solo en la agenda propia y nace Confirmado aun con aprobación manual.
-- El horario debe estar disponible; la reserva crea o reutiliza la relación en la misma operación.
+### HISTORIA DE USUARIO Núm: 2.9 | Listar Turno del Paciente
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.2, 2.5.3 | #282, #313–#316; contrato #313 | 3 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** paciente,<br>**quiero** visualizar un listado completo de mis turnos, próximos y pasados, con fecha, horario, profesional y estado,<br>**para** llevar un control personal de mis citas sin contactar a la secretaría. | **Valor:** 5<br>**Prioridad:** 2<br>**Estimación:** 24 h |
 
-### HU-PRO-07 · Registrar un paciente nuevo y agendarlo
+**Validación:**
 
-**Como** Profesional, **quiero** registrar a un paciente que no existe en el sistema y darle un turno en el mismo paso, **para** no depender de la secretaría ante una primera consulta.
+- Comprobar que se muestren solo los turnos del paciente autenticado, del más reciente al más antiguo.
+- Comprobar que se diferencien los estados Solicitado, Confirmado, Vencido, Cancelado, Asistió y No asistió.
+- Comprobar que, si el personal canceló un turno, se muestre quién lo canceló y el motivo.
+- Comprobar que no se muestren datos clínicos.
 
-Criterios de aceptación:
+**HECHO POR:** Said Quioto
 
-- Solo se ofrece después de buscar el DNI exacto y no encontrarlo.
-- Son obligatorios nombre, apellido, DNI, fecha de nacimiento y teléfono; el correo de contacto es opcional.
-- El alta, el turno Confirmado, la relación y la auditoría se guardan en una sola operación: si algo falla, no queda nada guardado.
-- No se crea cuenta ni se envía enlace de acceso. Si otro usuario registró ese DNI mientras tanto, se rechaza el duplicado.
+## 3. Configuración de Agenda
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 1.1, 2.5.3 (adaptadas) | #283, #317–#320; `docs/sprints/sprint-3/contrato-283-alta-y-reserva-profesional.md` | 3 |
+### HISTORIA DE USUARIO Núm: 3.1 | Editar Periodo
 
-## 4. Secretaría
+| Historia | Estimación |
+| --- | --- |
+| **Como** profesional de la salud,<br>**quiero** configurar la anticipación mínima y el horizonte con los que los pacientes pueden reservar,<br>**para** evitar reservas con escasa o excesiva anticipación. | **Valor:** 3<br>**Prioridad:** 2<br>**Estimación:** 12 h |
 
-### HU-SEC-01 · Buscar un paciente por documento
+**Validación:**
 
-**Como** Secretaría, **quiero** buscar a un paciente por tipo y número de documento, **para** saber si ya está registrado antes de darlo de alta o agendarlo.
+- Comprobar que el Profesional pueda modificar la anticipación mínima y el horizonte de reserva desde sus ajustes.
+- Comprobar que los cambios se apliquen de inmediato a los horarios ofrecidos al paciente y a la secretaría.
+- Comprobar que solo el Profesional dueño pueda modificar su configuración.
 
-Criterios de aceptación:
+**HECHO POR:** Said Quioto
 
-- El número se normaliza (sin puntos, guiones ni espacios) antes de buscar.
-- La búsqueda es obligatoria antes de registrar y queda auditada.
-- Solo la Secretaría puede usar esta búsqueda; Profesional y Administrador no.
+### HISTORIA DE USUARIO Núm: 3.2 | Editar Disponibilidad
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 1.4 (adaptada) | #67, #276, #293–#296; contrato #293 | 1, 3 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** profesional de la salud,<br>**quiero** configurar mis horarios regulares de atención por día de la semana,<br>**para** que el calendario muestre únicamente mi disponibilidad real. | **Valor:** 21<br>**Prioridad:** 5<br>**Estimación:** 24 h |
 
-### HU-SEC-02 · Registrar un paciente
+**Validación:**
 
-**Como** Secretaría, **quiero** registrar a un paciente que no existe en el sistema, **para** poder darle turnos.
+- Comprobar que el Profesional pueda definir sus franjas de atención semanales.
+- Comprobar que los pacientes y la secretaría solo vean horarios dentro de esas franjas.
+- Comprobar que solo el Profesional dueño pueda modificarlas.
 
-Criterios de aceptación:
+**HECHO POR:** Said Quioto
 
-- Son obligatorios nombre, apellido, tipo y número de documento, fecha de nacimiento (pasada) y teléfono; el correo de contacto es opcional.
-- El documento es único: un duplicado se rechaza.
-- El alta no crea cuenta de acceso, no envía enlace y no exige teléfono verificado; el perfil queda listo para reservar.
+### HISTORIA DE USUARIO Núm: 3.3 | Definir Tipos de Consulta
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 1.1 | #276, #293–#296; contrato #293 | 3 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** Profesional de la salud,<br>**quiero** configurar mi intervalo de agenda y gestionar mis tipos de consulta con nombre, precio, color y duración,<br>**para** ofrecer un catálogo claro y reservar solo horarios compatibles con cada prestación. | **Valor:** 8<br>**Prioridad:** 4<br>**Estimación:** 16 h |
 
-### HU-SEC-03 · Agendar un turno asistido
+**Validación:**
 
-**Como** Secretaría, **quiero** agendar a un paciente registrado en la agenda de cualquier Profesional, **para** asistir a quien no reserva por sus propios medios.
+- Comprobar que el intervalo de agenda vaya de 5 a 240 minutos en pasos de 5, y que cambiarlo pida confirmación y no mueva ni cancele turnos existentes.
+- Comprobar que cada tipo tenga nombre de hasta 32 caracteres, precio en ARS mayor o igual a 0, color y una cantidad de intervalos entre 1 y min(10, 240 / intervalo).
+- Comprobar que un tipo inactivo no se pueda editar, deje de ofrecerse para reservas nuevas y pueda reactivarse si su duración no supera 240 minutos.
+- Comprobar que los turnos ya reservados conserven el nombre, la duración y el precio que tenían al reservarse.
+- Comprobar que solo el Profesional dueño modifique su catálogo.
 
-Criterios de aceptación:
+**HECHO POR:** Said Quioto
 
-- Se puede elegir cualquier Profesional activo con perfil completo, un tipo de consulta activo y un horario disponible.
-- El estado inicial depende de la modalidad de aprobación del Profesional (ver HU-PRO-03).
-- El turno, la relación Profesional–Paciente y la auditoría se guardan en una sola operación.
-- No se exige teléfono verificado ni correo de acceso del paciente.
+## 4. Gestión de Profesionales
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.5.2 | #281, #309–#312; contrato #309 | 3 |
+### HISTORIA DE USUARIO Núm: 4.1 | Listar Profesionales
 
-### HU-SEC-04 · Consultar las agendas del centro
+| Historia | Estimación |
+| --- | --- |
+| **Como** Administrador,<br>**quiero** visualizar el listado de cuentas de profesionales y secretarias,<br>**para** conocer su estado y administrar su acceso. | **Valor:** 5<br>**Prioridad:** 3<br>**Estimación:** 12 h |
 
-**Como** Secretaría, **quiero** ver los turnos de todas las agendas del centro agrupados por fecha, **para** dar seguimiento a la operación diaria.
+**Validación:**
 
-Criterios de aceptación:
+- Comprobar que el listado muestre correo, rol, estado (pendiente de activación, activa o desactivada) y la cantidad de turnos futuros afectados.
+- Comprobar que no se muestren datos de pacientes ni de agendas.
+- Comprobar que solo el Administrador acceda a esta pantalla.
 
-- Se muestran los turnos de todos los Profesionales, en los seis estados y en la zona horaria de la organización.
-- El Administrador no tiene acceso a esta vista.
+**HECHO POR:** Santiago Casali
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.1 (adaptada) | #285, #378; matriz LIFE-06 | 4 |
+### HISTORIA DE USUARIO Núm: 4.2 | Alta Profesional
 
-## 5. Operación compartida y administración
+| Historia | Estimación |
+| --- | --- |
+| **Como** Administrador,<br>**quiero** crear cuentas de Profesional o Secretaria y emitir su invitación,<br>**para** incorporar al personal de forma ordenada y segura. | **Valor:** 8<br>**Prioridad:** 5<br>**Estimación:** 16 h |
 
-### HU-OPE-01 · Cancelar un turno con motivo
+**Validación:**
 
-**Como** Profesional o Secretaría, **quiero** cancelar un turno o una solicitud indicando el motivo, **para** liberar el horario y que el paciente sepa por qué.
+- Comprobar que solo se creen cuentas de Profesional o Secretaria.
+- Comprobar que el correo sea válido y único sin distinguir mayúsculas.
+- Comprobar que la cuenta quede Pendiente de activación y se emita una invitación de un solo uso que vence a las 24 horas.
+- Comprobar que el Administrador pueda reemitir la invitación de una cuenta pendiente, invalidando las anteriores.
+- Comprobar que el invitado active la cuenta definiendo su contraseña y enrolando TOTP (ver 7).
 
-Criterios de aceptación:
+**HECHO POR:** Santiago Casali
 
-- El Profesional cancela solo turnos de su agenda; la Secretaría, de cualquier agenda.
-- Solo se cancelan turnos Solicitados o Confirmados, con un motivo obligatorio.
-- El turno queda Cancelado, el horario se libera y el Paciente ve el origen (Profesional o Secretaría) y el motivo.
-- No hay multa ni notificación automática. Cancelar no equivale a rechazar una solicitud.
+### HISTORIA DE USUARIO Núm: 4.3.1 | Modificación Profesional (Administrador)
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.4 | #377–#379; contrato #285 (E7–E10); matriz LIFE-02, LIFE-03 | 4 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** Administrador,<br>**quiero** corregir el correo de la cuenta de un profesional o una secretaria,<br>**para** mantener actualizado su acceso. | **Valor:** 8<br>**Prioridad:** 3<br>**Estimación:** 12 h |
 
-### HU-OPE-02 · Registrar asistencia o ausencia
+**Validación:**
 
-**Como** Profesional o Secretaría, **quiero** marcar si el paciente asistió o no a un turno Confirmado, **para** dejar registrado el resultado de la atención.
+- Comprobar que el correo nuevo sea válido y único sin distinguir mayúsculas.
+- Comprobar que se conserven la cuenta, sus turnos, relaciones, perfil y ajustes, sin que el Administrador acceda a ellos.
+- Comprobar que no se pueda aplicar a cuentas de Administrador.
 
-Criterios de aceptación:
+**HECHO POR:** Santiago Casali
 
-- Solo se aplica a turnos Confirmados: pasan a Asistió o No asistió. Las solicitudes y los turnos vencidos, cancelados o ya cerrados se rechazan sin cambios.
-- El Profesional opera sobre su agenda; la Secretaría, sobre cualquiera.
-- No hay ventana horaria, corrección posterior ni multas.
+### HISTORIA DE USUARIO Núm: 4.3.2 | Modificación Profesional (Profesional)
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 2.1 (cierre del turno, adaptada) | #377–#379; contrato #285; matriz LIFE-07, LIFE-08 | 4 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** profesional,<br>**quiero** completar mi perfil con nombre, apellido, especialidad, tipo y número de matrícula,<br>**para** aparecer como opción de reserva ante pacientes y secretaría. | **Valor:** 5<br>**Prioridad:** 3<br>**Estimación:** 12 h |
 
-### HU-OPE-03 · Vincular el correo de acceso de un paciente
+**Validación:**
 
-**Como** Profesional o Secretaría, **quiero** vincular un correo de acceso a un paciente después de verificar su identidad fuera del sistema, **para** que pueda ingresar con enlace por correo.
+- Comprobar que los cinco datos sean obligatorios para ser reservable y que se pueda guardar un perfil parcial.
+- Comprobar que al paciente solo se le muestren nombre y especialidad.
+- Comprobar que solo el propio Profesional acceda a su perfil; Secretaria y Administrador no.
 
-Criterios de aceptación:
+**HECHO POR:** Santiago Casali
 
-- Solo para pacientes sin correo de acceso; el correo no puede estar usado por otro paciente.
-- Se envía un enlace que prueba la posesión del correo y la operación queda auditada.
-- No modifica la identidad del paciente ni su historial. El Administrador no puede hacerlo.
-- El reemplazo de un correo ya vinculado existe en el sistema (con motivo, invalidando enlaces y sesiones previas), pero su botón está oculto desde #472 y su ubicación depende de #471: **no se presenta como disponible en la interfaz**.
+### HISTORIA DE USUARIO Núm: 4.4 | Baja Profesional
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 1.3 (adaptada) | #277, #297–#300, #471, #472; contrato #297 | 3, 4 |
+| Historia | Estimación |
+| --- | --- |
+| **Como** Administrador,<br>**quiero** desactivar o reactivar la cuenta de un profesional o una secretaria,<br>**para** evitar nuevas reservas y accesos sin perder su historial. | **Valor:** 5<br>**Prioridad:** 3<br>**Estimación:** 8 h |
 
-### HU-ADM-01 · Incorporar al primer Administrador
+**Validación:**
 
-**Como** responsable del despliegue, **quiero** dar de alta al primer Administrador mediante un proceso controlado de despliegue, **para** que el sistema tenga un administrador sin credenciales por defecto.
+- Comprobar que la baja sea lógica: la cuenta pasa a desactivada y no se elimina información.
+- Comprobar que se corten las sesiones activas y se revoquen las invitaciones pendientes.
+- Comprobar que un profesional desactivado deje de recibir reservas nuevas por todos los canales.
+- Comprobar que ningún turno existente se cancele automáticamente: el Administrador solo ve cuántos turnos futuros quedan afectados.
+- Comprobar que el Administrador no pueda desactivarse a sí mismo ni operar sobre otros administradores.
+- Comprobar que al reactivar la cuenta vuelva a estar activa (o pendiente si nunca se activó) sin restaurar turnos cancelados.
 
-Criterios de aceptación:
+**HECHO POR:** Santiago Casali
 
-- El alta se hace por línea de comandos de despliegue, no desde la aplicación, y requiere un confirmador distinto del operador.
-- Solo es posible si no existe ningún Administrador; la cuenta queda pendiente y se activa con HU-INT-01.
-- Disponible solo en entornos no productivos; el alta en producción está pendiente (#452).
+## 6. Automatización
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 7 | #3, `openspec/specs/first-admin-bootstrap/`, `docs/deployment/FIRST_ADMIN_BOOTSTRAP.md`; matriz B-00, B-01 | 0, 1 |
+### HISTORIA DE USUARIO Núm: 6 | Liberación de turnos automáticamente
 
-### HU-ADM-02 · Crear cuentas internas e invitar
+| Historia | Estimación |
+| --- | --- |
+| **Como** sistema,<br>**quiero** marcar como vencidas las solicitudes que llegan a su hora de inicio sin resolverse,<br>**para** liberar el horario sin intervención manual. | **Valor:** —<br>**Prioridad:** —<br>**Estimación:** — |
 
-**Como** Administrador, **quiero** crear cuentas de Profesional o Secretaría y emitir su invitación, **para** incorporar al personal del centro.
+**Validación:**
 
-Criterios de aceptación:
+- Comprobar que una solicitud que alcanza su hora de inicio en estado Solicitado pase a Vencido y libere el horario.
+- Comprobar que el vencimiento no cuente como ausencia del paciente.
 
-- Solo se crean cuentas de Profesional o Secretaría, no de Administrador.
-- El correo debe ser válido y único sin distinguir mayúsculas; la cuenta queda pendiente de activación.
-- Se emite una invitación de un solo uso con vencimiento a las 24 horas, y la operación queda auditada.
-- El sistema no envía la invitación por correo: el Administrador la ve en pantalla y la entrega (mejora pendiente en #473).
-- El listado de cuentas muestra correo, rol, estado y cantidad de turnos futuros afectados, sin datos de pacientes.
+**HECHO POR:** Equipo Origen
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 4.2 (adaptada) | #37, #44, #55, #58–#60, #279; matriz S1-02, S1-03, INV-01 | 1, 4 |
+## 7 y 8. Inicio de sesión
 
-### HU-ADM-03 · Reemitir una invitación
+### HISTORIA DE USUARIO Núm: 7 | Iniciar Sesión Interno
 
-**Como** Administrador, **quiero** reemitir la invitación de una cuenta pendiente, **para** que pueda activarse si la anterior venció o se perdió.
+| Historia | Estimación |
+| --- | --- |
+| **Como** Usuario Interno,<br>**quiero** ingresar al sistema con mi correo, contraseña y un código TOTP,<br>**para** acceder de forma segura a las funciones de mi rol. | **Valor:** 21<br>**Prioridad:** 5<br>**Estimación:** 24 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- Solo para cuentas de Profesional o Secretaría pendientes de activación.
-- Las invitaciones anteriores quedan inválidas y la nueva vence a las 24 horas; no se duplica la cuenta.
+- Comprobar que, antes de ingresar por primera vez, la cuenta deba activarse con una invitación de un solo uso definiendo contraseña y enrolando TOTP.
+- Comprobar que el acceso exija contraseña y TOTP válidos, y que las cuentas pendientes de activación o desactivadas sean rechazadas.
+- Comprobar que la sesión dure como máximo 12 horas y se bloquee tras 15 minutos de inactividad (valores por defecto).
+- Comprobar que cada rol vea solo su navegación: Profesional (Agenda, Solicitudes, Ajustes), Secretaria (Agenda, Pacientes) y Administrador (Cuentas).
+- Comprobar que el primer Administrador se incorpore mediante un proceso de despliegue, sin credenciales por defecto.
+- Usuario interno = Administrador, Secretaria y Profesional.
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| — | matriz B-03, REI-02 | 1 |
+**HECHO POR:** Santiago Casali
 
-### HU-ADM-04 · Editar el correo de una cuenta interna
+### HISTORIA DE USUARIO Núm: 8.2 | Iniciar Sesión con Magic Link
 
-**Como** Administrador, **quiero** corregir el correo de una cuenta de Profesional o Secretaría, **para** mantener actualizado su acceso.
+| Historia | Estimación |
+| --- | --- |
+| **Como** Paciente,<br>**quiero** acceder al sistema a través de un enlace enviado a mi correo electrónico,<br>**para** iniciar sesión de forma rápida y segura sin recordar una contraseña. | **Valor:** 13<br>**Prioridad:** 5<br>**Estimación:** 16 h |
 
-Criterios de aceptación:
+**Validación:**
 
-- El correo debe ser válido y único sin distinguir mayúsculas.
-- Se conservan la cuenta, sus turnos, relaciones, perfil y ajustes; el Administrador no accede a esos datos.
-- No aplica a cuentas de Administrador.
+- Comprobar que el enlace solo se envíe si el correo está vinculado a un paciente (ver 1.3) y que la respuesta en pantalla sea la misma exista o no el correo.
+- Comprobar que el enlace venza a los 15 minutos, se use una sola vez y que cada nueva solicitud invalide los anteriores.
+- Comprobar que el acceso del paciente sea exclusivamente mediante el enlace enviado a su correo vinculado, sin contraseña.
+- Comprobar que, si el personal reemplaza el correo de acceso, las sesiones anteriores del paciente queden invalidadas.
+- Comprobar que el paciente pueda cerrar la sesión de su navegador.
 
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 4.3.1 (adaptada) | #279, #372–#375; contrato #372 | 4 |
-
-### HU-ADM-05 · Desactivar y reactivar cuentas internas
-
-**Como** Administrador, **quiero** desactivar o reactivar la cuenta de un Profesional o una Secretaría, **para** controlar quién opera en el centro sin perder su historial.
-
-Criterios de aceptación:
-
-- Al desactivar se cortan las sesiones activas y se revocan las invitaciones pendientes; un Profesional desactivado deja de recibir reservas nuevas por los tres canales.
-- Ningún turno existente se cancela: el Administrador solo ve **cuántos** turnos futuros quedan afectados, para que la Secretaría los gestione.
-- El Administrador no puede desactivarse a sí mismo ni operar sobre otros Administradores.
-- Al reactivar, la cuenta vuelve a Activa (o a pendiente si nunca se activó) y no se restauran turnos cancelados.
-
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| 4.4 (adaptada) | #279, #372–#375; contrato #372 | 4 |
-
-### HU-SIS-01 · Vencer solicitudes no resueltas
-
-**Como** sistema, **quiero** marcar como vencidas las solicitudes que llegan a su hora de inicio sin resolverse, **para** liberar el horario sin intervención manual.
-
-Criterios de aceptación:
-
-- Una solicitud que alcanza su hora de inicio en estado Solicitado pasa a Vencido y libera el horario.
-- No cuenta como ausencia del paciente ni genera multa.
-
-| HU original | Referencias | Sprint |
-| --- | --- | --- |
-| — | #284, #285; `docs/booking/APPOINTMENT_LIFECYCLE.md` | 3, 4 |
-
-## 6. Pendiente o excluido: no disponible en esta entrega
-
-### 6.1 Pendiente (planificado, sin implementación completa al corte)
-
-| Capacidad | Rol | Estado al corte | Issues |
-| --- | --- | --- | --- |
-| Registrar pagos, editar precio final y corregir pagos | Profesional, Secretaría | Contrato aprobado y maqueta solo en desarrollo; sin backend | #287, #384, #385, #386, #387 |
-| Ver precio final y estado de pago de los turnos propios | Paciente | Contrato aprobado; sin backend | #287, #384, #385 |
-| Resumen económico por fecha de turno | Profesional, Secretaría | Maqueta con **datos ficticios**, accesible desde la navegación; sin backend | #288, #388, #389, #390, #391 |
-| Listado y gestión de pacientes; ubicación de vincular y reemplazar correo | Profesional, Secretaría | En curso | #471 |
-| Enlace de invitación utilizable y conexión entre pantallas de acceso | Administrador, Visitante | En curso | #473 |
-| Alta del primer Administrador en producción | Operador de despliegue | Abierta | #452 |
-| Bloqueo de rangos puntuales de agenda | Profesional, Secretaría | Planificado para Sprint 5 | #286, #380–#383 |
-| Consulta de auditoría de solo lectura | Administrador | Declarada en la matriz; sin implementación ni issue | — |
-| Corrección de identidad del paciente y vista de datos propios | Profesional, Secretaría, Paciente | Prevista en OpenSpec; sin implementación ni issue | — |
-| Foto de perfil profesional | Profesional | Última prioridad del contrato #301 | #301 |
-| Cambio y recuperación de credenciales internas, dispositivo confiable | Usuarios internos | Especificado en el documento original; sin implementación ni issue | — |
-
-### 6.2 Excluido de la beta
-
-No forman parte de la entrega según `openspec/changes/health-center-beta-core/specs/beta-boundaries/`: WhatsApp y recordatorios, verificación telefónica obligatoria para reservar, regla D-1, multas, reprogramación directa, lista de espera, notas de devolución e historia clínica, comprobantes, pagos parciales, saldos a favor y devoluciones, representación de pacientes y reservas para terceros, ingreso con Google, autoedición del paciente, verificación de matrículas y reportes avanzados.
-
-La pantalla legada de verificación telefónica del Paciente (Sprint 1) sigue en el código, pero no está en la navegación ni es requisito para reservar; no se documenta como historia de esta entrega.
+**HECHO POR:** Santiago Casali

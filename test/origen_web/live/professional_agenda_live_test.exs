@@ -39,6 +39,45 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     }
   end
 
+  test "professional history keeps patient title, internal detail button and top-right status",
+       context do
+    start_time = DateTime.new!(Date.add(Date.utc_today(), -1), ~T[04:30:00], "Etc/UTC")
+
+    insert_appointment!(
+      context.professional_id,
+      context.patient_1.profile_id,
+      start_time,
+      DateTime.add(start_time, 3600, :second),
+      "confirmed"
+    )
+
+    {:ok, history} =
+      Origen.Booking.list_appointment_history(%{
+        account_id: context.professional_id,
+        session_id:
+          Sessions.fetch_session(context.prof_token) |> elem(1) |> Map.fetch!(:session_id)
+      })
+
+    id = hd(history).id
+
+    {:ok, view, _} =
+      live(put_internal_session(context.conn, context.prof_token), ~p"/profesional/agenda")
+
+    card = "#professional-history-appointment-#{id}"
+    assert has_element?(view, "#{card} h3", "Consulta General — Mario Bros")
+    refute element(view, card) |> render() =~ "Turno #{id}"
+
+    assert has_element?(
+             view,
+             "#{card} .flex-row.items-start.justify-between > span",
+             "Confirmado"
+           )
+
+    assert has_element?(view, "#{card} p + div #history-view-turn-#{id}", "Ver turno")
+    view |> element("#{card} #history-view-turn-#{id}") |> render_click()
+    assert has_element?(view, "#turn-detail[role='dialog']", "Consulta General")
+  end
+
   defmodule PatientSelectorDouble do
     def execute({:related, _session}) do
       {:ok, [patient("related", "Mario", "35111222")]}
