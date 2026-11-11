@@ -1,0 +1,49 @@
+# Render Blueprint for the Origen academic deployment.
+# Reference: https://render.com/docs/blueprint-spec
+#
+# Deploys are triggered by .github/workflows/cd.yml after a merge to main,
+# not by Render's own Git auto-deploy. See docs/deployment/RENDER.md.
+
+services:
+  - type: web
+    name: origen
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: virginia
+    # Paid plan: does not sleep and supports preDeployCommand.
+    plan: 0.5c-512mb
+    branch: main
+    autoDeployTrigger: "off"
+    # Runs inside the built image before the new version goes live.
+    # If a migration fails, the deploy stops and the previous version keeps running.
+    preDeployCommand: /app/bin/migrate
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: origen-db
+          property: connectionString
+      - key: POOL_SIZE
+        value: "5"
+      # Phoenix needs at least 64 bytes. Set it by hand: `mix phx.gen.secret`.
+      - key: SECRET_KEY_BASE
+        sync: false
+      # Encrypts TOTP seeds. Exactly 32 bytes: `openssl rand -hex 16`.
+      # Never rotate it by hand: existing seeds would become unreadable.
+      - key: ORIGEN_TOTP_KEY
+        sync: false
+      # Signs activation tokens. At least 32 bytes; Render generates 44.
+      - key: ORIGEN_VERIFIER_KEY
+        generateValue: true
+
+databases:
+  - name: origen-db
+    databaseName: origen
+    user: origen
+    region: virginia
+    postgresMajorVersion: "17"
+    plan: 0.1c-256mb
+    # Smallest disk (default would be 15 GB, billed per GB).
+    diskSizeGB: 1
+    # Only the web service connects; no access from the internet.
+    ipAllowList: []

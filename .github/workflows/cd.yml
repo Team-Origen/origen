@@ -1,0 +1,33 @@
+name: CD Render
+
+# Deploys main to Render after every merge (push) to main.
+# Render's own auto-deploy is off (render.yaml), so this is the only trigger.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer merge waits for the running one.
+concurrency:
+  group: render-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy a Render
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Trigger Render deploy for this commit
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::Missing secret RENDER_DEPLOY_HOOK_URL (Render > origen > Settings > Deploy Hook)."
+            exit 1
+          fi
+          # ref pins the deploy to the exact merged commit.
+          curl --fail --silent --show-error --max-time 60 -X POST \
+            "${RENDER_DEPLOY_HOOK_URL}&ref=${COMMIT_SHA}" > /dev/null
+          echo "Deploy requested for ${COMMIT_SHA}."
