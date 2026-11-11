@@ -2,7 +2,7 @@
 
 > **Estado:** Draft — pending independent review
 >
-> **Versión del documento:** `0.6-draft`
+> **Versión del documento:** `0.8-draft`
 >
 > **Base histórica aprobada:** versión `0.4`, validada por el equipo el 2026-08-24; esa aprobación no se extiende a los cambios de `0.5-draft` ni `0.6-draft`.
 >
@@ -51,6 +51,20 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | S1-12 | Crear de forma asistida un turno para un Paciente del centro | Denegar | Denegar | Condicional/alcance — `BOOK-02` | Denegar | No aplica | RF-02, RF-05, RF-06, RF-08, RF-10, RF-23 |
 | S1-13 | Crear un turno para un Paciente ya relacionado | Denegar | Condicional/alcance — `BOOK-03` | Denegar | Denegar | No aplica | RF-05, RF-08, RF-10, RF-23 |
 | S1-14 | Consultar la agenda propia | Denegar | Condicional/alcance — `AGENDA-01` | Denegar | Denegar | No aplica | RF-05, RF-10 |
+| S4-01 | Cancelar solicitud o turno propio antes del inicio | Denegar | Denegar | Denegar | Condicional/alcance — `LIFE-01` | No aplica | #377 / E3–E6 |
+| S4-02 | Cancelar un turno de la agenda propia con motivo | Denegar | Condicional/alcance — `LIFE-02` | Denegar | Denegar | No aplica | #377 / E7, E9–E10 |
+| S4-03 | Cancelar un turno de cualquier agenda con motivo | Denegar | Denegar | Condicional/alcance — `LIFE-03` | Denegar | No aplica | #377 / E8–E9 |
+| S4-04 | Consultar historial operativo propio | Denegar | Denegar | Denegar | Condicional/alcance — `LIFE-04` | No aplica | #377 / E6, E13 |
+| S4-05 | Consultar historial operativo de la agenda propia | Denegar | Condicional/alcance — `LIFE-05` | Denegar | Denegar | No aplica | #377 / E10, E13 |
+| S4-06 | Consultar historial operativo del centro | Denegar | Denegar | Condicional/alcance — `LIFE-06` | Denegar | No aplica | #377 / E8, E13 |
+| S4-07 | Registrar asistencia o ausencia en un turno confirmado de la agenda propia | Denegar | Condicional/alcance — `LIFE-07` | Denegar | Denegar | No aplica | #377 / E11–E12 |
+| S4-08 | Registrar asistencia o ausencia en un turno confirmado de cualquier agenda | Denegar | Denegar | Condicional/alcance — `LIFE-08` | Denegar | No aplica | #377 / E11–E12 |
+| S4-09 | Consultar precio final y estado de pago de un turno propio | Denegar | Condicional/alcance — `PAY-01` | Condicional/alcance — `PAY-01` | Condicional/alcance — `PAY-01` | No aplica | #384 / P3–P4 |
+| S4-10 | Editar el precio final impago de un turno | Denegar | Condicional/alcance — `PAY-02` | Condicional/alcance — `PAY-02` | Denegar | No aplica | #384 / P3, P5–P6 |
+| S4-11 | Registrar un pago total en efectivo o transferencia | Denegar | Condicional/alcance — `PAY-03` | Condicional/alcance — `PAY-03` | Denegar | No aplica | #384 / P1–P3, P6–P7 |
+| S4-12 | Consultar historial interno de acciones de pago | Denegar | Condicional/alcance — `PAY-04` | Condicional/alcance — `PAY-04` | Denegar | No aplica | #384 / P1, P3–P4, P7 |
+| S4-13 | Revertir una marca pagada con confirmación explícita | Denegar | Condicional/alcance — `PAY-05` | Condicional/alcance — `PAY-05` | Denegar | No aplica | #384 / P8–P12, P15 |
+| S4-14 | Consultar resumen económico de un Profesional por fecha de turno | Denegar | Condicional/alcance — `SUM-01` | Condicional/alcance — `SUM-01` | Denegar | No aplica | #388 / R15–R18 |
 
 ### Condiciones y alcances
 
@@ -77,6 +91,20 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | `BOOK-02` | Secretaría autenticada con cuenta `Activa` puede buscar Pacientes del centro, crear o reutilizar su Persona y perfil y reservar de forma asistida, incluso con perfil incompleto. Debe respetar identidad mínima, unicidad, disponibilidad y los estados por actor y fecha de RF-10. El primer turno exitoso crea atómicamente relación, turno, snapshots y auditoría; un fallo no crea relación. |
 | `BOOK-03` | Profesional autenticado con cuenta `Activa`; el Paciente ya pertenece a su lista permitida. No puede navegar el registro global ni usar un identificador para alcanzar a un Paciente ajeno. Valida disponibilidad y conserva sin simplificar los estados por actor y fecha de RF-10. |
 | `AGENDA-01` | Profesional autenticado con cuenta `Activa`; el backend deriva el perfil profesional de la sesión y devuelve únicamente sus propios turnos. No acepta un identificador manipulable como ampliación de alcance. |
+| `LIFE-01` | Paciente autenticado por una sesión de acceso revalidada; el backend deriva el perfil propio y permite cancelar solo sus turnos `requested` o `confirmed` estrictamente antes del inicio. No acepta rol o identificador de paciente enviado por el cliente. |
+| `LIFE-02` | Profesional autenticado mediante `Origen.Sessions.revalidate_principal/2`; el backend deriva su cuenta y limita la cancelación a su agenda. El motivo no puede estar en blanco y la regla no impone la frontera temporal del Paciente. |
+| `LIFE-03` | Secretaría autenticada mediante `Origen.Sessions.revalidate_principal/2`; puede cancelar turnos `requested` o `confirmed` de cualquier agenda con motivo no blanco. No concede aceptación o rechazo de solicitudes de #284. |
+| `LIFE-04` | Paciente autenticado; la consulta aplica `WHERE patient_profile_id = perfil_revalidado` y devuelve turnos propios, incluidos `expired` y `cancelled`, sin revelar agendas ajenas. |
+| `LIFE-05` | Profesional autenticado; la consulta aplica `WHERE professional_account_id = cuenta_revalidada`, incluso cuando comparte Paciente con otra agenda. |
+| `LIFE-06` | Secretaría autenticada; la consulta conserva el alcance operativo del centro. Administrador no obtiene acceso implícito a ninguna de estas operaciones. |
+| `LIFE-07` | Profesional autenticado mediante `Origen.Sessions.revalidate_principal/2`; el backend deriva su cuenta, limita la operación a su agenda y solo permite transformar un turno `confirmed` en `attended` o `no_show`. No se fija una ventana temporal ni un flujo de corrección terminal. |
+| `LIFE-08` | Secretaría autenticada mediante `Origen.Sessions.revalidate_principal/2`; puede transformar un turno `confirmed` de cualquier agenda en `attended` o `no_show`. No concede acceso a otras operaciones de #284 ni permisos implícitos al Administrador. |
+| `PAY-01` | Profesional o Secretaría con cuenta `Activa` y sesión revalidada consulta sólo su agenda o todas las agendas, respectivamente. Paciente con sesión passwordless revalidada consulta únicamente sus propios turnos. La proyección del Paciente contiene sólo `final_price_ars` y `payment_status` junto al identificador del turno; nunca método, actor, fecha o historial. Administrador, anónimo, sesión inválida y cuentas inactivas quedan denegados. |
+| `PAY-02` | Profesional con sesión revalidada sólo sobre su agenda y Secretaría con sesión revalidada sobre cualquier agenda pueden editar el precio final mientras el pago esté `pending`. El backend deriva actor y alcance, valida un Decimal finito no negativo —incluido cero— y bloquea la fila antes de mutar. Paciente, Administrador, cuentas inactivas, sesiones inválidas y agendas ajenas quedan denegados. |
+| `PAY-03` | Profesional con sesión revalidada sólo sobre su agenda y Secretaría con sesión revalidada sobre cualquier agenda pueden registrar una única marca total para un turno `confirmed` o `attended`, usando sólo `cash` o `transfer`. El servidor deriva importe desde el precio final, actor y fecha; el cliente no puede suministrar o sustituir esos valores. Paciente, Administrador, cuentas inactivas, sesiones inválidas, agendas ajenas, estados `requested`, `reserved`, `expired`, `cancelled` y `no_show`, pagos ya marcados y métodos no admitidos quedan denegados sin mutación. La fila de pago, acción append-only y auditoría se confirman atómicamente. |
+| `PAY-04` | Sólo Profesional sobre su agenda y Secretaría sobre el centro pueden consultar acciones internas de pago. La proyección nunca se entrega a Paciente, Administrador, sesiones inválidas ni actores fuera de alcance; conserva método, importe, actor y fecha de cada acción sin permitir edición o borrado. |
+| `PAY-05` | Profesional con sesión revalidada sólo sobre su agenda y Secretaría con sesión revalidada sobre cualquier agenda pueden revertir una marca `paid` únicamente con confirmación booleana explícita `true`. La operación bloquea turno y pago, vuelve el pago a `pending`, limpia los metadatos vigentes, conserva la acción `paid` y agrega una acción `reverted` con importe, método, actor y fecha del servidor. Paciente, Administrador, cuentas inactivas, sesiones inválidas, agendas ajenas, confirmación falsa/nula/cancelada, pago ya pendiente y opciones no admitidas quedan denegados o rechazados sin mutación. |
+| `SUM-01` | Profesional con sesión revalidada y cuenta `Activa` sólo puede consultar su propio resumen. Secretaría con sesión revalidada y cuenta `Activa` puede consultar un único identificador de una cuenta `Professional` activa por vez. La selección debe ser un entero positivo existente y se valida antes de cualquier cast SQL; no se aceptan listas, mapas, identificadores ajenos para Profesional ni agregados del centro. Administrador, Paciente, anónimo, sesión inválida/revocada y cuentas inactivas quedan denegados sin exposición financiera. El resumen agrupa por `appointments.start_time` con límites locales validados, usa `final_price_ars` y la marca de pago vigente, y no muta datos. |
 
 ## Pruebas mínimas de autorización
 
@@ -120,13 +148,13 @@ Estas pruebas son obligatorias en backend para las operaciones críticas. Deben 
 | Reserva por Profesional relacionado y agenda propia | RF-05, RF-08, RF-10, RF-23 |
 | Consulta e inmutabilidad de auditoría | RNF-02; RF-23; `SPRINT_00.md`, decisiones de auditoría append-only |
 
-Quedan fuera de esta versión la representación de Pacientes, ausencias y feriados, cambios de disponibilidad que afecten turnos, aprobación manual y gestión posterior del turno, WhatsApp, lista de espera, pagos, comprobantes, reportes y gestión posterior de datos o credenciales. También quedan fuera los perfiles representados en la reserva autónoma. Su ausencia no concede acceso: toda combinación rol–operación no declarada, incluida cualquier inferencia de jerarquía para Administrador, permanece denegada por defecto hasta incorporarse con fuente, alcance y pruebas.
+Quedan fuera de esta versión la representación de Pacientes, ausencias y feriados, cambios de disponibilidad que afecten turnos, aprobación manual y gestión posterior del turno, WhatsApp, lista de espera, comprobantes, reportes y gestión posterior de datos o credenciales. La consulta y edición de precio final de #384 se declara arriba; el registro y la corrección de pagos, sus acciones y el resumen económico siguen denegados hasta sus filas y pruebas propias. También quedan fuera los perfiles representados en la reserva autónoma. Su ausencia no concede acceso: toda combinación rol–operación no declarada, incluida cualquier inferencia de jerarquía para Administrador, permanece denegada por defecto hasta incorporarse con fuente, alcance y pruebas.
 
 ## Estado de decisiones
 
 La versión histórica `0.4` cerró los gaps de autorización de su alcance: `S1-05` quedó resuelta como un canal público condicionado por demostración de posesión del número, sin permiso derivado de rol y bajo default deny fuera de `TEL-02`. El equipo aprobó y validó integralmente esa versión el 2026-08-24; esa aprobación documental no acredita implementación ni ejecución de pruebas.
 
-La versión actual `0.6-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda y reservas, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
+La versión actual `0.8-draft`, incluidas las condiciones agregadas para acceso, teléfono, agenda, reservas y ciclo operativo, no está aprobada: permanece **pending independent review**. Aplica directamente la corrección documental acordada para RF-05, pero no debe interpretarse como evidencia de implementación, pruebas ejecutadas, CI completado, despliegue, correo, activación ni bootstrap.
 
 ## Cambio, versionado y revisión
 
@@ -141,6 +169,12 @@ La versión actual `0.6-draft`, incluidas las condiciones agregadas para acceso,
 
 | Versión | Fecha | Estado | Cambio |
 | --- | --- | --- | --- |
+| `1.2-draft` | 2026-11-11 | Draft — pending independent review | Agrega la consulta de resumen económico por fecha de turno de #388: Profesional sólo propio y Secretaría un Profesional activo por vez mediante `SUM-01`; conserva default deny, revalidación de sesión y cálculo read-only con precio final y marca vigente. No acredita implementación ni ejecución de pruebas. |
+| `1.1-draft` | 2026-11-11 | Draft — pending independent review | Agrega la reversión confirmada de una marca pagada de #385: Profesional sobre su agenda y Secretaría sobre todas, con confirmación `true`, trazabilidad append-only y atomicidad del estado vigente, acción y auditoría; conserva default deny. No acredita implementación ni ejecución de pruebas. |
+| `1.0-draft` | 2026-11-11 | Draft — pending independent review | Agrega el registro de un pago total y la consulta de acciones internas de pago de #385: Profesional sobre su agenda, Secretaría sobre todas, con método, importe, actor y fecha derivados por el servidor; conserva default deny, estados elegibles exactos y atomicidad de pago, acción y auditoría. No acredita implementación ni ejecución de pruebas. |
+| `0.9-draft` | 2026-11-08 | Draft — pending independent review | Agrega la consulta financiera mínima y la edición del precio final impago de #384: Profesional sobre su agenda, Secretaría sobre todas y Paciente sólo sobre sus turnos con proyección reducida; conserva default deny para Administrador y las sesiones inválidas. No acredita implementación ni ejecución de pruebas. |
+| `0.8-draft` | 2026-11-08 | Draft — pending independent review | Agrega el registro autenticado de asistencia/ausencia de #377: Profesional sólo en su agenda y Secretaría en todas, únicamente sobre turnos `confirmed`; conserva default deny para Paciente y Administrador y explicita que no fija ventana temporal ni corrección terminal. No acredita implementación ni ejecución de pruebas. |
+| `0.7-draft` | 2026-10-24 | Draft — pending independent review | Agrega cancelación autenticada e historial operativo SQL-acotado de #377 para Paciente, Profesional y Secretaría; exige motivo no blanco al personal, conserva default deny para Administrador y registra pruebas de alcance. No acredita implementación ni ejecución de pruebas. |
 | `0.6-draft` | 2026-09-02 | Draft — pending independent review | Amplía el alcance de demo con acceso y perfil propio de Paciente, verificación telefónica propia, tipo y disponibilidad propios del Profesional, primera reserva autónoma o asistida, reserva relacionada del Profesional y agenda propia. Define que solo la persistencia atómica exitosa crea la relación y agrega pruebas mínimas positivas y negativas. No acredita implementación ni pruebas ejecutadas. |
 | `0.5-draft` | 2026-09-02 | Draft — pending independent review | Agrega `APP-01` como autoridad de aprobación distinta, explicita el límite transaccional acotado y registra que la aceptación de staging está preparada/no ejecutada. No acredita correo, credenciales, despliegue ni bootstrap real. |
 | `0.4` | 2026-08-24 | Aprobada — validada por el equipo | Aprobación humana explícita e integral del contenido de `0.4-draft`, sin ampliar permisos ni modificar el default deny, las condiciones, los alcances o las pruebas mínimas. La aprobación documental no acredita implementación ni ejecución de pruebas. |

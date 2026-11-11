@@ -37,6 +37,8 @@ npm-debug.log
 
 # Local development configuration may contain credentials.
 /config/dev.local.exs
+/config/test.local.exs
+/priv/cert/
 
 # Local agent tooling metadata.
 /.atl/
@@ -45,3 +47,6 @@ npm-debug.log
 .pi/
 .codegraph/
 .DS_Store
+*.plt
+*.plt.hash
+mise.toml

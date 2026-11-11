@@ -10,7 +10,7 @@ defmodule Origen.Audit.Events do
     :secretary,
     :patient
   ]
-  @entity_kinds [:account, :invitation, :patient, :audit_event]
+  @entity_kinds [:account, :invitation, :patient, :appointment, :audit_event]
   @marker {__MODULE__, :constructed}
 
   @opaque t :: %__MODULE__{
@@ -45,7 +45,11 @@ defmodule Origen.Audit.Events do
   def activation_succeeded(actor, ref),
     do: lifecycle(actor, "account_activation", ref, "succeeded")
 
-  def activation_failed(actor, ref), do: lifecycle(actor, "account_activation", ref, "failed")
+  def activation_failed(actor, ref) when is_binary(ref),
+    do: lifecycle(actor, "account_activation", ref, "failed")
+
+  def activation_failed(actor, nil),
+    do: build(actor, "account_activation", nil, "failed")
 
   def invitation_consumed(actor, ref),
     do: lifecycle(actor, "invitation_consumption", ref, "succeeded")
@@ -68,11 +72,75 @@ defmodule Origen.Audit.Events do
   def internal_login_succeeded(actor, ref) when is_binary(ref),
     do: lifecycle(actor, "internal_login", ref, "succeeded")
 
+  def internal_account_updated(actor, ref),
+    do: lifecycle(actor, "internal_account_updated", ref, "succeeded")
+
+  def internal_account_deactivated(actor, ref),
+    do: lifecycle(actor, "internal_account_deactivated", ref, "succeeded")
+
+  def internal_account_reactivated(actor, ref),
+    do: lifecycle(actor, "internal_account_reactivated", ref, "succeeded")
+
   def internal_login_failed(actor, ref) when is_binary(ref),
     do: lifecycle(actor, "internal_login", ref, "failed")
 
   def internal_login_failed(actor, nil),
     do: build(actor, "internal_login", nil, "failed")
+
+  def magic_link_issued(actor, ref) when is_binary(ref),
+    do: build(actor, "magic_link_issued", {:patient, ref}, "succeeded")
+
+  def magic_link_consumed(actor, ref) when is_binary(ref),
+    do: build(actor, "magic_link_consumed", {:patient, ref}, "succeeded")
+
+  def magic_link_failed(actor, ref) when is_binary(ref),
+    do: build(actor, "magic_link_consumed", {:patient, ref}, "failed")
+
+  def magic_link_failed(actor, nil),
+    do: build(actor, "magic_link_consumed", nil, "failed")
+
+  def patient_profile_completed(actor, ref) when is_binary(ref),
+    do: build(actor, "patient_profile_completed", {:patient, ref}, "succeeded")
+
+  def patient_access_email_linked(actor, ref) when is_binary(ref),
+    do: build(actor, "patient_access_email_linked", {:patient, ref}, "succeeded")
+
+  def patient_access_email_replaced(actor, ref) when is_binary(ref),
+    do: build(actor, "patient_access_email_replaced", {:patient, ref}, "succeeded")
+
+  def document_collision_derived(actor, ref) when is_binary(ref),
+    do: build(actor, "document_collision_derived", {:patient, ref}, "succeeded")
+
+  def persona_searched(actor, ref, result \\ "succeeded") when is_binary(ref),
+    do: build(actor, "persona_searched", {:patient, ref}, result)
+
+  def persona_created(actor, ref) when is_binary(ref),
+    do: build(actor, "persona_created", {:patient, ref}, "succeeded")
+
+  def persona_reused(actor, ref) when is_binary(ref),
+    do: build(actor, "persona_reused", {:patient, ref}, "succeeded")
+
+  def phone_challenge_issued(actor, ref) when is_binary(ref),
+    do: build(actor, "phone_challenge_issued", {:patient, ref}, "succeeded")
+
+  def phone_challenge_consumed(actor, ref) when is_binary(ref),
+    do: build(actor, "phone_challenge_consumed", {:patient, ref}, "succeeded")
+
+  def phone_challenge_failed(actor, ref) when is_binary(ref),
+    do: build(actor, "phone_challenge_consumed", {:patient, ref}, "failed")
+
+  def availability_configuration_replaced(actor, ref) when is_binary(ref),
+    do: build(actor, "availability_configuration_replaced", {:account, ref}, "succeeded")
+
+  def payment_registered(actor, ref) when is_binary(ref),
+    do: build(actor, "appointment_payment_registered", {:appointment, ref}, "succeeded")
+
+  def payment_reverted(actor, ref) when is_binary(ref),
+    do: build(actor, "appointment_payment_reverted", {:appointment, ref}, "succeeded")
+
+  @spec agenda_interval_changed(term(), String.t()) :: {:ok, t()} | {:error, :invalid_event}
+  def agenda_interval_changed(actor, ref) when is_binary(ref),
+    do: build(actor, "agenda_interval_changed", {:account, ref}, "succeeded")
 
   def persistable?(%__MODULE__{marker: @marker}), do: true
   def persistable?(_event), do: false

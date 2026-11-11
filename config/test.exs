@@ -35,12 +35,15 @@ config :origen,
 
 config :origen,
   bootstrap_admin_enabled: false,
+  organization_timezone: "Etc/UTC",
   consultation_catalog_demo_enabled: true,
   consultation_type_catalog_adapter: Origen.ConsultationTypes.MockCatalog,
+  appointments_calendar_adapter: Origen.Appointments.MockCalendar,
   totp_keyring: %{
     active: %{tag: "test.v1", key: String.duplicate("k", 32)},
     retired: []
   },
+  bootstrap_admin_verifier_key: String.duplicate("k", 32),
   bootstrap_admin_delivery: %{
     enabled: false,
     allowed_adapters: [Origen.TestSupport.BootstrapAdmin.NonRetainingAdapter]
@@ -72,3 +75,7 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+if File.exists?(Path.join(__DIR__, "test.local.exs")) do
+  import_config "test.local.exs"
+end

@@ -1,6 +1,6 @@
 # Historial de ejecución de sprints
 
-La carpeta `sprints/` conserva el registro operativo e histórico de cada ciclo de Origen. El roadmap y el alcance base permanecen en [PLAN_DE_SPRINTS.md](../PLAN_DE_SPRINTS.md); cada documento de esta carpeta detalla cómo se ejecutó un sprint y cuál fue su resultado real.
+La carpeta `sprints/` conserva el registro operativo e histórico de cada ciclo de Origen. El roadmap y el alcance base permanecen en [PLAN_TENTATIVO_11_SPRINTS.md](./PLAN_TENTATIVO_11_SPRINTS.md); cada documento de esta carpeta detalla cómo se ejecutó un sprint y cuál fue su resultado real.
 
 ## Uso
 
@@ -20,4 +20,5 @@ Los documentos cerrados son históricos: se agregan aclaraciones de cierre, pero
 
 ## Relación con otros documentos
 
-- [PLAN_DE_SPRINTS.md](../PLAN_DE_SPRINTS.md): roadmap, alcance, dependencias, capacidad máxima y flujo oficial con su Definition of Done.
+- [PLAN_TENTATIVO_11_SPRINTS.md](./PLAN_TENTATIVO_11_SPRINTS.md): roadmap, alcance, dependencias, capacidad máxima y flujo oficial con su Definition of Done.
+- [REPROGRAMACION_Y_FUNDAMENTACION.md](./REPROGRAMACION_Y_FUNDAMENTACION.md): justificación y control de cambios de la reformulación del plan de sprints v1.0 a v2.0.

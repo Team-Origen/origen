@@ -1,0 +1,1533 @@
+defmodule OrigenWeb.SecretaryPatientLive do
+  @moduledoc """
+  LiveView for document-based person search and assisted registration (PLN-12, Issue #67).
+
+  Allows an active authenticated Secretary to search Personas by
+  controlled document type and normalized number, register new identities for
+  the assisted booking flow, and review the resulting patient summary before
+  starting an assisted reservation (#68).
+  """
+
+  use OrigenWeb, :live_view
+
+  on_mount {OrigenWeb.InternalAuthLive, :ensure_authenticated}
+
+  alias Ecto.Changeset
+  alias Origen.Appointments.AssistedBooking
+  alias Origen.PatientAccess
+  alias Origen.Patients
+  alias Origen.Patients.Persona
+
+  @doc_options [
+    {"DNI", "dni"},
+    {"Pasaporte", "passport"},
+    {"Cédula / Tarjeta de Identidad", "identity_card"},
+    {"Otro", "other"}
+  ]
+
+  @link_access_types %{email: :string}
+  @replace_access_types %{new_email: :string, reason: :string}
+
+  @gender_options [
+    {"Femenino", "femenino"},
+    {"Masculino", "masculino"},
+    {"Otro", "otro"},
+    {"Prefiero no decirlo", "prefiero_no_decir"}
+  ]
+
+  @gender_values Enum.map(@gender_options, &elem(&1, 1))
+
+  @search_types %{document_type: :string, document_number: :string}
+  @search_defaults %{document_type: "dni", document_number: ""}
+
+  @register_types %{
+    first_name: :string,
+    last_name: :string,
+    document_type: :string,
+    document_number: :string,
+    birthdate: :date,
+    phone: :string,
+    email: :string,
+    gender: :string
+  }
+
+  defp secretary_identity(principal) do
+    case Origen.Accounts.get_own_navigation_identity(principal) do
+      {:ok, identity} -> identity
+      {:error, _} -> nil
+    end
+  end
+
+  @impl true
+  def mount(_params, _session, socket) do
+    if socket.assigns.current_role == :secretary do
+      {:ok,
+       socket
+       |> assign(:secretary_identity, secretary_identity(socket.assigns.current_internal_session))
+       |> assign(:page_title, "Pacientes")
+       |> assign(:doc_options, @doc_options)
+       |> assign(:gender_options, @gender_options)
+       |> assign(:search_form, to_form(search_changeset(%{}), as: :search))
+       |> assign(:search_result, nil)
+       |> assign(:registration_form, nil)
+       |> assign(:registration_document, nil)
+       |> assign(:registration_identity, nil)
+       |> assign(:registration_outcome, nil)
+       |> assign(:registration_error, false)
+       |> assign(:assisted_booking_active, false)
+       |> assign(:booking_professionals, [])
+       |> assign(:selected_prof_id, nil)
+       |> assign(:booking_consultation_types, [])
+       |> assign(:selected_consultation_type_id, nil)
+       |> assign(:booking_date, Date.utc_today())
+       |> assign(:booking_slots, [])
+       |> assign(:selected_prof_approval_mode, :automatic)
+       |> assign(:selected_slot_time, nil)
+       |> assign(:booking_success, nil)
+       |> assign(:booking_error, nil)
+       |> assign(:access_action, nil)
+       |> assign(:access_form, nil)
+       |> assign(:access_error, nil)
+       |> assign(:access_feedback, nil)}
+    else
+      {:ok, redirect(socket, to: "/")}
+    end
+  end
+
+  @impl true
+  def handle_event("validate_search", %{"search" => params}, socket) do
+    {:noreply,
+     socket
+     |> clear_registration()
+     |> assign(:search_form, to_form(search_changeset(params), as: :search))}
+  end
+
+  def handle_event("validate_search", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("search", %{"search" => params}, socket) do
+    socket = clear_registration(socket)
+    changeset = search_changeset(params)
+
+    if changeset.valid? do
+      doc_type = Changeset.get_field(changeset, :document_type)
+      doc_num = Changeset.get_field(changeset, :document_number)
+
+      case Patients.search_persona_by_document(
+             doc_type,
+             doc_num,
+             socket.assigns.current_internal_session.account_id
+           ) do
+        {:error, :unauthorized} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "No tienes autorización para buscar pacientes.")
+           |> redirect(to: "/")}
+
+        {:ok, nil} ->
+          registration_params = %{
+            "document_type" => doc_type,
+            "document_number" => doc_num
+          }
+
+          {:noreply,
+           socket
+           |> assign(:search_result, :not_found)
+           |> assign(:registration_identity, {doc_type, doc_num})
+           |> assign(
+             :registration_form,
+             to_form(register_changeset(registration_params), as: :registration)
+           )
+           |> assign(:registration_document, "#{doc_label(doc_type)} #{doc_num}")
+           |> assign(:registration_outcome, nil)
+           |> assign(:registration_error, false)}
+
+        {:ok, %{persona: persona, profile: profile}} ->
+          {:noreply,
+           socket
+           |> assign(:search_result, %{persona: persona, profile: profile})
+           |> assign(:registration_form, nil)
+           |> assign(:registration_document, nil)
+           |> assign(:registration_outcome, nil)
+           |> assign(:registration_error, false)
+           |> assign(:access_action, nil)
+           |> assign(:access_form, nil)
+           |> assign(:access_error, nil)
+           |> assign(:access_feedback, nil)}
+      end
+    else
+      {:noreply, assign(socket, :search_form, to_form(changeset, as: :search))}
+    end
+  end
+
+  def handle_event("search", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("validate_registration", %{"registration" => params}, socket) do
+    if registration_matches_search?(socket, params) do
+      {:noreply,
+       assign(socket, :registration_form, to_form(register_changeset(params), as: :registration))}
+    else
+      {:noreply, clear_registration(socket)}
+    end
+  end
+
+  def handle_event("validate_registration", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("register", %{"registration" => params}, socket) do
+    if registration_matches_search?(socket, params) do
+      register_patient(socket, params)
+    else
+      {:noreply,
+       socket
+       |> clear_registration()
+       |> put_flash(:error, "Buscá el documento antes de registrar la persona.")}
+    end
+  end
+
+  def handle_event("register", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("new_search", _params, socket) do
+    {:noreply,
+     socket
+     |> clear_registration()
+     |> assign(:search_form, to_form(search_changeset(%{}), as: :search))}
+  end
+
+  @impl true
+  def handle_event("start_assisted_booking", _params, socket) do
+    if socket.assigns.current_role != :secretary do
+      {:noreply,
+       assign(
+         socket,
+         :booking_error,
+         "No tenés autorización para realizar esta reserva asistida."
+       )}
+    else
+      professionals = load_professionals()
+      prof_id = (professionals != [] && to_string(hd(professionals).id)) || nil
+      types = if prof_id, do: load_consultation_types(prof_id), else: []
+      type_id = (types != [] && to_string(hd(types).id)) || nil
+      date = next_weekday(Date.utc_today())
+      duration = (types != [] && hd(types)[:duration_minutes]) || 30
+      slots = if prof_id, do: load_slots(prof_id, date, duration), else: []
+
+      approval_mode =
+        if prof_id,
+          do: AssistedBooking.get_secretary_effective_approval_mode(prof_id),
+          else: :confirmed
+
+      {:noreply,
+       socket
+       |> assign(:registration_outcome, nil)
+       |> assign(:assisted_booking_active, true)
+       |> assign(:booking_professionals, professionals)
+       |> assign(:selected_prof_id, prof_id)
+       |> assign(:selected_prof_approval_mode, approval_mode)
+       |> assign(:booking_consultation_types, types)
+       |> assign(:selected_consultation_type_id, type_id)
+       |> assign(:booking_date, date)
+       |> assign(:booking_slots, slots)
+       |> assign(:selected_slot_time, nil)
+       |> assign(:booking_success, nil)
+       |> assign(:booking_error, nil)}
+    end
+  end
+
+  @impl true
+  def handle_event("update_booking_selection", params, socket) do
+    prof_id = params["professional_id"] || socket.assigns.selected_prof_id
+
+    if is_nil(prof_id) or prof_id == "" do
+      {:noreply, socket}
+    else
+      update_booking_selection(prof_id, params, socket)
+    end
+  end
+
+  @impl true
+  def handle_event("select_slot", %{"time" => time_str}, socket) do
+    {:noreply, assign(socket, :selected_slot_time, time_str)}
+  end
+
+  @impl true
+  def handle_event("confirm_assisted_booking", _params, socket) do
+    secretary_id = socket.assigns.current_internal_session.account_id
+
+    profile_id =
+      case socket.assigns.search_result do
+        %{profile: %{id: id}} -> id
+        _ -> nil
+      end
+
+    prof_id = socket.assigns.selected_prof_id
+    type_id = socket.assigns.selected_consultation_type_id
+    date = socket.assigns.booking_date
+    slot_time = socket.assigns.selected_slot_time
+
+    if is_nil(slot_time) or is_nil(profile_id) or is_nil(prof_id) or is_nil(type_id) do
+      {:noreply,
+       assign(
+         socket,
+         :booking_error,
+         "Por favor seleccioná todos los campos y un horario disponible."
+       )}
+    else
+      case Time.from_iso8601(slot_time <> ":00") do
+        {:ok, _time} ->
+          # The slot label is a local time in the organization timezone; the
+          # context builds the UTC start from date + slot so that booking and
+          # availability validation use the same clock as the offered grid.
+          reserve_params = %{
+            professional_id: prof_id,
+            consultation_type_id: type_id,
+            date: date,
+            slot: %{start_time: slot_time}
+          }
+
+          case AssistedBooking.reserve(secretary_id, profile_id, reserve_params) do
+            {:ok, result} ->
+              duration =
+                case Enum.find(
+                       socket.assigns.booking_consultation_types,
+                       &(to_string(&1.id) == to_string(type_id))
+                     ) do
+                  %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+                  _ -> 30
+                end
+
+              refreshed_slots = load_slots(prof_id, date, duration)
+
+              {:noreply,
+               socket
+               |> assign(:booking_success, result)
+               |> assign(:booking_slots, refreshed_slots)
+               |> assign(:booking_error, nil)
+               |> assign(:selected_slot_time, nil)}
+
+            {:error, reason} ->
+              duration =
+                case Enum.find(
+                       socket.assigns.booking_consultation_types,
+                       &(to_string(&1.id) == to_string(type_id))
+                     ) do
+                  %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+                  _ -> 30
+                end
+
+              refreshed_slots = load_slots(prof_id, date, duration)
+
+              {:noreply,
+               socket
+               |> assign(:booking_error, format_booking_error(reason))
+               |> assign(:booking_slots, refreshed_slots)
+               |> assign(:selected_slot_time, nil)
+               |> assign(:booking_success, nil)}
+          end
+
+        _ ->
+          {:noreply, assign(socket, :booking_error, "Formato de horario inválido.")}
+      end
+    end
+  end
+
+  @impl true
+  def handle_event("cancel_assisted_booking", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:assisted_booking_active, false)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_error, nil)}
+  end
+
+  @impl true
+  def handle_event("open_link_access", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:registration_outcome, nil)
+     |> assign(:access_action, :link)
+     |> assign(:access_form, to_form(link_access_changeset(%{}), as: :access))
+     |> assign(:access_error, nil)
+     |> assign(:access_feedback, nil)}
+  end
+
+  @impl true
+  def handle_event("open_replace_access", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:registration_outcome, nil)
+     |> assign(:access_action, :replace)
+     |> assign(:access_form, to_form(replace_access_changeset(%{}), as: :access))
+     |> assign(:access_error, nil)
+     |> assign(:access_feedback, nil)}
+  end
+
+  @impl true
+  def handle_event("cancel_access_action", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:access_action, nil)
+     |> assign(:access_form, nil)
+     |> assign(:access_error, nil)}
+  end
+
+  @impl true
+  def handle_event("validate_link_access", %{"access" => params}, socket) do
+    changeset =
+      params
+      |> link_access_changeset()
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :access_form, to_form(changeset, as: :access))}
+  end
+
+  @impl true
+  def handle_event("validate_replace_access", %{"access" => params}, socket) do
+    changeset =
+      params
+      |> replace_access_changeset()
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :access_form, to_form(changeset, as: :access))}
+  end
+
+  @impl true
+  def handle_event("submit_link_access", %{"access" => params}, socket) do
+    profile = socket.assigns.search_result.profile
+    account_id = socket.assigns.current_internal_session.account_id
+    email = Map.get(params, "email", "")
+
+    case Patients.link_patient_access_email(profile.id, email, account_id) do
+      {:ok, %{patient_profile: updated_profile}} ->
+        search_result = %{socket.assigns.search_result | profile: updated_profile}
+
+        {:noreply,
+         socket
+         |> assign(:search_result, search_result)
+         |> assign(:access_action, nil)
+         |> assign(:access_form, nil)
+         |> assign(:access_error, nil)
+         |> assign(
+           :access_feedback,
+           "Correo de acceso vinculado exitosamente. Se ha enviado el enlace de comprobación de posesión."
+         )}
+
+      {:error, :email_already_in_use} ->
+        {:noreply,
+         assign(
+           socket,
+           :access_error,
+           "Este correo ya está registrado por otra cuenta de paciente."
+         )}
+
+      {:error, :invalid_email} ->
+        {:noreply, assign(socket, :access_error, "El formato del correo es inválido.")}
+
+      {:error, :already_has_access_email} ->
+        {:noreply,
+         assign(socket, :access_error, "El paciente ya posee un correo de acceso vinculado.")}
+
+      {:error, :unauthorized} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "No tienes autorización para vincular correos de acceso.")
+         |> redirect(to: "/")}
+
+      {:error, _other} ->
+        {:noreply,
+         assign(socket, :access_error, "No se pudo vincular el correo. Verifique los datos.")}
+    end
+  end
+
+  @impl true
+  def handle_event("submit_replace_access", %{"access" => params}, socket) do
+    profile = socket.assigns.search_result.profile
+    account_id = socket.assigns.current_internal_session.account_id
+    new_email = Map.get(params, "new_email", "")
+    reason = Map.get(params, "reason", "")
+
+    case Patients.replace_patient_access_email(profile.id, new_email, account_id, reason) do
+      {:ok, %{patient_profile: updated_profile}} ->
+        search_result = %{socket.assigns.search_result | profile: updated_profile}
+
+        {:noreply,
+         socket
+         |> assign(:search_result, search_result)
+         |> assign(:access_action, nil)
+         |> assign(:access_form, nil)
+         |> assign(:access_error, nil)
+         |> assign(
+           :access_feedback,
+           "Correo de acceso reemplazado exitosamente. Se invalidaron los accesos y enlaces anteriores y se envió el enlace de comprobación al nuevo correo."
+         )}
+
+      {:error, :reason_required} ->
+        {:noreply,
+         assign(socket, :access_error, "Debe ingresar un motivo para el reemplazo del correo.")}
+
+      {:error, :same_email} ->
+        {:noreply,
+         assign(socket, :access_error, "El nuevo correo no puede ser igual al correo actual.")}
+
+      {:error, :email_already_in_use} ->
+        {:noreply,
+         assign(
+           socket,
+           :access_error,
+           "Este correo ya está registrado por otra cuenta de paciente."
+         )}
+
+      {:error, :invalid_email} ->
+        {:noreply, assign(socket, :access_error, "El formato del correo es inválido.")}
+
+      {:error, :unauthorized} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "No tienes autorización para reemplazar correos de acceso.")
+         |> redirect(to: "/")}
+
+      {:error, _other} ->
+        {:noreply,
+         assign(socket, :access_error, "No se pudo reemplazar el correo. Verifique los datos.")}
+    end
+  end
+
+  defp registration_matches_search?(socket, params) do
+    socket.assigns.search_result == :not_found and
+      socket.assigns.registration_identity ==
+        {params["document_type"], Persona.normalize_number(params["document_number"])}
+  end
+
+  defp clear_registration(socket) do
+    socket
+    |> assign(:search_result, nil)
+    |> assign(:registration_form, nil)
+    |> assign(:registration_document, nil)
+    |> assign(:registration_identity, nil)
+    |> assign(:registration_outcome, nil)
+    |> assign(:registration_error, false)
+    |> assign(:assisted_booking_active, false)
+    |> assign(:booking_professionals, [])
+    |> assign(:selected_prof_id, nil)
+    |> assign(:booking_consultation_types, [])
+    |> assign(:selected_consultation_type_id, nil)
+    |> assign(:booking_date, Date.utc_today())
+    |> assign(:booking_slots, [])
+    |> assign(:selected_prof_approval_mode, :automatic)
+    |> assign(:selected_slot_time, nil)
+    |> assign(:booking_success, nil)
+    |> assign(:booking_error, nil)
+    |> assign(:access_action, nil)
+    |> assign(:access_form, nil)
+    |> assign(:access_error, nil)
+    |> assign(:access_feedback, nil)
+  end
+
+  defp register_patient(socket, params) do
+    changeset = register_changeset(params)
+
+    if changeset.valid? do
+      case Patients.register_absent_patient(
+             params,
+             socket.assigns.current_internal_session.account_id
+           ) do
+        {:ok, %{persona: persona, profile: profile, outcome: outcome}} ->
+          {:noreply,
+           socket
+           |> assign(:search_result, %{persona: persona, profile: profile})
+           |> assign(:registration_form, nil)
+           |> assign(:registration_document, nil)
+           |> assign(:registration_outcome, outcome)
+           |> assign(:registration_error, false)}
+
+        {:error, %Changeset{} = backend_changeset} ->
+          doc_errors = Keyword.get_values(backend_changeset.errors, :document_number)
+
+          registration_error_msg =
+            case doc_errors do
+              [{msg, _} | _] -> msg
+              _ -> "Revisá los datos ingresados e intentá nuevamente."
+            end
+
+          {:noreply,
+           socket
+           |> assign(:registration_error, registration_error_msg)
+           |> assign(:registration_form, to_form(backend_changeset, as: :registration))}
+
+        {:error, :unauthorized} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "No tienes autorización para registrar pacientes.")
+           |> redirect(to: "/")}
+      end
+    else
+      {:noreply,
+       socket
+       |> assign(:registration_error, false)
+       |> assign(:registration_form, to_form(changeset, as: :registration))}
+    end
+  end
+
+  defp search_changeset(params) do
+    {@search_defaults, @search_types}
+    |> Changeset.cast(params, [:document_type, :document_number])
+    |> Changeset.validate_required([:document_type, :document_number],
+      message: "no puede estar en blanco"
+    )
+    |> Changeset.validate_inclusion(:document_type, Persona.document_types(),
+      message: "debe ser un tipo de documento válido"
+    )
+    |> normalize_doc_number()
+    |> validate_document_number_by_type()
+    |> Map.put(:action, :validate)
+  end
+
+  defp register_changeset(params) do
+    {%{}, @register_types}
+    |> Changeset.cast(params, [
+      :first_name,
+      :last_name,
+      :document_type,
+      :document_number,
+      :birthdate,
+      :phone,
+      :email,
+      :gender
+    ])
+    |> Changeset.validate_required(
+      [:first_name, :last_name, :document_type, :document_number, :birthdate, :phone],
+      message: "no puede estar en blanco"
+    )
+    |> Changeset.validate_inclusion(:document_type, Persona.document_types(),
+      message: "debe ser un tipo de documento válido"
+    )
+    |> Changeset.validate_inclusion(:gender, @gender_values,
+      message: "debe ser una opción válida"
+    )
+    |> normalize_doc_number()
+    |> validate_document_number_by_type()
+    |> validate_birthdate()
+    |> validate_optional_email()
+    |> Map.put(:action, :validate)
+  end
+
+  defp link_access_changeset(params) do
+    {%{}, @link_access_types}
+    |> Changeset.cast(params, [:email])
+    |> Changeset.validate_required([:email], message: "El correo es obligatorio")
+    |> Changeset.validate_format(
+      :email,
+      ~r/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/,
+      message: "Debe ser un correo electrónico válido"
+    )
+  end
+
+  defp replace_access_changeset(params) do
+    {%{}, @replace_access_types}
+    |> Changeset.cast(params, [:new_email, :reason])
+    |> Changeset.validate_required([:new_email, :reason], message: "Este campo es obligatorio")
+    |> Changeset.validate_format(
+      :new_email,
+      ~r/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/,
+      message: "Debe ser un correo electrónico válido"
+    )
+  end
+
+  defp validate_optional_email(changeset) do
+    case Changeset.get_change(changeset, :email) do
+      nil ->
+        changeset
+
+      "" ->
+        Changeset.put_change(changeset, :email, nil)
+
+      email when is_binary(email) ->
+        trimmed = String.trim(email)
+
+        if trimmed == "" do
+          Changeset.put_change(changeset, :email, nil)
+        else
+          if Regex.match?(~r/^[^\s]+@[^\s]+$/, trimmed) do
+            changeset
+          else
+            Changeset.add_error(changeset, :email, "debe ser un correo electrónico válido")
+          end
+        end
+    end
+  end
+
+  defp normalize_doc_number(changeset) do
+    case Changeset.get_change(changeset, :document_number) do
+      nil ->
+        changeset
+
+      num when is_binary(num) ->
+        Changeset.put_change(changeset, :document_number, Persona.normalize_number(num))
+    end
+  end
+
+  defp validate_document_number_by_type(changeset) do
+    doc_type = Changeset.get_field(changeset, :document_type)
+
+    case Changeset.get_change(changeset, :document_number) do
+      nil ->
+        changeset
+
+      num when is_binary(num) ->
+        case doc_type do
+          "dni" ->
+            if Regex.match?(~r/^[0-9]{6,9}$/, num) do
+              changeset
+            else
+              Changeset.add_error(
+                changeset,
+                :document_number,
+                "el DNI debe contener solo números (entre 6 y 9 dígitos)"
+              )
+            end
+
+          "passport" ->
+            if Regex.match?(~r/^[A-Za-z0-9]{3,20}$/, num) do
+              changeset
+            else
+              Changeset.add_error(
+                changeset,
+                :document_number,
+                "el pasaporte debe ser alfanumérico (entre 3 y 20 caracteres)"
+              )
+            end
+
+          _other ->
+            if Regex.match?(~r/^[A-Za-z0-9]{1,32}$/, num) do
+              changeset
+            else
+              Changeset.add_error(changeset, :document_number, "debe ser alfanumérico válido")
+            end
+        end
+    end
+  end
+
+  defp validate_birthdate(changeset) do
+    Changeset.validate_change(changeset, :birthdate, fn _, date ->
+      if Date.compare(date, Date.utc_today()) == :lt do
+        []
+      else
+        [birthdate: "debe ser una fecha en el pasado"]
+      end
+    end)
+  end
+
+  defp doc_label("dni"), do: "DNI"
+  defp doc_label("passport"), do: "Pasaporte"
+  defp doc_label("identity_card"), do: "Cédula / Tarjeta de Identidad"
+  defp doc_label("other"), do: "Otro"
+  defp doc_label(doc_type), do: doc_type
+
+  defp profile_state_label(nil), do: "Sin perfil de paciente"
+
+  defp profile_state_label("pending_completion"), do: "Pendiente de completar"
+  defp profile_state_label("completed"), do: "Completado"
+  defp profile_state_label("pending_secretary_review"), do: "Pendiente de revisión de Secretaría"
+  defp profile_state_label(state), do: state
+
+  defp access_status_label(:unlinked), do: "Sin acceso"
+  defp access_status_label(:pending_verification), do: "Pendiente de verificación"
+  defp access_status_label(:verified), do: "Acceso verificado"
+
+  defp access_status_badge_color(:unlinked), do: "gray"
+  defp access_status_badge_color(:pending_verification), do: "warning"
+  defp access_status_badge_color(:verified), do: "success"
+
+  defp outcome_feedback(:created), do: "Persona registrada correctamente."
+  defp outcome_feedback(:reused), do: "La persona ya estaba registrada y fue reutilizada."
+
+  defp load_professionals do
+    case AssistedBooking.list_professionals() do
+      {:ok, list} -> list
+      _ -> []
+    end
+  end
+
+  defp update_booking_selection(prof_id, params, socket) do
+    type_id = params["consultation_type_id"] || socket.assigns.selected_consultation_type_id
+
+    date =
+      case params["date"] do
+        nil ->
+          socket.assigns.booking_date
+
+        "" ->
+          socket.assigns.booking_date
+
+        str ->
+          case Date.from_iso8601(str) do
+            {:ok, d} -> d
+            _ -> socket.assigns.booking_date
+          end
+      end
+
+    types =
+      if prof_id != socket.assigns.selected_prof_id do
+        load_consultation_types(prof_id)
+      else
+        socket.assigns.booking_consultation_types
+      end
+
+    type_id =
+      if Enum.any?(types, &(to_string(&1.id) == to_string(type_id))),
+        do: type_id,
+        else: (types != [] && to_string(hd(types).id)) || nil
+
+    duration =
+      case Enum.find(types, &(to_string(&1.id) == to_string(type_id))) do
+        %{duration_minutes: d} when is_integer(d) and d > 0 -> d
+        _ -> 30
+      end
+
+    slots = load_slots(prof_id, date, duration)
+    approval_mode = AssistedBooking.get_secretary_effective_approval_mode(prof_id)
+
+    {:noreply,
+     socket
+     |> assign(:selected_prof_id, prof_id)
+     |> assign(:selected_prof_approval_mode, approval_mode)
+     |> assign(:booking_consultation_types, types)
+     |> assign(:selected_consultation_type_id, type_id)
+     |> assign(:booking_date, date)
+     |> assign(:booking_slots, slots)
+     |> assign(:selected_slot_time, nil)
+     |> assign(:booking_error, nil)}
+  end
+
+  defp load_consultation_types(prof_id) do
+    case AssistedBooking.list_consultation_types(prof_id) do
+      {:ok, types} ->
+        Enum.map(types, fn t ->
+          Map.put_new(t, :duration_minutes, (t[:interval_count] || 1) * 30)
+        end)
+
+      _ ->
+        []
+    end
+  end
+
+  defp load_slots(prof_id, date, duration) do
+    case AssistedBooking.get_daily_schedule(prof_id, date, duration_minutes: duration) do
+      {:ok, %{slots: slots}} when is_list(slots) -> slots
+      _ -> []
+    end
+  end
+
+  defp next_weekday(date) do
+    case Date.day_of_week(date) do
+      6 -> Date.add(date, 2)
+      7 -> Date.add(date, 1)
+      _ -> date
+    end
+  end
+
+  defp format_booking_error(:slot_already_booked),
+    do: "El horario seleccionado ya no está disponible. Por favor seleccioná otro."
+
+  defp format_booking_error(:slot_unavailable),
+    do: "El horario seleccionado no se encuentra dentro de la disponibilidad del profesional."
+
+  defp format_booking_error(:patient_schedule_conflict),
+    do: "El paciente ya posee otro turno superpuesto con este horario."
+
+  defp format_booking_error(:unauthorized),
+    do: "No tenés autorización para realizar esta reserva asistida."
+
+  defp format_booking_error(:patient_not_found),
+    do: "El paciente no fue encontrado en el sistema."
+
+  defp format_booking_error(:invalid_professional),
+    do: "El profesional seleccionado no está activo o disponible."
+
+  defp format_booking_error(:consultation_type_not_found),
+    do: "El tipo de consulta seleccionado no está disponible."
+
+  defp format_booking_error(_),
+    do: "No se pudo completar la reserva. Verificá los datos e intentá nuevamente."
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:secretary}
+      active="patients"
+      secretary_identity={@secretary_identity}
+    />
+    <main data-theme="light" class="min-h-screen bg-surface py-6 text-text sm:py-10">
+      <.container max_width="xl">
+        <div class="flex flex-col gap-6 sm:gap-8">
+          <header class="space-y-2">
+            <.h1
+              id="patient-search-title"
+              class="text-3xl sm:text-4xl lg:text-5xl"
+              color_class="text-text"
+              no_margin
+            >
+              Búsqueda de pacientes
+            </.h1>
+
+            <.text_muted class="text-text-muted dark:text-gray-300">
+              Buscá una persona por documento para reutilizar su identidad o registrarla para una reserva asistida.
+            </.text_muted>
+          </header>
+
+          <section aria-labelledby="persona-search-heading">
+            <.card variant="basic">
+              <.card_header>
+                <.h2 id="persona-search-heading" color_class="text-text dark:text-gray-100" no_margin>
+                  Buscar persona
+                </.h2>
+
+                <:action>
+                  <.button
+                    :if={not is_nil(@search_result)}
+                    color="secondary"
+                    variant="outline"
+                    size="sm"
+                    phx-click="new_search"
+                  >
+                    Nueva búsqueda
+                  </.button>
+                </:action>
+              </.card_header>
+
+              <.card_content>
+                <.form
+                  for={@search_form}
+                  id="persona-search-form"
+                  phx-change="validate_search"
+                  phx-submit="search"
+                  class="flex flex-col gap-4"
+                >
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <.field
+                      field={@search_form[:document_type]}
+                      type="select"
+                      label="Tipo de documento"
+                      options={@doc_options}
+                      required
+                      no_margin
+                    />
+                    <.field
+                      field={@search_form[:document_number]}
+                      type="text"
+                      inputmode={
+                        if @search_form[:document_type].value in [nil, "", "dni"],
+                          do: "numeric",
+                          else: "text"
+                      }
+                      label="Número de documento"
+                      placeholder="Ej. 38123456"
+                      required
+                      no_margin
+                    />
+                  </div>
+                  <div>
+                    <.button type="submit" color="primary">Buscar</.button>
+                  </div>
+                </.form>
+              </.card_content>
+            </.card>
+          </section>
+
+          <.alert
+            :if={@booking_error}
+            id="booking-error-message"
+            color="danger"
+            variant="callout"
+            with_icon
+          >
+            {@booking_error}
+          </.alert>
+
+          <section
+            :if={@search_result == :not_found}
+            id="persona-registration-section"
+            aria-labelledby="persona-registration-heading"
+          >
+            <.card variant="basic">
+              <.card_header>
+                <.h2
+                  id="persona-registration-heading"
+                  color_class="text-text dark:text-gray-100"
+                  no_margin
+                >
+                  Registrar persona
+                </.h2>
+
+                <.text_muted>
+                  No encontramos una persona con el documento indicado. Completá los datos mínimos para registrarla.
+                </.text_muted>
+              </.card_header>
+
+              <.card_content class="flex flex-col gap-4">
+                <.alert
+                  :if={@registration_error}
+                  id="registration-error"
+                  color="danger"
+                  variant="callout"
+                  with_icon
+                >
+                  <strong>No se pudo registrar la persona.</strong>
+                  {@registration_error}
+                </.alert>
+
+                <.form
+                  for={@registration_form}
+                  id="assisted-registration-form"
+                  phx-change="validate_registration"
+                  phx-submit="register"
+                  class="flex flex-col gap-4"
+                >
+                  <input
+                    type="hidden"
+                    name={@registration_form[:document_type].name}
+                    value={@registration_form[:document_type].value}
+                  />
+                  <input
+                    type="hidden"
+                    name={@registration_form[:document_number].name}
+                    value={@registration_form[:document_number].value}
+                  />
+
+                  <p class="text-sm text-text-muted dark:text-gray-300">
+                    Documento a registrar:
+                    <strong class="text-text dark:text-gray-100">{@registration_document}</strong>
+                  </p>
+
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <.field
+                      field={@registration_form[:first_name]}
+                      type="text"
+                      label="Nombres"
+                      placeholder="Ej. Juan Manuel"
+                      required
+                      no_margin
+                    />
+                    <.field
+                      field={@registration_form[:last_name]}
+                      type="text"
+                      label="Apellidos"
+                      placeholder="Ej. Pérez"
+                      required
+                      no_margin
+                    />
+                    <.field
+                      field={@registration_form[:birthdate]}
+                      type="date"
+                      label="Fecha de nacimiento"
+                      required
+                      no_margin
+                    />
+                    <.field
+                      field={@registration_form[:phone]}
+                      type="tel"
+                      label="Teléfono"
+                      placeholder="Ej. +5491122334455"
+                      required
+                      no_margin
+                    />
+                  </div>
+
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <.field
+                      field={@registration_form[:email]}
+                      type="email"
+                      label="Correo de contacto (opcional)"
+                      placeholder="ejemplo@correo.com"
+                      no_margin
+                    />
+
+                    <.field
+                      field={@registration_form[:gender]}
+                      type="select"
+                      label="Género"
+                      options={@gender_options}
+                      prompt="Seleccionar género"
+                      no_margin
+                    />
+                  </div>
+
+                  <div>
+                    <.button type="submit" color="primary">Registrar persona</.button>
+                  </div>
+                </.form>
+              </.card_content>
+            </.card>
+          </section>
+
+          <section
+            :if={is_map(@search_result)}
+            id="patient-summary-section"
+            aria-labelledby="patient-summary-heading"
+          >
+            <.card variant="basic">
+              <.card_header>
+                <.h2 id="patient-summary-heading" color_class="text-text dark:text-gray-100" no_margin>
+                  Resumen del paciente
+                </.h2>
+              </.card_header>
+
+              <.card_content class="flex flex-col gap-4">
+                <.alert
+                  :if={@registration_outcome}
+                  id="registration-outcome"
+                  color="success"
+                  variant="callout"
+                  with_icon
+                >
+                  {outcome_feedback(@registration_outcome)}
+                </.alert>
+
+                <dl
+                  id="patient-summary"
+                  class="grid gap-x-4 gap-y-3 text-sm sm:grid-cols-[12rem_1fr] sm:items-baseline"
+                >
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Documento</dt>
+                  <dd id="patient-summary-document" class="font-semibold text-text dark:text-gray-100">
+                    {doc_label(@search_result.persona.document_type)} {@search_result.persona.document_number}
+                  </dd>
+
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Nombre completo</dt>
+                  <dd
+                    id="patient-summary-full-name"
+                    class="font-semibold text-text dark:text-gray-100"
+                  >
+                    {@search_result.persona.first_name} {@search_result.persona.last_name}
+                  </dd>
+
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Estado del perfil</dt>
+                  <dd id="patient-summary-profile-state" class="text-text dark:text-gray-200">
+                    {profile_state_label(@search_result.profile && @search_result.profile.state)}
+                  </dd>
+
+                  <dt class="font-medium text-text-muted dark:text-gray-300">Correo de contacto</dt>
+                  <dd id="patient-summary-email" class="text-text dark:text-gray-200">
+                    {(@search_result.profile &&
+                        (@search_result.profile.contact_email || @search_result.profile.email)) ||
+                      "No declarado"}
+                  </dd>
+
+                  <dt class="font-medium text-text-muted dark:text-gray-300">
+                    Correo de acceso personal
+                  </dt>
+                  <dd id="patient-summary-access-email" class="flex flex-wrap items-center gap-2">
+                    <span
+                      :if={@search_result.profile && @search_result.profile.email}
+                      class="font-medium text-gray-900 dark:text-gray-100"
+                    >
+                      {@search_result.profile.email}
+                    </span>
+                    <span
+                      :if={is_nil(@search_result.profile) or is_nil(@search_result.profile.email)}
+                      class="text-gray-500 dark:text-gray-400 italic"
+                    >
+                      Sin acceso web vinculado
+                    </span>
+
+                    <% access_state = PatientAccess.access_status(@search_result.profile) %>
+                    <% access_label = access_status_label(access_state) %>
+                    <% access_color = access_status_badge_color(access_state) %>
+                    <.badge
+                      :if={access_state != :verified}
+                      id="patient-summary-access-status"
+                      color={access_color}
+                      variant="soft"
+                      size="sm"
+                      dot
+                      label={access_label}
+                      role="status"
+                    />
+
+                    <.button
+                      :if={
+                        @search_result.profile && is_nil(@search_result.profile.email) &&
+                          is_nil(@access_action)
+                      }
+                      id="btn-open-link-access"
+                      color="secondary"
+                      variant="outline"
+                      size="xs"
+                      phx-click="open_link_access"
+                    >
+                      Vincular correo de acceso
+                    </.button>
+                  </dd>
+
+                  <dt class="font-medium text-text-muted dark:text-gray-300">
+                    Verificación telefónica
+                  </dt>
+                  <dd id="patient-summary-phone-verified">
+                    <.badge
+                      :if={@search_result.profile && @search_result.profile.phone_verified}
+                      color="success"
+                      variant="soft"
+                      size="sm"
+                      dot
+                      label="Teléfono verificado"
+                      role="status"
+                    />
+                    <.badge
+                      :if={
+                        is_nil(@search_result.profile) or not @search_result.profile.phone_verified
+                      }
+                      color="gray"
+                      variant="soft"
+                      size="sm"
+                      dot
+                      label="Teléfono no verificado"
+                      role="status"
+                    />
+                  </dd>
+                </dl>
+
+                <.alert
+                  :if={@access_feedback}
+                  id="access-feedback"
+                  color="success"
+                  variant="callout"
+                  with_icon
+                >
+                  {@access_feedback}
+                </.alert>
+
+                <section
+                  :if={@access_action == :link}
+                  id="link-access-section"
+                  aria-labelledby="link-access-heading"
+                  class="p-4 border border-border rounded-lg bg-surface-muted dark:bg-gray-800 dark:border-gray-700 flex flex-col gap-3"
+                >
+                  <h3
+                    id="link-access-heading"
+                    class="text-sm font-semibold text-text dark:text-gray-100"
+                  >
+                    Vincular correo de acceso personal (Magic Link)
+                  </h3>
+                  <p class="text-xs text-text-muted dark:text-gray-300">
+                    Comprobá la identidad del paciente antes de vincular. Se enviará un enlace de un solo uso para verificar posesión.
+                  </p>
+
+                  <.alert
+                    :if={@access_error}
+                    id="link-access-error"
+                    color="danger"
+                    variant="callout"
+                    with_icon
+                  >
+                    {@access_error}
+                  </.alert>
+
+                  <.form
+                    for={@access_form}
+                    id="link-access-form"
+                    phx-change="validate_link_access"
+                    phx-submit="submit_link_access"
+                    class="flex flex-col gap-3"
+                  >
+                    <.field
+                      field={@access_form[:email]}
+                      type="email"
+                      label="Correo electrónico personal"
+                      placeholder="paciente@ejemplo.com"
+                      autocomplete="email"
+                      required
+                      no_margin
+                    />
+
+                    <div class="flex gap-2 justify-end">
+                      <.button
+                        type="button"
+                        id="cancel-link-access"
+                        color="gray"
+                        variant="ghost"
+                        size="sm"
+                        phx-click="cancel_access_action"
+                      >
+                        Cancelar
+                      </.button>
+                      <.button
+                        type="submit"
+                        id="submit-link-access"
+                        color="primary"
+                        size="sm"
+                      >
+                        Vincular y enviar Magic Link
+                      </.button>
+                    </div>
+                  </.form>
+                </section>
+
+                <section
+                  :if={@access_action == :replace}
+                  id="replace-access-section"
+                  aria-labelledby="replace-access-heading"
+                  class="p-4 border border-border rounded-lg bg-surface-muted dark:bg-gray-800 dark:border-gray-700 flex flex-col gap-3"
+                >
+                  <h3
+                    id="replace-access-heading"
+                    class="text-sm font-semibold text-text dark:text-gray-100"
+                  >
+                    Reemplazar correo de acceso personal
+                  </h3>
+                  <p class="text-xs text-text-muted dark:text-gray-300">
+                    El reemplazo invalidará inmediatamente los enlaces y sesiones web anteriores del paciente. Se requiere motivo justificado.
+                  </p>
+
+                  <.alert
+                    :if={@access_error}
+                    id="replace-access-error"
+                    color="danger"
+                    variant="callout"
+                    with_icon
+                  >
+                    {@access_error}
+                  </.alert>
+
+                  <.form
+                    for={@access_form}
+                    id="replace-access-form"
+                    phx-change="validate_replace_access"
+                    phx-submit="submit_replace_access"
+                    class="flex flex-col gap-3"
+                  >
+                    <.field
+                      field={@access_form[:new_email]}
+                      type="email"
+                      label="Nuevo correo electrónico personal"
+                      placeholder="nuevo.paciente@ejemplo.com"
+                      autocomplete="email"
+                      required
+                      no_margin
+                    />
+
+                    <.field
+                      field={@access_form[:reason]}
+                      type="text"
+                      label="Motivo del reemplazo (obligatorio)"
+                      placeholder="Ej: Solicitud presencial por cambio de casilla"
+                      required
+                      no_margin
+                    />
+
+                    <div class="flex gap-2 justify-end">
+                      <.button
+                        type="button"
+                        id="cancel-replace-access"
+                        color="gray"
+                        variant="ghost"
+                        size="sm"
+                        phx-click="cancel_access_action"
+                      >
+                        Cancelar
+                      </.button>
+                      <.button
+                        type="submit"
+                        id="submit-replace-access"
+                        color="primary"
+                        size="sm"
+                      >
+                        Confirmar reemplazo y enviar Magic Link
+                      </.button>
+                    </div>
+                  </.form>
+                </section>
+
+                <div :if={@current_role == :secretary} class="flex flex-wrap gap-2">
+                  <.button
+                    id="start-assisted-booking"
+                    color="primary"
+                    phx-click="start_assisted_booking"
+                  >
+                    Iniciar Reserva Asistida
+                  </.button>
+                </div>
+
+                <section
+                  :if={@assisted_booking_active}
+                  id="assisted-booking-section"
+                  aria-labelledby="assisted-booking-heading"
+                  class="mt-6 border-t border-border dark:border-gray-700 pt-6 flex flex-col gap-4"
+                >
+                  <.h3
+                    id="assisted-booking-heading"
+                    color_class="text-text dark:text-gray-100"
+                    no_margin
+                  >
+                    Reserva asistida de turno
+                  </.h3>
+                  <.text_muted>
+                    Seleccioná profesional, tipo de consulta y horario disponible para agendar el turno.
+                  </.text_muted>
+
+                  <.alert
+                    :if={@booking_success}
+                    id="booking-success-message"
+                    color="success"
+                    variant="callout"
+                    with_icon
+                  >
+                    <strong>¡Turno agendado con éxito!</strong>
+                    <p class="text-sm mt-1">
+                      Estado: <strong>{String.capitalize(to_string(@booking_success.status))}</strong>
+                      |
+                      Consulta: {@booking_success.consultation_type_name} |
+                      Horario: {DateTime.to_iso8601(@booking_success.start_time)}
+                    </p>
+                  </.alert>
+
+                  <form
+                    phx-change="update_booking_selection"
+                    id="assisted-booking-form"
+                    class="grid gap-4 sm:grid-cols-3"
+                  >
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-text dark:text-gray-200 mb-1"
+                        for="booking-professional-select"
+                      >
+                        Profesional
+                      </label>
+                      <select
+                        id="booking-professional-select"
+                        name="professional_id"
+                        class="block w-full rounded-md border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-100 shadow-sm text-sm"
+                      >
+                        <option
+                          :for={prof <- @booking_professionals}
+                          value={prof.id}
+                          selected={to_string(prof.id) == to_string(@selected_prof_id)}
+                        >
+                          {prof.name}
+                        </option>
+                      </select>
+                      <span
+                        :if={@selected_prof_approval_mode in [:manual, :requested]}
+                        id="prof-approval-mode-badge"
+                        class="inline-block text-xs font-medium text-amber-700 dark:text-amber-400 mt-1"
+                      >
+                        Aprobación manual requerida (nacerá como Solicitud)
+                      </span>
+                      <span
+                        :if={@selected_prof_approval_mode in [:automatic, :confirmed]}
+                        id="prof-approval-mode-badge"
+                        class="inline-block text-xs font-medium text-green-700 dark:text-green-400 mt-1"
+                      >
+                        Aprobación automática (confirmación directa)
+                      </span>
+                    </div>
+
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-text dark:text-gray-200 mb-1"
+                        for="booking-consultation-type-select"
+                      >
+                        Tipo de consulta
+                      </label>
+                      <select
+                        id="booking-consultation-type-select"
+                        name="consultation_type_id"
+                        class="block w-full rounded-md border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-100 shadow-sm text-sm"
+                      >
+                        <option
+                          :for={type <- @booking_consultation_types}
+                          value={type.id}
+                          selected={to_string(type.id) == to_string(@selected_consultation_type_id)}
+                        >
+                          {type.name} ({type[:duration_minutes] || 30} min)
+                        </option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        class="block text-sm font-medium text-text dark:text-gray-200 mb-1"
+                        for="booking-date-input"
+                      >
+                        Fecha de turno
+                      </label>
+                      <input
+                        id="booking-date-input"
+                        type="date"
+                        name="date"
+                        value={Date.to_iso8601(@booking_date)}
+                        class="block w-full rounded-md border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-100 shadow-sm text-sm"
+                      />
+                    </div>
+                  </form>
+
+                  <div class="mt-2">
+                    <h4 class="text-sm font-semibold text-text dark:text-gray-100 mb-2">
+                      Horarios disponibles
+                    </h4>
+
+                    <div
+                      :if={@booking_slots == []}
+                      id="no-slots-available"
+                      class="text-sm text-text-muted dark:text-gray-400 italic"
+                    >
+                      No hay horarios disponibles para la fecha y profesional seleccionados.
+                    </div>
+
+                    <div
+                      :if={@booking_slots != []}
+                      id="booking-slots-grid"
+                      class="flex flex-wrap gap-2"
+                    >
+                      <button
+                        :for={slot <- @booking_slots}
+                        type="button"
+                        id={"slot-#{slot.start_formatted}"}
+                        phx-click="select_slot"
+                        phx-value-time={slot.start_formatted}
+                        class={
+                          if slot.start_formatted == @selected_slot_time,
+                            do:
+                              "px-3 py-1.5 rounded bg-primary-700 text-white font-semibold text-sm shadow",
+                            else:
+                              "px-3 py-1.5 rounded border border-border dark:border-gray-700 bg-surface dark:bg-gray-800 text-text dark:text-gray-200 hover:bg-surface-muted dark:hover:bg-gray-700 text-sm"
+                        }
+                      >
+                        {slot.start_formatted}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-3 pt-2">
+                    <.button
+                      id="confirm-assisted-booking"
+                      color="primary"
+                      phx-click="confirm_assisted_booking"
+                      disabled={
+                        is_nil(@selected_slot_time) or is_nil(@selected_consultation_type_id) or
+                          is_nil(@selected_prof_id)
+                      }
+                    >
+                      Confirmar reserva asistida
+                    </.button>
+
+                    <.button
+                      id="cancel-assisted-booking"
+                      color="secondary"
+                      variant="outline"
+                      phx-click="cancel_assisted_booking"
+                    >
+                      Cerrar
+                    </.button>
+                  </div>
+                </section>
+              </.card_content>
+            </.card>
+          </section>
+        </div>
+      </.container>
+    </main>
+    """
+  end
+end

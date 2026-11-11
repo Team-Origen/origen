@@ -109,7 +109,7 @@ defmodule OrigenWeb.AdminActivationController do
       |> configure_session(renew: true)
       |> put_session(@session_key, nonce)
       |> secure_headers()
-      |> redirect(to: ~p"/admin/activate")
+      |> redirect(to: ~p"/administrador/activar")
     else
       _denied -> unavailable(conn)
     end

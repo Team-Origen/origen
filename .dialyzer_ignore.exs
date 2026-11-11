@@ -1,0 +1,21 @@
+[
+  {"lib/origen/accounts.ex", :call_without_opaque},
+  {"lib/origen/appointments/booking_service.ex", :unknown_type},
+  {"lib/origen/availability.ex", :call_without_opaque},
+  {"lib/origen/booking.ex", :unknown_type},
+  {"lib/origen/booking.ex", :call_without_opaque},
+  {"lib/origen/booking/agenda.ex", :unknown_type},
+  {"lib/origen/booking/authorization.ex", :unknown_type},
+  {"lib/origen/bootstrap_admin.ex", :call_without_opaque},
+  {"lib/origen/bootstrap_admin/delivery.ex", :call_without_opaque},
+  {"lib/origen/bootstrap_admin/invitation.ex", :call_without_opaque},
+  {"lib/origen/bootstrap_admin/local/command.ex", :call_without_opaque},
+  {"lib/origen/bootstrap_admin/local/readiness.ex", :unknown_type},
+  {"lib/origen/consultation_types.ex", :pattern_match},
+  {"lib/origen/consultation_types/mock_catalog.ex", :pattern_match},
+  {"lib/origen/patient_access.ex", :call_without_opaque},
+  {"lib/origen/patients.ex", :unknown_type},
+  {"lib/origen/patients.ex", :call_without_opaque},
+  {"lib/origen/protected_operation.ex", :call_without_opaque},
+  {"lib/origen_web/provider_event_replay.ex", :guard_fail}
+]

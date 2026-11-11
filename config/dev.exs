@@ -54,9 +54,13 @@ config :origen, OrigenWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :origen, dev_routes: true
 
+# Professional booking uses the real Booking adapter by default (#316).
+# The synthetic selector demo is opt-in; see docs/sprints/integration/316-professional-booking.md.
+
 config :origen,
-  consultation_catalog_demo_enabled: true,
-  consultation_type_catalog_adapter: Origen.ConsultationTypes.MockCatalog
+  consultation_catalog_demo_enabled: false,
+  consultation_type_catalog_adapter: Origen.ConsultationTypes.DatabaseCatalog,
+  appointments_calendar_adapter: Origen.Appointments.DatabaseCalendar
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
@@ -82,6 +86,16 @@ config :origen, :bootstrap_admin_local, %{enabled: false}
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+# Bootstrap admin verifier key for development invitation issuance
+config :origen, bootstrap_admin_verifier_key: String.duplicate("d", 32)
+
+# Development TOTP keyring for internal account activation
+config :origen,
+  totp_keyring: %{
+    active: %{tag: "seed.dev.v1", key: String.duplicate("d", 32)},
+    retired: []
+  }
 
 if File.exists?(Path.expand("dev.local.exs", __DIR__)) do
   import_config "dev.local.exs"

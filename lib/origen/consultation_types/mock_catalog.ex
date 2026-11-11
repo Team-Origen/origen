@@ -5,12 +5,9 @@ defmodule Origen.ConsultationTypes.MockCatalog do
 
   @behaviour Origen.ConsultationTypes.Catalog
 
-  @demo_enabled Application.compile_env(:origen, :consultation_catalog_demo_enabled, false) and
-                  Mix.env() != :prod
-
   @impl true
   def execute(operation) do
-    if @demo_enabled do
+    if demo_enabled?() do
       execute_demo(operation)
     else
       {:error, :unavailable}
@@ -84,4 +81,8 @@ defmodule Origen.ConsultationTypes.MockCatalog do
   end
 
   defp execute_demo(_operation), do: {:error, :unavailable}
+
+  defp demo_enabled? do
+    Application.get_env(:origen, :consultation_catalog_demo_enabled, false) and Mix.env() != :prod
+  end
 end

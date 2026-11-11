@@ -30,6 +30,31 @@ defmodule Origen.Audit.EventsTest do
     refute function_exported?(Events, :new, 1)
   end
 
+  test "availability replacement evidence contains references and outcome only" do
+    assert {:ok, event} =
+             Events.availability_configuration_replaced({:professional, "42"}, "42")
+
+    assert {:ok, persisted} = Writer.append(event, {:allow, :sys_01})
+
+    assert Map.take(persisted, [
+             :actor_kind,
+             :actor_ref,
+             :event,
+             :entity_kind,
+             :entity_ref,
+             :result
+           ]) == %{
+             actor_kind: "professional",
+             actor_ref: "42",
+             event: "availability_configuration_replaced",
+             entity_kind: "account",
+             entity_ref: "42",
+             result: "succeeded"
+           }
+
+    assert Enum.map(Map.keys(persisted), &to_string/1) |> Enum.sort() == Enum.sort(@columns)
+  end
+
   test "database checks reject malformed values and invalid combinations" do
     valid = ["system", nil, "operation_allowed", nil, nil, "allowed"]
 

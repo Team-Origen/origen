@@ -12,7 +12,10 @@ defmodule Origen.MixProject do
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
-      releases: [origen: [applications: [mix: :permanent]]]
+      releases: [origen: [applications: [mix: :permanent]]],
+      dialyzer: [
+        plt_add_apps: [:mix]
+      ]
     ]
   end
 
@@ -45,6 +48,7 @@ defmodule Origen.MixProject do
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},
       {:postgrex, ">= 0.0.0"},
+      {:tzdata, "~> 1.2"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.0"},
@@ -53,6 +57,7 @@ defmodule Origen.MixProject do
       {:tidewave, "~> 0.9.0", only: :dev},
       {:argon2_elixir, "~> 4.1.3"},
       {:nimble_totp, "~> 1.0.0"},
+      {:eqrcode, "~> 0.2"},
       {:cloak, "~> 1.1.4"},
       {:cloak_ecto, "~> 1.3.0"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
@@ -79,7 +84,10 @@ defmodule Origen.MixProject do
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
-      {:bandit, "~> 1.5"}
+      {:bandit, "~> 1.5"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.13", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
