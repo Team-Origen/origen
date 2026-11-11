@@ -10,7 +10,7 @@ Publish the approved development-only mock as a feature-branch chain. No merge, 
 
 ## Tasks
 
-- T1 [S1-S2] route: inline — Create tracker and delivery plan; commit pending.
+- T1 [S1-S2] route: inline — Done: tracker #467 (draft/no-merge), commit `474fed01334e5d6ef1e5cd0b2f784238a95ba919`.
 - T2 [S2-S3] route: inline — Publish shared existing row layout with regression evidence; commit pending.
 - T3 [S2-S3] route: inline — Publish cohesive mock, tests and documentation; commit pending.
 - T4 [S1-S3] route: inline — Verify PR boundaries, labels and initial CI; evidence commit pending.
