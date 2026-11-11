@@ -13,6 +13,8 @@ How Origen is deployed to Render for the academic delivery (#292), and how a mer
 
 Render's own Git auto-deploy is off (`autoDeployTrigger: "off"` in `render.yaml`), so the workflow is the only automatic trigger. It can also be run by hand from the Actions tab (`workflow_dispatch`).
 
+After the hook call succeeds, the workflow tags the commit as `v<YYYY.MM.DD>-<run number>` (UTC), for example `v2026.11.11-12`. The tag records that a deploy was **requested** for that commit; whether it went live is shown in the Render dashboard. A manual re-run on an already tagged commit does not add a second tag.
+
 ## What `render.yaml` creates
 
 | Resource | Name | Plan | Notes |

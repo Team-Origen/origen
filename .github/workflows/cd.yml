@@ -18,6 +18,9 @@ jobs:
     name: Deploy a Render
     runs-on: ubuntu-latest
     environment: production
+    # contents: write lets the job create the deploy tag below.
+    permissions:
+      contents: write
     steps:
       - name: Trigger Render deploy for this commit
         env:
@@ -39,3 +42,24 @@ jobs:
           # The hook only queues the deploy: build, migrations and health check
           # results are visible in the Render dashboard, not in this run.
           echo "Deploy queued in Render for ${COMMIT_SHA}."
+
+      # Tags each deployed commit as v<date>-<run number> (UTC), e.g.
+      # v2026.11.11-12. The tag means "deploy requested", not "deploy live":
+      # check the Render dashboard for the result. A commit that already has
+      # a deploy tag (manual re-run) is not tagged again.
+      - name: Tag the deployed commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          EXISTING=$(gh api "repos/${REPO}/git/matching-refs/tags/v" \
+            --jq "[.[] | select(.object.sha == \"${COMMIT_SHA}\") | .ref] | first // empty")
+          if [ -n "$EXISTING" ]; then
+            echo "Commit already tagged as ${EXISTING#refs/tags/}; skipping."
+            exit 0
+          fi
+          TAG="v$(date -u +%Y.%m.%d)-${RUN_NUMBER}"
+          gh api "repos/${REPO}/git/refs" -f ref="refs/tags/${TAG}" -f sha="${COMMIT_SHA}" > /dev/null
+          echo "Tagged ${COMMIT_SHA} as ${TAG}."
