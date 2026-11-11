@@ -17,10 +17,14 @@ Branch: `feat/admin-invitation-cli` (base `develop`). Delivery: single PR. Test 
 
 | ID | Specs | Route | Status | Commit |
 | --- | --- | --- | --- | --- |
-| T1 | S1–S5 | inline | in progress | — |
-| T2 | S6 | inline | pending | — |
+| T1 | S1–S5 | inline | done | 6c089ab, 39cd7ea |
+| T2 | S6 | inline | done | 6c089ab (script, DATABASE_SSL), docs commit |
+| T3 | S1 (activation in prod) | inline | done | ed4c24d |
 
 ## Log
 
 - L1 (2026-11-11, user): "Mira, la verdad que es bastante lío, quizas simplemente podriamos hacer un script que sirva para crear admins." Then: "sí, dale con la opción 2."
 - L2: Login accepts email or numeric account id; the bootstrap account has no email, so the account id is the login identifier.
+- L3: HTTP end-to-end against the release image (prod config, postgres:17): link exchange 302, TOTP enrollment shown, password+TOTP 302, account active, login with account id 302 to /administrador/cuentas, replayed link 404; audit bootstrap_admin, invitation_delivery_handoff, account_activation, internal_login.
+- L4: Found pre-existing bug: in :prod AdminActivationController read only :bootstrap_admin_totp_keyring while runtime.exs sets :totp_keyring, so activation always returned 422. Fixed to resolve like Origen.Accounts (T3, RED observed first).
+- L5: Checks: mix test 1206 passed (one unrelated flaky failure in a first run, not reproduced in two reruns); format and compile --warnings-as-errors clean.
