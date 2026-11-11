@@ -53,6 +53,9 @@ expect "a commit that already has a semver tag gets none" ""
 repo; commit "chore: init"; git tag v1.2.3; git tag v2026.11.11-3; commit "fix: a"
 expect "date tags are ignored when finding the last version" "v1.2.4"
 
+repo; commit "chore: init"; git tag v1.2.3; commit "fix: a"; git tag v2026.11.12-4
+expect "a commit with only a date tag still gets a version" "v1.2.4"
+
 repo; commit "chore: init"; git tag v1.9.0; git tag v1.10.0; commit "fix: a"
 expect "versions are compared numerically, not as text" "v1.10.1"
 

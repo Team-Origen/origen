@@ -63,6 +63,9 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          # The tag is created through the API with GH_TOKEN; do not leave the
+          # write-scoped token in the local git config.
+          persist-credentials: false
 
       - name: Create the next version tag unless the commit already has one
         env:
