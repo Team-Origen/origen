@@ -224,8 +224,16 @@ defmodule OrigenWeb.AdminActivationController do
 
   defp parse_invitation_id(_value), do: {:error, :invalid_request}
 
+  # Outside the local profile, resolve the keyring in the same order as
+  # Origen.Accounts (:totp_keyring first, which config/runtime.exs sets in :prod),
+  # so the seed is encrypted with the key that login later decrypts with.
   defp totp_keyring do
-    keyring = activation_secret(:totp_keyring, :bootstrap_admin_totp_keyring)
+    keyring =
+      if Application.get_env(:origen, :bootstrap_admin_profile) == :local,
+        do: activation_secret(:totp_keyring, :bootstrap_admin_totp_keyring),
+        else:
+          Application.get_env(:origen, :totp_keyring) ||
+            Application.get_env(:origen, :bootstrap_admin_totp_keyring)
 
     case Credentials.validate_keyring(keyring) do
       :ok -> {:ok, keyring}

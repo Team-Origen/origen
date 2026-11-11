@@ -16,20 +16,23 @@ defmodule OrigenWeb.AdminActivationControllerTest do
 
     previous_verifier_key = Application.get_env(:origen, :bootstrap_admin_verifier_key)
     previous_keyring = Application.get_env(:origen, :bootstrap_admin_totp_keyring)
+    previous_shared_keyring = Application.get_env(:origen, :totp_keyring)
     previous_ttl = Application.get_env(:origen, :bootstrap_admin_session_ttl_seconds)
 
     Application.put_env(:origen, :bootstrap_admin_verifier_key, @verifier_key)
 
-    Application.put_env(:origen, :bootstrap_admin_totp_keyring, %{
-      active: %{tag: "seed.test.v1", key: @totp_key},
-      retired: []
-    })
+    # Activation encrypts with the same keyring login decrypts with; keep both
+    # names on one keyring so these tests do not depend on config/test.exs.
+    test_keyring = %{active: %{tag: "seed.test.v1", key: @totp_key}, retired: []}
+    Application.put_env(:origen, :bootstrap_admin_totp_keyring, test_keyring)
+    Application.put_env(:origen, :totp_keyring, test_keyring)
 
     Application.put_env(:origen, :bootstrap_admin_session_ttl_seconds, 600)
 
     on_exit(fn ->
       restore_env(:bootstrap_admin_verifier_key, previous_verifier_key)
       restore_env(:bootstrap_admin_totp_keyring, previous_keyring)
+      restore_env(:totp_keyring, previous_shared_keyring)
       restore_env(:bootstrap_admin_session_ttl_seconds, previous_ttl)
       AdminActivationSessionStore.clear()
     end)
@@ -249,6 +252,34 @@ defmodule OrigenWeb.AdminActivationControllerTest do
 
     Application.put_env(:origen, :bootstrap_admin_enabled, false)
     assert {:error, :bootstrap_disabled} = Origen.BootstrapAdmin.Gate.check()
+  end
+
+  test "activates with the keyring that config/runtime.exs sets for :prod (:totp_keyring)", %{
+    conn: conn
+  } do
+    # Exactly what config/runtime.exs configures in :prod (setup restores both).
+    Application.put_env(:origen, :totp_keyring, keyring())
+    Application.delete_env(:origen, :bootstrap_admin_totp_keyring)
+
+    invitation = issue_invitation()
+
+    page_conn =
+      conn |> exchange(invitation) |> recycle() |> get(https(~p"/administrador/activar"))
+
+    seed = page_conn |> html_response(200) |> totp_seed_from_page()
+
+    success_conn =
+      page_conn
+      |> recycle()
+      |> post(https(~p"/administrador/activar"), %{
+        "password" => "a-secure-password",
+        "password_confirmation" => "a-secure-password",
+        "totp_code" => NimbleTOTP.verification_code(seed)
+      })
+
+    assert redirected_to(success_conn) == ~p"/"
+    [["active", _password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
+    assert {:ok, ^seed} = Credentials.decrypt_seed(encrypted_seed, keyring())
   end
 
   defp issue_invitation do
