@@ -2,15 +2,15 @@
 
 ## Resultado primero
 
-**Entrega parcial para continuidad, no verificada de forma independiente, no completa y no lista para merge.** La rama que contiene todo el código y este handoff es `feat/389-02-summary`, basada en `develop` `7372371`. Los commits de implementación son `aecb97fe8d0262ffe66123ad7bd1e7cbc6fe048a` (períodos) y `632a1290ac87b49a9671715a1251fa409939f367` (consulta autorizada y agregación). La publicación de esta entrega no implica PR, merge, cierre de issues ni aprobación del backend.
+**Entrega parcial para continuidad, no verificada de forma independiente, no completa y no lista para merge.** La rama de entrega para continuar el trabajo es `feat/389-backend-handoff`; contiene todo el código y este handoff, basada en `develop` `7372371`. Los commits de implementación son `aecb97fe8d0262ffe66123ad7bd1e7cbc6fe048a` (períodos) y `632a1290ac87b49a9671715a1251fa409939f367` (consulta autorizada y agregación). La publicación de esta entrega no implica PR, merge, cierre de issues ni aprobación del backend.
 
-Cadena local para revisión: `feat/389-economic-summary` (base `7372371`) → `feat/389-01-periods` (`aecb97f`, 367 líneas añadidas) → `feat/389-02-summary` (`632a129` más este handoff). La segunda unidad tiene 661 líneas añadidas/eliminadas, incluidas sus pruebas y documentación: se mantiene coherente en lugar de separar la autorización y el cálculo de las pruebas que los respaldan.
+Origen de los commits para revisión: `feat/389-economic-summary` (base `7372371`) → `feat/389-01-periods` (`aecb97f`, 367 líneas añadidas) → `feat/389-02-summary` (`632a129` y handoff inicial `6c36521`). La rama nueva `feat/389-backend-handoff` conserva todos esos commits y es el destino de esta entrega; no hace falta continuar sobre las ramas anteriores. La segunda unidad tiene 661 líneas añadidas/eliminadas, incluidas sus pruebas y documentación: se mantiene coherente en lugar de separar la autorización y el cálculo de las pruebas que los respaldan.
 
 Alcance y trazabilidad: [#389](https://github.com/Team-Origen/origen/issues/389), padre [#288](https://github.com/Team-Origen/origen/issues/288), contrato [#388](https://github.com/Team-Origen/origen/issues/388), y [OpenSpec `health-center-beta-core`](../../../openspec/changes/health-center-beta-core/) con scope backend #389. La integración #391 no pertenece a este backend; el mock frontend de [#390](https://github.com/Team-Origen/origen/issues/390) queda intacto.
 
 ## Para continuar
 
-1. Obtener las ramas remotas y hacer checkout de `feat/389-02-summary`; incluye los dos commits de implementación y este handoff, sin depender de cambios locales sin commit.
+1. Ejecutar `git fetch origin feat/389-backend-handoff` y `git switch --track origin/feat/389-backend-handoff` si no existe una rama local de ese nombre. La rama incluye los dos commits de implementación y este handoff, sin depender de cambios locales sin commit.
 2. Leer primero el [contrato #388](../contracts/388-resumen-economico-por-fecha-turno.md) y el [contrato técnico de la operación](../../booking/ECONOMIC_SUMMARY.md).
 3. Resolver el runner con PostgreSQL descartable y runtime aislado; no usar la base por defecto ni mutar el toolchain global.
 4. Ejecutar la checklist pendiente de abajo. Los resultados históricos del escritor no sustituyen la verificación independiente ni la revisión final del parent.
