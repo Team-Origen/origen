@@ -52,6 +52,7 @@ No se define una sección independiente de pagos del Paciente: la beta permite c
 | --- | --- | --- |
 | `/profesional/agenda` | `/profesional/agenda` | Conservar, incluido `?date=AAAA-MM-DD`. |
 | `/profesional/agenda/crear` | `/profesional/agenda/crear` | Conservar el recorrido real de reserva. El modo demo opcional no convierte esta ruta en un borrador exclusivo. |
+| Sin ruta actual (#472) | `/profesional/solicitudes` | Listado general de solicitudes pendientes del Profesional autenticado, reutilizando tarjetas y acciones; orden por fecha/hora ascendente y fecha/hora visible. Sin filtro diario ni controles de fecha; un `date` heredado no limita el listado. Agenda conserva su propio `?date=AAAA-MM-DD`. |
 | `/configuracion/profesional` | `/profesional/ajustes` | Migrar sin dividir las configuraciones actuales en nuevas pantallas. |
 | `/configuracion/profesional/perfil` | `/profesional/ajustes/perfil` | Migrar; Mi perfil continúa dentro de Ajustes. |
 | Sin ruta actual | `/profesional/resumen-economico` | Ubicación prevista para #288, limitada al resumen propio. |

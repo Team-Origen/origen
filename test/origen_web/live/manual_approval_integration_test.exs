@@ -341,14 +341,22 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
           ~p"/profesional/agenda?date=#{date_iso}"
         )
 
+      {:ok, requests_view, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/solicitudes?date=#{date_iso}"
+        )
+
       for req_id <- [
             appt_man_conf_patient.id,
             appt_man_req_patient.id,
             appt_man_req_sec.id
           ] do
         assert has_element?(agenda_day_view, "#appointment-#{req_id}", "Solicitado")
-        assert has_element?(agenda_day_view, "#accept-request-#{req_id}", "Aceptar")
-        assert has_element?(agenda_day_view, "#reject-request-#{req_id}", "Rechazar")
+        refute has_element?(agenda_day_view, "#accept-request-#{req_id}")
+        refute has_element?(agenda_day_view, "#reject-request-#{req_id}")
+        assert has_element?(requests_view, "#accept-request-#{req_id}", "Aceptar")
+        assert has_element?(requests_view, "#reject-request-#{req_id}", "Rechazar")
       end
 
       for conf_id <- [
@@ -500,7 +508,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, other_prof_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_other.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/solicitudes?date=#{date_iso}"
         )
 
       refute has_element?(other_prof_view, "#appointment-#{req_0900.id}")
@@ -515,7 +523,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, owner_agenda_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/solicitudes?date=#{date_iso}"
         )
 
       owner_agenda_view
@@ -524,11 +532,19 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       assert has_element?(
                owner_agenda_view,
-               "#agenda-flash-info",
+               "#requests-flash-info",
                "Solicitud aceptada y turno confirmado."
              )
 
-      assert has_element?(owner_agenda_view, "#appointment-#{req_0900.id}", "Confirmado")
+      refute has_element?(owner_agenda_view, "#appointment-#{req_0900.id}")
+
+      {:ok, refreshed_agenda, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/agenda?date=#{date_iso}"
+        )
+
+      assert has_element?(refreshed_agenda, "#appointment-#{req_0900.id}", "Confirmado")
       refute has_element?(owner_agenda_view, "#accept-request-#{req_0900.id}")
       refute has_element?(owner_agenda_view, "#reject-request-#{req_0900.id}")
       assert Repo.get!(Appointment, req_0900.id).status == "confirmed"
@@ -556,11 +572,19 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       assert has_element?(
                owner_agenda_view,
-               "#agenda-flash-info",
+               "#requests-flash-info",
                "Solicitud rechazada y horario liberado."
              )
 
-      assert has_element?(owner_agenda_view, "#appointment-#{req_1000.id}", "Cancelado")
+      refute has_element?(owner_agenda_view, "#appointment-#{req_1000.id}")
+
+      {:ok, refreshed_agenda, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/agenda?date=#{date_iso}"
+        )
+
+      assert render(refreshed_agenda) =~ "Cancelado"
       refute has_element?(owner_agenda_view, "#accept-request-#{req_1000.id}")
       refute has_element?(owner_agenda_view, "#reject-request-#{req_1000.id}")
       assert Repo.get!(Appointment, req_1000.id).status == "cancelled"
@@ -623,8 +647,11 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/solicitudes?date=#{date_iso}"
         )
+
+      {:ok, settings_view, _} =
+        live(internal_conn(ctx.conn, ctx.prof_owner.token), ~p"/profesional/agenda")
 
       # Revocar la sesión activa del profesional mientras la vista está abierta
       SQL.query!(
@@ -642,7 +669,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       assert Repo.get!(Appointment, req.id).status == "requested"
 
       html_cfg =
-        render_change(view, "update_approval_config", %{
+        render_change(settings_view, "update_approval_config", %{
           "approval_mode" => "automatic",
           "secretary_approval_mode" => "confirmed"
         })
@@ -717,6 +744,13 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # Las solicitudes previas permanecen intactas en requested y siguen ocupando sus horarios
       assert Repo.get!(Appointment, pending_pat.id).status == "requested"
       assert Repo.get!(Appointment, pending_sec.id).status == "requested"
+
+      {:ok, prof_view, _} =
+        live(
+          internal_conn(ctx.conn, ctx.prof_owner.token),
+          ~p"/profesional/solicitudes?date=#{Date.to_iso8601(date)}"
+        )
+
       assert has_element?(prof_view, "#appointment-#{pending_pat.id}", "Solicitado")
       assert has_element?(prof_view, "#appointment-#{pending_sec.id}", "Solicitado")
       assert has_element?(prof_view, "#accept-request-#{pending_pat.id}")

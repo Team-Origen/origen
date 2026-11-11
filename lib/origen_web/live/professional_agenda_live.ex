@@ -181,64 +181,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   end
 
   @impl true
-  def handle_event("accept_request", %{"id" => id_str}, socket) do
-    case parse_appointment_id(id_str) do
-      {:ok, appt_id} ->
-        actor = socket.assigns.current_internal_session
-
-        case Booking.accept_request(actor, appt_id) do
-          {:ok, _updated} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Solicitud aceptada y turno confirmado.")
-             |> load_agenda(socket.assigns.date)
-             |> load_history()}
-
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, resolution_error_message(reason))
-             |> load_agenda(socket.assigns.date)}
-        end
-
-      :error ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "El identificador del turno no es válido.")
-         |> load_agenda(socket.assigns.date)}
-    end
-  end
-
-  @impl true
-  def handle_event("reject_request", %{"id" => id_str}, socket) do
-    case parse_appointment_id(id_str) do
-      {:ok, appt_id} ->
-        actor = socket.assigns.current_internal_session
-
-        case Booking.reject_request(actor, appt_id) do
-          {:ok, _updated} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Solicitud rechazada y horario liberado.")
-             |> load_agenda(socket.assigns.date)
-             |> load_history()}
-
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> put_flash(:error, resolution_error_message(reason))
-             |> load_agenda(socket.assigns.date)}
-        end
-
-      :error ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "El identificador del turno no es válido.")
-         |> load_agenda(socket.assigns.date)}
-    end
-  end
-
-  @impl true
   def handle_event("open_cancellation", %{"appointment_id" => id_str}, socket) do
     case parse_appointment_id(id_str) do
       {:ok, appointment_id} ->
@@ -735,31 +677,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       • {appt.duration_minutes} min
                     </span>
                   </p>
-
-                  <div
-                    :if={to_string(appt.status) == "requested"}
-                    id={"request-actions-#{appt.id}"}
-                    class="pt-2 flex items-center gap-2"
-                  >
-                    <button
-                      type="button"
-                      id={"accept-request-#{appt.id}"}
-                      phx-click="accept_request"
-                      phx-value-id={appt.id}
-                      class="px-2.5 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm transition"
-                    >
-                      Aceptar
-                    </button>
-                    <button
-                      type="button"
-                      id={"reject-request-#{appt.id}"}
-                      phx-click="reject_request"
-                      phx-value-id={appt.id}
-                      class="px-2.5 py-1 text-xs font-semibold rounded border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 shadow-sm transition"
-                    >
-                      Rechazar
-                    </button>
-                  </div>
 
                   <div
                     :if={to_string(appt.status) in @lifecycle_statuses}

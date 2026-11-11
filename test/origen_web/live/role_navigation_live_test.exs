@@ -19,6 +19,7 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
     for {path, active} <- [
           {"/profesional/agenda?date=2026-11-09", "agenda"},
           {"/profesional/agenda/crear", "agenda"},
+          {"/profesional/solicitudes", "requests"},
           {"/profesional/ajustes", "settings"},
           {"/profesional/ajustes/perfil", "settings"}
         ] do
@@ -27,7 +28,7 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
       assert has_element?(view, "#role-navigation a[href='/profesional/agenda']", "Agenda")
       assert has_element?(view, "#role-navigation a[href='/profesional/ajustes']", "Ajustes")
       assert has_element?(view, "#nav-#{active}[aria-current='page']")
-      assert has_element?(view, "#nav-requests[phx-click]", "Solicitudes")
+      assert has_element?(view, "#nav-requests[href='/profesional/solicitudes']", "Solicitudes")
 
       assert has_element?(
                view,
@@ -35,7 +36,7 @@ defmodule OrigenWeb.RoleNavigationLiveTest do
                "Resumen económico"
              )
 
-      refute has_element?(view, "#role-navigation a[href*='solicitudes']")
+      refute has_element?(view, "#nav-patients")
 
       assert has_element?(
                view,
