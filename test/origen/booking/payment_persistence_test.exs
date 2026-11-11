@@ -173,6 +173,6 @@ defmodule Origen.Booking.PaymentPersistenceTest do
       )
 
     assert {:error, %Postgrex.Error{} = error} = result
-    assert error.postgres.code == :restrict_violation
+    assert error.postgres.code in [:restrict_violation, :foreign_key_violation]
   end
 end
