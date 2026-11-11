@@ -105,6 +105,16 @@ defmodule OrigenWeb.InternalSessionHTML do
                   </.button>
                 </div>
               </form>
+
+              <div class="text-center">
+                <.link
+                  id="patient-access-link"
+                  href={~p"/paciente/acceso"}
+                  class="inline-block rounded-md px-2 py-2 text-sm font-medium text-text-muted underline underline-offset-4 hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  Acceder como paciente
+                </.link>
+              </div>
             </.card_content>
           </.card>
         </div>

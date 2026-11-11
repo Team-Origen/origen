@@ -16,6 +16,11 @@ defmodule OrigenWeb.InternalSessionControllerTest do
     body = html_response(conn, 200)
     document = LazyHTML.from_document(body)
 
+    patient_link = LazyHTML.query(document, ~s(a#patient-access-link[href="/paciente/acceso"]))
+    assert LazyHTML.text(patient_link) =~ "Acceder como paciente"
+    assert LazyHTML.attribute(patient_link, "data-phx-link") == []
+    assert Enum.empty?(LazyHTML.query(document, "#internal-login-form #patient-access-link"))
+
     assert body =~ "Origen - Gestión de turnos"
     assert body =~ "Iniciar sesión"
     assert body =~ ~s(src="/images/origen-logo-primary.png")

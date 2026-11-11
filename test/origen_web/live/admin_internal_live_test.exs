@@ -188,6 +188,64 @@ defmodule OrigenWeb.AdminInternalLiveTest do
       assert html =~ "Profesional"
     end
 
+    test "creation presents the existing invitation with client-only copy and safe open controls",
+         %{conn: conn} do
+      admin = insert_active_account("administrator")
+      conn = put_user_in_session(conn, admin)
+      {:ok, view, _html} = live(conn, ~p"/administrador/cuentas")
+      refute has_element?(view, "#created-invitation-link")
+
+      html =
+        view
+        |> form("#admin-internal-form",
+          form: %{role: "professional", email: "invite@example.test"}
+        )
+        |> render_submit()
+
+      document = LazyHTML.from_document(html)
+      [url] = LazyHTML.query(document, "#created-invitation-url") |> LazyHTML.attribute("value")
+      uri = URI.parse(url)
+      assert uri.path == "/activar"
+      assert is_nil(uri.query)
+      assert uri.host == URI.parse(OrigenWeb.Endpoint.url()).host
+      fragment = URI.decode_query(uri.fragment)
+      assert Map.keys(fragment) |> Enum.sort() == ["invitation_id", "token"]
+      {invitation_id, ""} = Integer.parse(fragment["invitation_id"])
+
+      assert {:ok, binding} =
+               Origen.Accounts.prepare_internal_account_activation(
+                 invitation_id,
+                 fragment["token"],
+                 verifier_key: @default_verifier_key
+               )
+
+      assert has_element?(
+               view,
+               "#created-invitation-link[target='_blank'][rel='noopener noreferrer']",
+               "Abrir invitación"
+             )
+
+      assert has_element?(view, "#copy-created-invitation[type='button']", "Copiar enlace")
+      refute has_element?(view, "#copy-created-invitation[phx-click]")
+      assert has_element?(view, "#created-invitation-url[readonly]")
+
+      {:ok, before_accounts} = Origen.Accounts.list_internal_accounts(admin.id)
+      render(view)
+      {:ok, after_accounts} = Origen.Accounts.list_internal_accounts(admin.id)
+      assert before_accounts == after_accounts
+      assert Enum.count(after_accounts, &(&1.email == "invite@example.test")) == 1
+
+      assert {:ok, ^binding} =
+               Origen.Accounts.prepare_internal_account_activation(
+                 invitation_id,
+                 fragment["token"],
+                 verifier_key: @default_verifier_key
+               )
+
+      {:ok, fresh_view, _html} = live(conn, ~p"/administrador/cuentas")
+      refute has_element?(fresh_view, "#created-invitation-url")
+    end
+
     test "shows success result when administrator creates secretary account", %{conn: conn} do
       admin = insert_active_account("administrator")
       conn = put_user_in_session(conn, admin)
