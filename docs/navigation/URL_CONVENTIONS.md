@@ -52,6 +52,7 @@ No se define una sección independiente de pagos del Paciente: la beta permite c
 | --- | --- | --- |
 | `/profesional/agenda` | `/profesional/agenda` | Conservar, incluido `?date=AAAA-MM-DD`. |
 | `/profesional/agenda/crear` | `/profesional/agenda/crear` | Conservar el recorrido real de reserva. El modo demo opcional no convierte esta ruta en un borrador exclusivo. |
+| Sin ruta actual (#472) | `/profesional/solicitudes` | Listado general de solicitudes pendientes del Profesional autenticado, reutilizando tarjetas y acciones; orden por fecha/hora ascendente y fecha/hora visible. Sin filtro diario ni controles de fecha; un `date` heredado no limita el listado. Agenda conserva su propio `?date=AAAA-MM-DD`. |
 | `/configuracion/profesional` | `/profesional/ajustes` | Migrar sin dividir las configuraciones actuales en nuevas pantallas. |
 | `/configuracion/profesional/perfil` | `/profesional/ajustes/perfil` | Migrar; Mi perfil continúa dentro de Ajustes. |
 | Sin ruta actual | `/profesional/resumen-economico` | Ubicación prevista para #288, limitada al resumen propio. |
@@ -85,6 +86,7 @@ Administrador no recibe acceso a pacientes, agendas, pagos, resumen económico n
 | `GET /` | `/` | Conservar. Hoy funciona como portal de Paciente; el destino del logo y el comportamiento de inicio por rol se acordarán con navegación. |
 | `GET /login`, `POST /login` | Sin cambio | Excepción explícita para ingreso interno. |
 | `POST /logout` | Sin cambio | Excepción explícita: reutilizar el cierre de sesión interno existente y retorno a `/login`. No convertirlo en GET ni equipararlo al flujo de Paciente. |
+| `POST /paciente/cerrar-sesion` | Endpoint de salida del Paciente (#371) | Protegido por CSRF. Elimina la autenticación del Paciente en el navegador actual, renueva la cookie y vuelve a `/paciente/acceso`, sin terminar una sesión interna coexistente. No es una pantalla ni admite GET. |
 | `GET /activate`, `POST /activate` | `/activar` | Destino en español para el mismo flujo de invitación. |
 | `POST /activate/exchange` | `/activar/intercambiar` | Paso técnico del mismo flujo, no una pantalla de menú. |
 | `GET /admin/activate`, `POST /admin/activate` | `/administrador/activar` | Destino en español para la activación especial del Administrador inicial. |
@@ -96,7 +98,7 @@ La traducción de activación no permite cambiar su autenticación, tokens ni pr
 
 - Actualizar rutas, enlaces, formularios y redirecciones afectados de manera conjunta.
 - Para páginas GET ordinarias renombradas, mantener la URL anterior como entrada compatible que redirige al destino acordado, preservando los parámetros existentes que use el recorrido. No crear pantallas duplicadas.
-- En magic links y activaciones, mantener la aceptación de enlaces e invitaciones anteriores mediante el manejo existente. No redirigir indiscriminadamente credenciales ni solicitudes POST. El mecanismo concreto de compatibilidad se resolverá en #370 antes de modificar estos endpoints.
+- En magic links y activaciones, mantener la aceptación de enlaces e invitaciones anteriores mediante el manejo existente. No redirigir indiscriminadamente credenciales ni solicitudes POST. El mecanismo implementado en #370 se detalla en «Implementación de la migración»: los endpoints anteriores conservan handlers directos.
 - Conservar sin cambio las rutas ya consistentes y el parámetro `date` de Agenda.
 - No agregar filtros a la URL cuando actualmente viven en el estado de la pantalla; no cambiar cómo funcionan al recargar o usar Atrás/Adelante. Para rutas migradas, preservar el comportamiento existente de acceso directo y navegación del navegador.
 - Conservar la denegación de la antigua ruta de autoedición de perfil del Paciente; no convertirla en una pantalla accesible.
@@ -111,9 +113,35 @@ Pendientes explícitos:
 
 - Lugar de la verificación telefónica existente en el recorrido beta; no resolverlo imponiendo requisitos históricos.
 - Diseño de las pantallas nuevas, filtros que realmente necesiten y acceso a la creación asistida desde Agenda de Secretaría.
-- Mecanismo de compatibilidad de magic links y activación antes de implementar sus cambios.
+- Compatibilidad de magic links y activación: resuelta en la implementación de #370 mediante handlers directos para los endpoints anteriores (ver sección siguiente).
 - La pantalla actual `/admin/internal` contempla Secretaría en `allowed_roles_for`, mientras la beta asigna gestión de cuentas al Administrador. Registrar esta discrepancia no autoriza corregir permisos en la migración ni reproducirla como permiso aprobado.
 - Navbars: entradas, orden, sección activa, destinos de logo/nombre y ubicación de cierre de sesión se definirán en la siguiente sección de planificación. No están acordados por este inventario.
+
+## Implementación de la migración (#370)
+
+Las rutas existentes del inventario cuentan con sus destinos canónicos en español. La verificación telefónica conserva su recorrido actual en `/paciente/telefono/verificar`, sin incorporarse como requisito nuevo de reserva. Los destinos sin pantalla actual siguen siendo planificación.
+
+- Las entradas GET antiguas de acceso, reserva, teléfono, cuentas y ajustes redirigen al destino canónico conservando la cadena de consulta. Ajustes conserva sus controles de sesión y rol antes de la redirección.
+- `/access/verify` sigue consumiendo directamente el magic link mediante el mismo controlador que `/paciente/acceso/verificar`: no hay redirección intermedia del token. Los correos nuevos usan el destino canónico.
+- Las rutas anteriores de activación conservan sus handlers GET y POST, incluidos los intercambios. Los formularios y pasos siguientes utilizan `/activar` y `/administrador/activar`, con sus respectivos endpoints `/intercambiar`. No se redirigen cuerpos POST ni se cambia el mecanismo de credenciales en fragmentos.
+- La configuración de origen de la invitación inicial admite tanto el path anterior exacto como el nuevo, con las mismas restricciones de host, entorno y HTTPS. Normaliza la emisión de invitaciones nuevas a `/administrador/activar`; no exige cambiar de inmediato una configuración existente.
+- `/patient/profile/complete` permanece denegada. Login, logout, Agenda, `date`, Secretaría y endpoints técnicos no cambian.
+
+Las decisiones visuales e inicios por rol registrados en `NAVIGATION_DECISIONS.md` siguen separados de esta migración y no se implementan aquí.
+
+### Verificación
+
+- RED inicial: las ocho pruebas nuevas de migración fallaron antes de modificar las rutas.
+- Suite completa sobre una base de pruebas aislada (`MIX_TEST_PARTITION=_issue370_verify`): 929 pruebas aprobadas, 32 omitidas y 8 excluidas; salida 0.
+- Verificación independiente: controles de sesión/rol, preservación exacta de consultas, handlers de compatibilidad y validadores de origen aprobados.
+- La base local preexistente produjo errores de preparación por la FK `agenda_settings_owner_account_id_fkey`; no se borraron ni corrigieron sus datos para hacer pasar las pruebas.
+- Acceso directo, guards de LiveView y recarga de activación se comprobaron mediante pruebas automatizadas. Atrás/Adelante y recarga en navegador real no se verificaron; no se presentan como evidencia completada.
+
+## Cuenta e ingreso del Paciente (#371)
+
+Después de consumir correctamente un magic link, tanto `/paciente/acceso/verificar` como su entrada compatible `/access/verify` llevan a `/paciente/turnos/reservar`. No se implementa `/paciente/turnos` para completar esta navegación: Mis turnos sigue pendiente y su botón sólo muestra el aviso acordado.
+
+La navbar muestra nombre, apellido y correo del perfil autenticado, sin DNI ni teléfono. Si el perfil aún no tiene nombre registrado, muestra «Paciente», sin inventar datos ni habilitar autoedición. La salida usa `POST /paciente/cerrar-sesion`, no el endpoint interno. El alcance de esta salida es la cookie del navegador actual: no agrega revocación global, revocación de copias previas de cookies ni desconexión de LiveViews que ya estuvieran abiertos en otras pestañas. Esas capacidades no existen en el mecanismo actual de sesión del Paciente.
 
 ## Fuentes y trazabilidad
 

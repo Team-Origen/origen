@@ -11,7 +11,7 @@ defmodule Origen.Booking.Appointment do
 
   @type t :: %__MODULE__{}
 
-  @statuses ~w(requested reserved confirmed attended cancelled no_show)
+  @statuses ~w(requested reserved confirmed expired attended cancelled no_show)
 
   @primary_key {:id, :id, autogenerate: true}
   schema "appointments" do
@@ -21,11 +21,15 @@ defmodule Origen.Booking.Appointment do
     field :start_time, :utc_datetime_usec
     field :end_time, :utc_datetime_usec
     field :status, :string, default: "reserved"
+    field :cancellation_origin, :string
+    field :cancellation_reason, :string
 
     # Snapshots históricos inmutables (#63)
     field :snapshot_consultation_type_name, :string
     field :snapshot_duration_minutes, :integer
     field :snapshot_exact_price_ars, :decimal
+    # Final price is server-managed and intentionally excluded from changeset/2.
+    field :final_price_ars, :decimal, read_after_writes: true
 
     timestamps(inserted_at: :created_at, updated_at: :updated_at, type: :utc_datetime_usec)
   end
@@ -42,6 +46,8 @@ defmodule Origen.Booking.Appointment do
       :start_time,
       :end_time,
       :status,
+      :cancellation_origin,
+      :cancellation_reason,
       :snapshot_consultation_type_name,
       :snapshot_duration_minutes,
       :snapshot_exact_price_ars

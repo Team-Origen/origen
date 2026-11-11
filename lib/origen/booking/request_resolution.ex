@@ -15,7 +15,10 @@ defmodule Origen.Booking.RequestResolution do
 
   alias Ecto.Adapters.SQL
   alias Origen.Booking.Appointment
+  alias Origen.Booking.Expiry
   alias Origen.Repo
+  alias Origen.Sessions
+  alias Origen.Sessions.InternalSession
 
   @resolution_audit_insert """
   INSERT INTO public.audit_events
@@ -30,32 +33,48 @@ defmodule Origen.Booking.RequestResolution do
   profesional o inactivo siempre recibe `{:error, :unauthorized}`, incluso ante
   IDs inexistentes, sin revelar la existencia de turnos ajenos (oráculo IDOR).
   """
-  @spec accept_request(integer(), integer()) ::
+  @spec accept_request(integer() | map() | InternalSession.t(), integer(), keyword()) ::
           {:ok, Appointment.t()} | {:error, term()}
-  def accept_request(actor_account_id, appointment_id)
-      when is_integer(actor_account_id) and is_integer(appointment_id) do
-    with :ok <- ensure_active_professional(actor_account_id) do
-      resolve_request(actor_account_id, appointment_id, "confirmed", "appointment_confirmed")
+  def accept_request(actor, appointment_id, opts \\ [])
+
+  def accept_request(actor, appointment_id, opts)
+      when is_integer(appointment_id) and is_list(opts) do
+    with {:ok, actor_account_id} <- resolve_active_professional(actor) do
+      resolve_request(
+        actor_account_id,
+        appointment_id,
+        "confirmed",
+        "appointment_confirmed",
+        opts
+      )
     end
   end
 
-  def accept_request(_invalid_actor, _invalid_appt), do: {:error, :unauthorized}
+  def accept_request(_invalid_actor, _invalid_appt, _opts), do: {:error, :unauthorized}
 
   @doc """
   Rechaza una solicitud de turno pendiente, liberando el slot. Exclusivo del profesional dueño.
 
   La validación del actor precede a cualquier consulta del turno (ver `accept_request/2`).
   """
-  @spec reject_request(integer(), integer()) ::
+  @spec reject_request(integer() | map() | InternalSession.t(), integer(), keyword()) ::
           {:ok, Appointment.t()} | {:error, term()}
-  def reject_request(actor_account_id, appointment_id)
-      when is_integer(actor_account_id) and is_integer(appointment_id) do
-    with :ok <- ensure_active_professional(actor_account_id) do
-      resolve_request(actor_account_id, appointment_id, "cancelled", "appointment_cancelled")
+  def reject_request(actor, appointment_id, opts \\ [])
+
+  def reject_request(actor, appointment_id, opts)
+      when is_integer(appointment_id) and is_list(opts) do
+    with {:ok, actor_account_id} <- resolve_active_professional(actor) do
+      resolve_request(
+        actor_account_id,
+        appointment_id,
+        "cancelled",
+        "appointment_cancelled",
+        opts
+      )
     end
   end
 
-  def reject_request(_invalid_actor, _invalid_appt), do: {:error, :unauthorized}
+  def reject_request(_invalid_actor, _invalid_appt, _opts), do: {:error, :unauthorized}
 
   @doc """
   Consulta la configuración de aprobación de un profesional.
@@ -100,11 +119,11 @@ defmodule Origen.Booking.RequestResolution do
   valor inválido produce `{:error, :invalid_approval_mode}` o
   `{:error, :invalid_secretary_approval_mode}`.
   """
-  @spec update_approval_configuration(integer(), map()) ::
+  @spec update_approval_configuration(integer() | map() | InternalSession.t(), map()) ::
           {:ok, map()} | {:error, term()}
-  def update_approval_configuration(professional_account_id, attrs)
-      when is_integer(professional_account_id) and is_map(attrs) do
-    with :ok <- ensure_active_professional(professional_account_id),
+  def update_approval_configuration(professional_actor, attrs)
+      when is_map(attrs) do
+    with {:ok, professional_account_id} <- resolve_active_professional(professional_actor),
          {:ok, app_mode} <- validate_optional_approval_mode(attrs),
          {:ok, sec_mode} <- validate_optional_secretary_mode(attrs) do
       query = """
@@ -140,30 +159,51 @@ defmodule Origen.Booking.RequestResolution do
   # TOCTOU) y emite el evento de auditoría append-only minimizado en la misma
   # transacción. Ante cualquier fallo la transacción completa se revierte.
 
-  defp resolve_request(actor_account_id, appointment_id, target_status, audit_event) do
-    Repo.transaction(fn ->
-      appointment = lock_appointment!(appointment_id)
+  defp resolve_request(actor_account_id, appointment_id, target_status, audit_event, opts) do
+    result =
+      Repo.transaction(fn ->
+        appointment = lock_appointment!(appointment_id)
 
-      if appointment.professional_account_id != actor_account_id do
-        Repo.rollback(:unauthorized)
-      end
+        if appointment.professional_account_id != actor_account_id do
+          Repo.rollback(:unauthorized)
+        end
 
-      if appointment.status != "requested" do
-        Repo.rollback(:invalid_status_transition)
-      end
+        now = resolution_now(opts)
 
-      appointment
-      |> Appointment.changeset(%{status: target_status})
-      |> Repo.update()
-      |> case do
-        {:ok, updated} ->
-          :ok = append_resolution_audit_event!(actor_account_id, audit_event, updated)
-          updated
+        if appointment.status == "requested" and
+             DateTime.compare(appointment.start_time, now) != :gt do
+          {:ok, _expired} = Expiry.expire_locked(appointment, now)
+          {:error, :appointment_expired}
+        else
+          if appointment.status != "requested" do
+            Repo.rollback(:invalid_status_transition)
+          end
 
-        {:error, reason} ->
-          Repo.rollback(reason)
-      end
-    end)
+          appointment
+          |> Appointment.changeset(%{status: target_status})
+          |> Repo.update()
+          |> case do
+            {:ok, updated} ->
+              :ok = append_resolution_audit_event!(actor_account_id, audit_event, updated)
+              updated
+
+            {:error, reason} ->
+              Repo.rollback(reason)
+          end
+        end
+      end)
+
+    case result do
+      {:ok, {:error, reason}} -> {:error, reason}
+      other -> other
+    end
+  end
+
+  defp resolution_now(opts) do
+    case Keyword.get(opts, :now) do
+      %DateTime{} = now -> now
+      _default -> DateTime.utc_now()
+    end
   end
 
   defp lock_appointment!(appointment_id) do
@@ -195,6 +235,25 @@ defmodule Origen.Booking.RequestResolution do
   end
 
   # Helpers privados
+
+  defp resolve_active_professional(%InternalSession{id: session_id, account_id: account_id}),
+    do: resolve_active_professional(%{session_id: session_id, account_id: account_id})
+
+  defp resolve_active_professional(%{session_id: session_id, account_id: account_id})
+       when is_integer(session_id) and is_integer(account_id) do
+    case Sessions.revalidate_principal(session_id, account_id) do
+      {:ok, %{account_id: id, role: :professional}} -> {:ok, id}
+      _ -> {:error, :unauthorized}
+    end
+  end
+
+  defp resolve_active_professional(actor_id) when is_integer(actor_id) do
+    with :ok <- ensure_active_professional(actor_id) do
+      {:ok, actor_id}
+    end
+  end
+
+  defp resolve_active_professional(_invalid), do: {:error, :unauthorized}
 
   defp ensure_active_professional(actor_id) do
     query = """

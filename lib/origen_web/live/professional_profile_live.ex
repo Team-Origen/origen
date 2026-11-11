@@ -81,6 +81,11 @@ defmodule OrigenWeb.ProfessionalProfileLive do
          assign(socket,
            profile: profile,
            draft: profile,
+           current_professional_identity:
+             Map.merge(socket.assigns.current_professional_identity || %{}, %{
+               first_name: profile["first_name"],
+               last_name: profile["last_name"]
+             }),
            missing: missing_fields(profile),
            save_error: false,
            saved: true,
@@ -105,6 +110,11 @@ defmodule OrigenWeb.ProfessionalProfileLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:professional}
+      active="settings"
+      professional_identity={@current_professional_identity}
+    />
     <main data-theme="light" class="min-h-screen bg-page py-6 text-text sm:py-10">
       <.container max_width="md">
         <div class="flex flex-col gap-6">
@@ -115,7 +125,7 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             </div>
             <.button
               link_type="a"
-              to="/configuracion/profesional"
+              to="/profesional/ajustes"
               icon="hero-arrow-left"
               color="gray"
               variant="outline"
@@ -132,7 +142,7 @@ defmodule OrigenWeb.ProfessionalProfileLive do
             <strong>No se pudo cargar el perfil.</strong>
             No se muestra información parcial.
             <:actions>
-              <.button id="profile-retry" link_type="a" to="/configuracion/profesional/perfil">
+              <.button id="profile-retry" link_type="a" to="/profesional/ajustes/perfil">
                 Reintentar carga
               </.button>
             </:actions>

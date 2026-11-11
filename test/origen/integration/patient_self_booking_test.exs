@@ -3,6 +3,7 @@ defmodule Origen.Integration.PatientSelfBookingTest do
 
   alias Origen.{Availability, Booking, ConsultationTypes, Patients, Repo, Sessions}
   alias Origen.Appointments.{BookingService, Calendar, DatabaseCalendar}
+  alias Origen.Booking.{Appointment, ProfessionalPatientRelationship}
 
   setup do
     previous = Application.get_env(:origen, :appointments_calendar_adapter)
@@ -93,8 +94,16 @@ defmodule Origen.Integration.PatientSelfBookingTest do
     first = complete_patient!("first-#{ctx.suffix}@example.test", "412#{ctx.suffix}")
     second = complete_patient!("second-#{ctx.suffix}@example.test", "413#{ctx.suffix}")
 
-    assert {:ok, _first_result} =
+    assert {:ok, first_result} =
              BookingService.reserve(first, reservation(ctx, first, date, ~T[11:00:00], now))
+
+    original_appointment = Repo.get!(Appointment, first_result.appointment_id)
+
+    original_relationship =
+      Repo.get_by!(ProfessionalPatientRelationship,
+        professional_account_id: ctx.professional_id,
+        patient_profile_id: first.id
+      )
 
     agenda_before = public_agenda!(ctx, date)
     assert length(agenda_before.appointments) == 1
@@ -119,8 +128,28 @@ defmodule Origen.Integration.PatientSelfBookingTest do
              )
 
     assert Enum.any?(before_schedule.slots, &(&1.start_formatted == "12:00"))
-    assert {:error, :rollback} = BookingService.reserve(first, forged)
-    assert public_agenda!(ctx, date) == agenda_before
+    assert {:ok, forged_result} = BookingService.reserve(first, forged)
+    assert forged_result.appointment.patient_profile_id == first.id
+
+    agenda_after = public_agenda!(ctx, date)
+    assert length(agenda_after.appointments) == 2
+    assert length(agenda_before.appointments) == 1
+    assert Repo.aggregate(Appointment, :count, :id) == 2
+    assert Repo.get!(Appointment, original_appointment.id) == original_appointment
+
+    assert Repo.get!(ProfessionalPatientRelationship, original_relationship.id) ==
+             original_relationship
+
+    assert Repo.get_by!(Appointment,
+             professional_account_id: ctx.professional_id,
+             patient_profile_id: first.id,
+             start_time: DateTime.new!(date, ~T[12:00:00], "Etc/UTC")
+           ).id == forged_result.appointment_id
+
+    refute Repo.get_by(Appointment,
+             professional_account_id: ctx.professional_id,
+             patient_profile_id: second.id
+           )
 
     assert {:ok, related_after} = Booking.list_professional_patients(ctx.principal)
     assert Enum.count(related_after, &(&1.id == first.id)) == 1
@@ -132,7 +161,7 @@ defmodule Origen.Integration.PatientSelfBookingTest do
                now: now
              )
 
-    assert Enum.any?(after_schedule.slots, &(&1.start_formatted == "12:00"))
+    refute Enum.any?(after_schedule.slots, &(&1.start_formatted == "12:00"))
   end
 
   defp reservation(ctx, _profile, date, start_time, now) do

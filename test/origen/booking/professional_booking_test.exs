@@ -102,6 +102,12 @@ defmodule Origen.Booking.ProfessionalBookingTest do
 
   describe "reserve_professional_appointment/3" do
     test "books a related patient in confirmed state and reuses the existing relationship", ctx do
+      original_relationship =
+        Repo.get_by!(ProfessionalPatientRelationship,
+          professional_account_id: ctx.professional.account_id,
+          patient_profile_id: ctx.related_patient
+        )
+
       params =
         booking_params(ctx.related_patient, ctx.consultation_type_id, ~U[2026-10-15 09:00:00Z])
 
@@ -114,6 +120,9 @@ defmodule Origen.Booking.ProfessionalBookingTest do
       assert result.relationship_created? == false
       assert Repo.get!(Appointment, result.appointment_id).status == "confirmed"
       assert relationship_count(ctx.professional.account_id, ctx.related_patient) == 1
+
+      assert Repo.get!(ProfessionalPatientRelationship, original_relationship.id) ==
+               original_relationship
     end
 
     test "books an exact-DNI selected registered patient and creates the relationship atomically",

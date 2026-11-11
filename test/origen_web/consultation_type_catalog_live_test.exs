@@ -3,7 +3,7 @@ defmodule OrigenWeb.ConsultationTypeCatalogLiveTest do
 
   import Phoenix.LiveViewTest
 
-  @professional_configuration_path "/configuracion/profesional"
+  @professional_configuration_path "/profesional/ajustes"
   @expected_types [
     %{
       id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",

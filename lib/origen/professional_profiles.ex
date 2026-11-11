@@ -20,6 +20,21 @@ defmodule Origen.ProfessionalProfiles do
     with_owner(principal, :read_own_profile, &fetch_profile/1)
   end
 
+  @doc "Returns the authenticated Professional's own name and account email for navigation."
+  @spec get_own_identity(map()) :: {:ok, map()} | {:error, :unauthorized | :unavailable}
+  def get_own_identity(principal) do
+    with_owner(principal, :read_own_profile, fn owner_id ->
+      profile = fetch_profile(owner_id) || %{}
+
+      %{rows: [[email]]} =
+        Repo.query!("SELECT email FROM internal_accounts WHERE id = $1", [owner_id])
+
+      profile
+      |> Map.take([:first_name, :last_name])
+      |> Map.put(:email, email)
+    end)
+  end
+
   @doc "Saves a partial patch of the authenticated Professional's declared profile."
   @spec save_own_profile(map(), map()) ::
           {:ok, map()} | {:error, :unauthorized | :unavailable | {:validation, map()}}

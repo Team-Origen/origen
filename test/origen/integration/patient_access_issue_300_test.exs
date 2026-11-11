@@ -87,15 +87,15 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
     refute old_link.token_digest == old_token
 
     # Consume the actual local link through the public HTTP endpoint.
-    old_conn = get(build_conn(), ~p"/access/verify?token=#{old_token}")
-    assert redirected_to(old_conn) == ~p"/"
+    old_conn = get(build_conn(), ~p"/paciente/acceso/verificar?token=#{old_token}")
+    assert redirected_to(old_conn) == ~p"/paciente/turnos/reservar"
     assert get_session(old_conn, :patient_email) == old_email
     old_authenticated_at = get_session(old_conn, :patient_authenticated_at)
     assert {:ok, _old_auth_dt, _offset} = DateTime.from_iso8601(old_authenticated_at)
 
     # A patient session can reach the patient-facing LiveView, but only renders
     # the identity belonging to that session.
-    {:ok, _old_view, old_html} = live(old_conn, ~p"/patient/calendar")
+    {:ok, _old_view, old_html} = live(old_conn, ~p"/paciente/turnos/reservar")
     assert old_html =~ "María López"
     refute old_html =~ "Julián Gómez"
 
@@ -148,14 +148,14 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
     assert {:error, :session_invalidated} =
              Patients.verify_patient_session(new_email, old_authenticated_at)
 
-    assert {:error, {:redirect, %{to: "/access"}}} =
-             live(old_conn, ~p"/patient/calendar")
+    assert {:error, {:redirect, %{to: "/paciente/acceso"}}} =
+             live(old_conn, ~p"/paciente/turnos/reservar")
 
     # Replacement dispatches a new real local Magic Link, which creates a fresh
     # session through the same public endpoint.
     new_token = receive_magic_token!(new_email)
-    new_conn = get(build_conn(), ~p"/access/verify?token=#{new_token}")
-    assert redirected_to(new_conn) == ~p"/"
+    new_conn = get(build_conn(), ~p"/paciente/acceso/verificar?token=#{new_token}")
+    assert redirected_to(new_conn) == ~p"/paciente/turnos/reservar"
     assert get_session(new_conn, :patient_email) == new_email
     new_authenticated_at = get_session(new_conn, :patient_authenticated_at)
     assert {:ok, _new_auth_dt, _offset} = DateTime.from_iso8601(new_authenticated_at)
@@ -163,7 +163,7 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
     assert {:ok, _verified_profile} =
              Patients.verify_patient_session(new_email, new_authenticated_at)
 
-    {:ok, _new_view, new_html} = live(new_conn, ~p"/patient/calendar")
+    {:ok, _new_view, new_html} = live(new_conn, ~p"/paciente/turnos/reservar")
     assert new_html =~ "María López"
     refute new_html =~ "Julián Gómez"
 
@@ -187,12 +187,12 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
     assert Repo.get!(PatientProfile, profile.id).email == new_email
     refute_receive {:email, _email}, 100
 
-    # The public /access response is opaque for an unknown email and does not
+    # The public /paciente/acceso response is opaque for an unknown email and does not
     # create a Magic Link or deliver a message.
     unknown_email = "unknown-#{suffix}@example.test"
     before_unknown_links = Repo.aggregate(MagicLink, :count)
 
-    {:ok, access_view, _access_html} = live(build_conn(), ~p"/access")
+    {:ok, access_view, _access_html} = live(build_conn(), ~p"/paciente/acceso")
 
     unknown_html =
       access_view
@@ -231,7 +231,13 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
              &(&1.event == "magic_link_consumed" and &1.result == "succeeded")
            )
 
-    sensitive_values = [old_token, pending_old_token, new_token, reason, "/access/verify?token="]
+    sensitive_values = [
+      old_token,
+      pending_old_token,
+      new_token,
+      reason,
+      "/paciente/acceso/verificar?token="
+    ]
 
     for row <- audit_rows do
       serialized = inspect(row)
@@ -251,7 +257,10 @@ defmodule Origen.Integration.PatientAccessIssue300Test do
     receive do
       {:email, email} ->
         assert email.to == [{"", recipient}]
-        [_, encoded_token] = Regex.run(~r{/access/verify\?token=([^"&]+)}, email.html_body)
+
+        [_, encoded_token] =
+          Regex.run(~r{/paciente/acceso/verificar\?token=([^"&]+)}, email.html_body)
+
         URI.decode_www_form(encoded_token)
     after
       1_000 -> flunk("Expected a local Magic Link email for #{recipient}")

@@ -16,7 +16,7 @@ defmodule OrigenWeb.InternalSessionController do
 
   def create(conn, params) do
     with :ok <- require_tls(conn),
-         {:ok, %{token: token}} <-
+         {:ok, %{token: token, session: %{role: role}}} <-
            Accounts.authenticate_internal_account(
              Map.get(params, "identifier"),
              Map.get(params, "password"),
@@ -28,7 +28,7 @@ defmodule OrigenWeb.InternalSessionController do
       |> clear_session()
       |> put_session(@session_key, token)
       |> secure_headers()
-      |> redirect(to: ~p"/")
+      |> redirect(to: landing_path(role))
     else
       {:error, :tls_required} -> unavailable(conn)
       _unauthenticated -> invalid_credentials(conn)
@@ -50,6 +50,10 @@ defmodule OrigenWeb.InternalSessionController do
       _denied -> unavailable(conn)
     end
   end
+
+  defp landing_path(:professional), do: ~p"/profesional/agenda"
+  defp landing_path(:secretary), do: ~p"/secretaria/pacientes"
+  defp landing_path(:administrator), do: ~p"/administrador/cuentas"
 
   defp render_login(conn, error) do
     conn

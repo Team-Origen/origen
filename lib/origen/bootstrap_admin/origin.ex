@@ -13,7 +13,7 @@ defmodule Origen.BootstrapAdmin.Origin do
     with :ok <- staging(environment),
          {:ok, uri} <- parse(value),
          :ok <- approved_host(uri.host, hosts) do
-      {:ok, %__MODULE__{uri: uri}}
+      {:ok, %__MODULE__{uri: %{uri | path: "/administrador/activar"}}}
     end
   end
 
@@ -30,7 +30,8 @@ defmodule Origen.BootstrapAdmin.Origin do
 
     if uri.scheme == "https" and is_binary(uri.host) and uri.host != "" and
          uri.port in [nil, 443] and is_nil(uri.userinfo) and is_nil(uri.query) and
-         is_nil(uri.fragment) and uri.path == "/admin/activate" and safe_raw?(value),
+         is_nil(uri.fragment) and uri.path in ["/administrador/activar", "/admin/activate"] and
+         safe_raw?(value),
        do: {:ok, uri},
        else: {:error, :invalid_origin}
   rescue

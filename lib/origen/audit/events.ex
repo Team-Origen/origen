@@ -10,7 +10,7 @@ defmodule Origen.Audit.Events do
     :secretary,
     :patient
   ]
-  @entity_kinds [:account, :invitation, :patient, :audit_event]
+  @entity_kinds [:account, :invitation, :patient, :appointment, :audit_event]
   @marker {__MODULE__, :constructed}
 
   @opaque t :: %__MODULE__{
@@ -72,6 +72,15 @@ defmodule Origen.Audit.Events do
   def internal_login_succeeded(actor, ref) when is_binary(ref),
     do: lifecycle(actor, "internal_login", ref, "succeeded")
 
+  def internal_account_updated(actor, ref),
+    do: lifecycle(actor, "internal_account_updated", ref, "succeeded")
+
+  def internal_account_deactivated(actor, ref),
+    do: lifecycle(actor, "internal_account_deactivated", ref, "succeeded")
+
+  def internal_account_reactivated(actor, ref),
+    do: lifecycle(actor, "internal_account_reactivated", ref, "succeeded")
+
   def internal_login_failed(actor, ref) when is_binary(ref),
     do: lifecycle(actor, "internal_login", ref, "failed")
 
@@ -122,6 +131,12 @@ defmodule Origen.Audit.Events do
 
   def availability_configuration_replaced(actor, ref) when is_binary(ref),
     do: build(actor, "availability_configuration_replaced", {:account, ref}, "succeeded")
+
+  def payment_registered(actor, ref) when is_binary(ref),
+    do: build(actor, "appointment_payment_registered", {:appointment, ref}, "succeeded")
+
+  def payment_reverted(actor, ref) when is_binary(ref),
+    do: build(actor, "appointment_payment_reverted", {:appointment, ref}, "succeeded")
 
   @spec agenda_interval_changed(term(), String.t()) :: {:ok, t()} | {:error, :invalid_event}
   def agenda_interval_changed(actor, ref) when is_binary(ref),

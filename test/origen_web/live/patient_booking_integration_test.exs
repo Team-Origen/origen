@@ -60,7 +60,7 @@ defmodule OrigenWeb.PatientBookingIntegrationTest do
     conn = authenticated_conn!(email)
 
     booking_date = next_weekday(Date.utc_today(), 2)
-    {:ok, view, html} = live(conn, ~p"/patient/calendar")
+    {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
     assert html =~ "Calendario de Reservas"
     assert html =~ "Sofía Martínez"
@@ -123,7 +123,7 @@ defmodule OrigenWeb.PatientBookingIntegrationTest do
     conn = authenticated_conn!(email)
     booking_date = Date.add(Date.utc_today(), 1)
 
-    {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+    {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
     render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
     {:ok, schedule} =
@@ -166,7 +166,7 @@ defmodule OrigenWeb.PatientBookingIntegrationTest do
     conn = authenticated_conn!(first.email)
     booking_date = next_weekday(Date.utc_today(), 3)
 
-    {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+    {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
     render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
     {:ok, schedule} =
@@ -205,8 +205,8 @@ defmodule OrigenWeb.PatientBookingIntegrationTest do
   defp authenticated_conn!(email) do
     assert {:ok, :delivered} = PatientAccess.request_magic_link(email)
     token = receive_magic_token!(email)
-    conn = get(build_conn(), ~p"/access/verify?token=#{token}")
-    assert redirected_to(conn) == ~p"/"
+    conn = get(build_conn(), ~p"/paciente/acceso/verificar?token=#{token}")
+    assert redirected_to(conn) == ~p"/paciente/turnos/reservar"
     assert get_session(conn, :patient_email) == email
     conn
   end
@@ -215,7 +215,7 @@ defmodule OrigenWeb.PatientBookingIntegrationTest do
     receive do
       {:email, email} ->
         assert email.to == [{"", recipient}]
-        [_, encoded] = Regex.run(~r{/access/verify\?token=([^"&]+)}, email.html_body)
+        [_, encoded] = Regex.run(~r{/paciente/acceso/verificar\?token=([^"&]+)}, email.html_body)
         URI.decode_www_form(encoded)
     after
       1_000 -> flunk("Expected a local Magic Link email for #{recipient}")

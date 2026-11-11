@@ -10,7 +10,7 @@ defmodule Origen.BootstrapAdmin.InvitationEmailTest do
     from = "security@example.test"
 
     {:ok, origin} =
-      Origin.validate("https://approved-host/admin/activate", %{
+      Origin.validate("https://approved-host/administrador/activar", %{
         environment: :staging,
         approved_hosts: ["approved-host"]
       })
@@ -24,7 +24,7 @@ defmodule Origen.BootstrapAdmin.InvitationEmailTest do
              )
 
     encoded_link =
-      "https://approved-host/admin/activate#invitation_id=invitation%2F42&token=tok%2B%2F%3D%3F%20secret"
+      "https://approved-host/administrador/activar#invitation_id=invitation%2F42&token=tok%2B%2F%3D%3F%20secret"
 
     assert email.to == [{"", destination}]
     assert email.from == {"", from}
@@ -42,14 +42,14 @@ defmodule Origen.BootstrapAdmin.InvitationEmailTest do
              ~s(<p>Activate the approved staging administrator invitation:</p><p><a href="#{encoded_link}">Activate invitation</a></p>)
 
     server_visible = URI.parse(encoded_link)
-    assert server_visible.path == "/admin/activate"
+    assert server_visible.path == "/administrador/activar"
     assert server_visible.query == nil
     refute inspect(Map.take(email, [:headers, :private, :assigns])) =~ token
   end
 
   test "rejects malformed invitation values with a constant safe error" do
     {:ok, origin} =
-      Origin.validate("https://approved-host/admin/activate", %{
+      Origin.validate("https://approved-host/administrador/activar", %{
         environment: :staging,
         approved_hosts: ["approved-host"]
       })

@@ -456,6 +456,11 @@ defmodule OrigenWeb.ProfessionalPatientSelectionLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <OrigenWeb.RoleNavigation.navbar
+      role={:professional}
+      active="agenda"
+      professional_identity={@current_professional_identity}
+    />
     <main class="min-h-screen bg-[#F6F6F4] px-4 py-8 sm:px-6">
       <div class="mx-auto max-w-3xl space-y-6">
         <aside

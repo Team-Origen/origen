@@ -4,7 +4,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
   import Phoenix.LiveViewTest
   alias Origen.{ProfessionalProfiles, Sessions}
 
-  @path "/configuracion/profesional/perfil"
+  @path "/profesional/ajustes/perfil"
   @fields ~w(first_name last_name specialty license_type license_number)
   @complete %{
     "first_name" => "Ana",
@@ -41,7 +41,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
   test "settings loads the owner's empty real profile without replacing existing settings", %{
     conn: conn
   } do
-    {:ok, view, _} = live(conn, "/configuracion/profesional?scenario=complete")
+    {:ok, view, _} = live(conn, "/profesional/ajustes?scenario=complete")
     refute has_element?(view, "#professional-profile-entry", "Datos simulados")
     assert has_element?(view, ~s|a[href="#{@path}"]|, "Ver perfil")
     assert has_element?(view, "#profile-patient-name", "Nombre y apellido pendientes")
@@ -57,7 +57,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
          principal: principal
        } do
     assert {:ok, _} = ProfessionalProfiles.save_own_profile(principal, @complete)
-    {:ok, view, _} = live(conn, "/configuracion/profesional?scenario=empty")
+    {:ok, view, _} = live(conn, "/profesional/ajustes?scenario=empty")
     assert has_element?(view, "#profile-patient-preview", "Ana Pérez")
     assert has_element?(view, "#profile-summary-details", "Clínica")
 
@@ -81,7 +81,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
   test "partial profile remains editable and lists missing requirements without exposing credentials",
        %{conn: conn, principal: principal} do
     assert {:ok, _} = ProfessionalProfiles.save_own_profile(principal, %{"first_name" => "Ana"})
-    {:ok, view, _} = live(conn, "/configuracion/profesional")
+    {:ok, view, _} = live(conn, "/profesional/ajustes")
     assert has_element?(view, "#profile-patient-name", "Ana")
     assert has_element?(view, "#profile-entry-status", "Perfil incompleto")
 
@@ -97,7 +97,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
     conn: conn
   } do
     Application.put_env(:origen, :professional_profiles_context, UnavailableProfiles)
-    {:ok, view, _} = live(conn, "/configuracion/profesional")
+    {:ok, view, _} = live(conn, "/profesional/ajustes")
     assert has_element?(view, "#profile-entry-error[role=alert]", "No se pudo cargar")
     refute has_element?(view, "#profile-patient-preview")
     refute has_element?(view, "#profile-entry-action")
@@ -141,7 +141,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
     assert has_element?(view, "#profile-photo", "opcional")
     refute has_element?(view, ~s|input[type="file"]|)
     refute has_element?(view, "select[name='profile[license_type]']")
-    assert has_element?(view, ~s|a[href="/configuracion/profesional"]|, "Volver a Ajustes")
+    assert has_element?(view, ~s|a[href="/profesional/ajustes"]|, "Volver a Ajustes")
   end
 
   test "partial saves persist and completeness follows stored values rather than draft", %{
@@ -332,7 +332,7 @@ defmodule OrigenWeb.ProfessionalProfileLiveTest do
     refute has_element?(view, "#profile-edit", "Editar perfil")
     assert {:ok, partial} = ProfessionalProfiles.get_own_profile(principal)
     refute partial.complete?
-    {:ok, settings, _} = live(conn, "/configuracion/profesional")
+    {:ok, settings, _} = live(conn, "/profesional/ajustes")
     assert has_element?(settings, "#profile-entry-action", "Ver perfil")
     assert has_element?(settings, "#profile-license-summary", "MP-304")
     settings |> element("#profile-entry-action") |> render_click()

@@ -286,7 +286,8 @@ defmodule Origen.Integration.PrototypeJourneyTest do
       assert html =~ "Consulta Médica General"
       assert html =~ "10:00 - 10:30"
       assert html =~ "38999888"
-      assert html =~ "+5491188776655"
+      refute html =~ "+5491188776655"
+      refute has_element?(view, "[phx-click='open_replace_access']")
       assert html =~ "Confirmado"
 
       # Navegar a otra fecha sin turnos: debe mostrar el estado vacío

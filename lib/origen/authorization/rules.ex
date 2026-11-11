@@ -84,7 +84,29 @@ defmodule Origen.Authorization.Rules do
            {:s1_02, :create_professional_account, {:role, :administrator}, :active,
             %{role: :professional, state: :pending_activation}, :not_applicable},
            {:s1_03, :create_secretary_account, {:role, :administrator}, :active,
-            %{role: :secretary, state: :pending_activation}, :not_applicable}
+            %{role: :secretary, state: :pending_activation}, :not_applicable},
+           {:pay_01, :read_payment, {:role, :patient}, :not_applicable,
+            %{patient_matches_actor: true}, %{authenticated: true}},
+           {:pay_01, :read_payment, {:role, :professional}, :active, %{owner_matches_actor: true},
+            %{authenticated: true}},
+           {:pay_01, :read_payment, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_02, :edit_appointment_price, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_02, :edit_appointment_price, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_03, :register_payment, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_03, :register_payment, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_05, :revert_payment, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_05, :revert_payment, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_04, :read_payment_history, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_04, :read_payment_history, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}}
          ] ++
            for(
              role <- [:administrator, :professional, :secretary],
@@ -109,6 +131,36 @@ defmodule Origen.Authorization.Rules do
              do:
                {:rei_02, :reissue_internal_invitation, {:role, :administrator}, :active,
                 %{role: role, state: :pending_activation}, %{authenticated: true}}
+           ) ++
+           for(
+             role <- [:professional, :secretary],
+             do:
+               {:adm_01, :list_internal_accounts, {:role, :administrator}, :active, %{role: role},
+                :not_applicable}
+           ) ++
+           [
+             {:adm_01, :list_internal_accounts, {:role, :administrator}, :active,
+              %{roles: [:professional, :secretary]}, :not_applicable}
+           ] ++
+           for(
+             role <- [:professional, :secretary],
+             state <- [:pending_activation, :active, :deactivated],
+             do:
+               {:adm_02, :update_internal_account, {:role, :administrator}, :active,
+                %{role: role, state: state}, :not_applicable}
+           ) ++
+           for(
+             role <- [:professional, :secretary],
+             state <- [:pending_activation, :active],
+             do:
+               {:adm_03, :deactivate_internal_account, {:role, :administrator}, :active,
+                %{role: role, state: state}, :not_applicable}
+           ) ++
+           for(
+             role <- [:professional, :secretary],
+             do:
+               {:adm_04, :reactivate_internal_account, {:role, :administrator}, :active,
+                %{role: role, state: :deactivated}, :not_applicable}
            )
 
   @operations @rules

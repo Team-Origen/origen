@@ -12,6 +12,7 @@ defmodule Origen.Booking.AuthorizationTest do
 
   alias Ecto.Adapters.SQL
   alias Ecto.Adapters.SQL.Sandbox
+  alias Origen.Authorization.Fact
   alias Origen.Booking
   alias Origen.Booking.Authorization
   alias Origen.Booking.ReservationRequest
@@ -336,6 +337,110 @@ defmodule Origen.Booking.AuthorizationTest do
       assert {:error, :unauthorized} = Authorization.authorize_reservation("patient")
     end
   end
+
+  describe "financial operations" do
+    alias Origen.Authorization.Policy
+
+    test "requires explicit ownership or centre scope facts in the pure matrix" do
+      allowed = [
+        {:read_payment, {:role, :patient}, :not_applicable, %{patient_matches_actor: true},
+         %{authenticated: true}},
+        {:read_payment, {:role, :professional}, {:known, :active}, %{owner_matches_actor: true},
+         %{authenticated: true}},
+        {:read_payment, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:edit_appointment_price, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}},
+        {:edit_appointment_price, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:register_payment, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}},
+        {:register_payment, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:revert_payment, {:role, :professional}, {:known, :active}, %{owner_matches_actor: true},
+         %{authenticated: true}},
+        {:revert_payment, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:read_payment_history, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}},
+        {:read_payment_history, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}}
+      ]
+
+      for {operation, subject, state, target, scope} <- allowed do
+        request =
+          Origen.Authorization.Request.new(
+            operation: Fact.known(operation),
+            subject: Fact.known(subject),
+            account_state: state,
+            target: Fact.known(target),
+            scope: Fact.known(scope)
+          )
+
+        assert Origen.Authorization.decide(request) in [
+                 {:allow, :pay_01},
+                 {:allow, :pay_02},
+                 {:allow, :pay_03},
+                 {:allow, :pay_04},
+                 {:allow, :pay_05}
+               ]
+      end
+
+      for {operation, subject, state, target, scope} <- allowed do
+        request =
+          Origen.Authorization.Request.new(
+            operation: Fact.known(operation),
+            subject: Fact.known(subject),
+            account_state: state,
+            target: Fact.known(denied_target(target)),
+            scope: Fact.known(scope)
+          )
+
+        assert Origen.Authorization.decide(request) == {:deny, :no_matching_rule}
+      end
+
+      empty_scope =
+        Origen.Authorization.Request.new(
+          operation: Fact.known(:read_payment),
+          subject: Fact.known({:role, :professional}),
+          account_state: Fact.known(:active),
+          target: Fact.known(%{}),
+          scope: Fact.known(%{})
+        )
+
+      assert Origen.Authorization.decide(empty_scope) == {:deny, :no_matching_rule}
+    end
+
+    test "allows payment reads for patient, professional and secretary only" do
+      assert Policy.payment_allowed?(:patient, :read_payment)
+      assert Policy.payment_allowed?(:professional, :read_payment)
+      assert Policy.payment_allowed?(:secretary, :read_payment)
+      refute Policy.payment_allowed?(:administrator, :read_payment)
+    end
+
+    test "allows price edits for professional and secretary only" do
+      assert Policy.payment_allowed?(:professional, :edit_appointment_price)
+      assert Policy.payment_allowed?(:secretary, :edit_appointment_price)
+      refute Policy.payment_allowed?(:patient, :edit_appointment_price)
+      refute Policy.payment_allowed?(:administrator, :edit_appointment_price)
+    end
+
+    test "allows payment reversals for professional and secretary only" do
+      assert Policy.payment_allowed?(:professional, :revert_payment)
+      assert Policy.payment_allowed?(:secretary, :revert_payment)
+      refute Policy.payment_allowed?(:patient, :revert_payment)
+      refute Policy.payment_allowed?(:administrator, :revert_payment)
+    end
+  end
+
+  defp denied_target(%{patient_matches_actor: _} = target),
+    do: Map.put(target, :patient_matches_actor, false)
+
+  defp denied_target(%{owner_matches_actor: _} = target),
+    do: Map.put(target, :owner_matches_actor, false)
+
+  defp denied_target(%{center_scope: _} = target),
+    do: Map.put(target, :center_scope, false)
 
   # Fixtures y helpers
 

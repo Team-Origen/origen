@@ -169,6 +169,27 @@ defmodule OrigenWeb.SecretaryBookingIntegrationTest do
       # El slot 09:00 ya no se ofrece en la grilla reactiva ni en una nueva consulta al calendario
       refute has_element?(view, ~s(button[phx-click="select_slot"][phx-value-time="09:00"]))
       assert has_element?(view, ~s(button[phx-click="select_slot"][phx-value-time="09:30"]))
+
+      second_start = DateTime.new!(ctx.future_date, ~T[09:30:00], "Etc/UTC")
+
+      assert {:ok, second_result} =
+               AssistedBooking.reserve(ctx.secretary.id, ctx.patient.id, %{
+                 professional_id: ctx.prof_auto.id,
+                 consultation_type_id: ctx.prof_auto.type_id,
+                 start_time: second_start
+               })
+
+      assert second_result.status == :confirmed
+
+      assert Repo.get_by!(Appointment,
+               patient_profile_id: ctx.patient.id,
+               professional_account_id: ctx.prof_auto.id,
+               start_time: second_start
+             ).id != appt.id
+
+      assert Repo.get!(ProfessionalPatientRelationship, rel.id).first_appointment_id == appt.id
+      assert Repo.aggregate(Appointment, :count, :id) == 2
+      assert Repo.aggregate(ProfessionalPatientRelationship, :count, :id) == 1
     end
 
     test "respeta modalidad manual (requested vs confirmed según subconfiguración) y crea relación sin habilitar aprobación/rechazo a Secretaría",
@@ -478,6 +499,59 @@ defmodule OrigenWeb.SecretaryBookingIntegrationTest do
                )
 
       assert Enum.any?(schedule_after.slots, &(&1.start_formatted == "14:00"))
+    end
+  end
+
+  describe "organization timezone (#493)" do
+    setup do
+      previous_timezone = Application.get_env(:origen, :organization_timezone)
+      on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous_timezone) end)
+      Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+      :ok
+    end
+
+    test "books an offered slot at the local time the screen shows", ctx do
+      {:ok, view, _html} = live(conn_for(ctx.secretary), @path)
+
+      view
+      |> form("#persona-search-form",
+        search: %{"document_type" => "dni", "document_number" => "34.111.222"}
+      )
+      |> render_submit()
+
+      view |> element("#start-assisted-booking") |> render_click()
+
+      render_change(view, "update_booking_selection", %{
+        "professional_id" => to_string(ctx.prof_auto.id),
+        "consultation_type_id" => ctx.prof_auto.type_id,
+        "date" => Date.to_iso8601(ctx.future_date)
+      })
+
+      slot = ~s(button[phx-click="select_slot"][phx-value-time="09:00"])
+      assert has_element?(view, slot)
+
+      view |> element(slot) |> render_click()
+      view |> element("#confirm-assisted-booking") |> render_click()
+
+      refute render(view) =~ "no se encuentra dentro de la disponibilidad"
+      assert has_element?(view, "#booking-success-message")
+
+      appt =
+        Repo.get_by!(Appointment,
+          patient_profile_id: ctx.patient.id,
+          professional_account_id: ctx.prof_auto.id
+        )
+
+      expected_start =
+        ctx.future_date
+        |> DateTime.new!(~T[09:00:00], "America/Argentina/Buenos_Aires")
+        |> DateTime.shift_zone!("Etc/UTC")
+
+      assert DateTime.compare(appt.start_time, expected_start) == :eq
+
+      # The booked local slot leaves the grid; its neighbour is still offered.
+      refute has_element?(view, slot)
+      assert has_element?(view, ~s(button[phx-click="select_slot"][phx-value-time="09:30"]))
     end
   end
 

@@ -72,6 +72,35 @@ defmodule Origen.Booking.Agenda do
 
   def get_professional_agenda(_principal, _params), do: {:error, :unauthorized}
 
+  @doc """
+  Lists all pending requests owned by the authenticated professional, without
+  a date limit. Uses the same revalidated session and operational projection
+  as the daily agenda, ordered by appointment start time and ID ascending.
+  """
+  @spec list_professional_pending_requests(map() | InternalSession.t()) ::
+          {:ok, [map()]} | {:error, :unauthorized}
+  def list_professional_pending_requests(%InternalSession{
+        id: session_id,
+        account_id: account_id
+      }),
+      do: list_professional_pending_requests(%{session_id: session_id, account_id: account_id})
+
+  def list_professional_pending_requests(%{session_id: session_id, account_id: account_id})
+      when is_integer(session_id) and is_integer(account_id) do
+    with {:ok, owner_id} <- resolve_owner(session_id, account_id) do
+      appointments =
+        from(a in own_appointments_query(owner_id),
+          where: a.status == "requested",
+          order_by: [asc: a.start_time, asc: a.id]
+        )
+        |> Repo.all()
+
+      {:ok, appointments}
+    end
+  end
+
+  def list_professional_pending_requests(_principal), do: {:error, :unauthorized}
+
   # Identidad: solo la sesión revalidada en el servidor define al dueño de la
   # agenda. `owner_matches_actor` se satisface por construcción porque el
   # `owner_id` proviene de la propia cuenta de la sesión, nunca de `params`.
@@ -126,42 +155,45 @@ defmodule Origen.Booking.Agenda do
     day_start = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
     day_end = DateTime.add(day_start, 1, :day)
 
-    query =
-      from(a in Appointment,
-        join: p in PatientProfile,
-        on: p.id == a.patient_profile_id,
-        left_join: per in Persona,
-        on: per.id == p.persona_id,
-        where: a.professional_account_id == ^owner_id,
-        where: a.start_time >= ^day_start and a.start_time < ^day_end,
-        order_by: [asc: a.start_time],
-        select: %{
-          id: a.id,
-          start_time: a.start_time,
-          end_time: a.end_time,
-          status: a.status,
-          consultation_type_name: a.snapshot_consultation_type_name,
-          duration_minutes: a.snapshot_duration_minutes,
-          price_ars: a.snapshot_exact_price_ars,
-          patient: %{
-            id: p.id,
-            name:
-              fragment(
-                "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', ?, ?)), ''), ?)",
-                per.first_name,
-                per.last_name,
-                p.email
-              ),
-            first_name: per.first_name,
-            last_name: per.last_name,
-            email: p.email,
-            phone: p.phone,
-            document_type: per.document_type,
-            document_number: per.document_number
-          }
-        }
-      )
+    from(a in own_appointments_query(owner_id),
+      where: a.start_time >= ^day_start and a.start_time < ^day_end,
+      order_by: [asc: a.start_time]
+    )
+    |> Repo.all()
+  end
 
-    Repo.all(query)
+  defp own_appointments_query(owner_id) do
+    from(a in Appointment,
+      join: p in PatientProfile,
+      on: p.id == a.patient_profile_id,
+      left_join: per in Persona,
+      on: per.id == p.persona_id,
+      where: a.professional_account_id == ^owner_id,
+      select: %{
+        id: a.id,
+        start_time: a.start_time,
+        end_time: a.end_time,
+        status: a.status,
+        consultation_type_name: a.snapshot_consultation_type_name,
+        duration_minutes: a.snapshot_duration_minutes,
+        price_ars: a.snapshot_exact_price_ars,
+        patient: %{
+          id: p.id,
+          name:
+            fragment(
+              "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', ?, ?)), ''), ?)",
+              per.first_name,
+              per.last_name,
+              p.email
+            ),
+          first_name: per.first_name,
+          last_name: per.last_name,
+          email: p.email,
+          phone: p.phone,
+          document_type: per.document_type,
+          document_number: per.document_number
+        }
+      }
+    )
   end
 end

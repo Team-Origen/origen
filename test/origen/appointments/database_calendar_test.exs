@@ -223,6 +223,83 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
       assert Enum.all?(schedule.slots, &(Time.diff(&1.end_time, &1.start_time, :minute) == 45))
     end
 
+    test "converts persisted occupancy at local midnight boundaries", %{account_id: account_id} do
+      previous_timezone = Application.get_env(:origen, :organization_timezone)
+      Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+      on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous_timezone) end)
+
+      Repo.query!(
+        """
+        UPDATE agenda_settings
+        SET weekly_availability = $2::jsonb, minimum_lead_minutes = 0
+        WHERE owner_account_id = $1
+        """,
+        [account_id, ~s({"friday":[{"start":"22:00","end":"23:30"}]})]
+      )
+
+      [[patient_id]] =
+        Repo.query!(
+          "INSERT INTO patient_profiles (email, state) VALUES ('midnight@example.test', 'completed') RETURNING id"
+        ).rows
+
+      type_id = Ecto.UUID.generate()
+
+      Repo.query!(
+        """
+        INSERT INTO consultation_types
+          (id, owner_account_id, name, exact_price_ars, color, interval_count, status)
+        VALUES ($1, $2, 'Midnight Consultation', 100.00, '#123456', 1, 'active')
+        """,
+        [Ecto.UUID.dump!(type_id), account_id]
+      )
+
+      assert {:ok, _appointment} =
+               Origen.Booking.persist_appointment(
+                 %{
+                   patient_profile_id: patient_id,
+                   professional_account_id: account_id,
+                   consultation_type_id: type_id,
+                   start_time: ~U[2026-09-26 02:00:00Z],
+                   status: "confirmed"
+                 },
+                 %{
+                   name: "Midnight Consultation",
+                   duration_minutes: 30,
+                   exact_price_ars: Decimal.new("100.00")
+                 }
+               )
+
+      assert {:ok, schedule} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25],
+                 now: ~U[2026-09-24 08:00:00Z],
+                 duration_minutes: 30
+               )
+
+      assert Enum.map(schedule.slots, & &1.start_formatted) == ["22:00", "22:30"]
+    end
+
+    test "honors an explicit UTC timezone override", %{account_id: account_id} do
+      previous_timezone = Application.get_env(:origen, :organization_timezone)
+      Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+      on_exit(fn -> Application.put_env(:origen, :organization_timezone, previous_timezone) end)
+
+      assert {:ok, schedule} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25],
+                 now: @fixed_now,
+                 duration_minutes: 30,
+                 timezone: "Etc/UTC"
+               )
+
+      assert Enum.map(schedule.slots, & &1.start_formatted) == [
+               "14:00",
+               "14:30",
+               "15:00",
+               "15:30",
+               "16:00",
+               "16:30"
+             ]
+    end
+
     test "handles unknown or unconfigured professional gracefully" do
       friday = ~D[2026-09-25]
 
@@ -231,6 +308,62 @@ defmodule Origen.Appointments.DatabaseCalendarTest do
 
       assert {:error, :invalid_professional} =
                DatabaseCalendar.get_daily_schedule("invalid_id", friday)
+    end
+
+    test "rejects the schedule of a deactivated professional (contract #372, #373)", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1",
+        [account_id]
+      )
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25], now: @fixed_now)
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(to_string(account_id), ~D[2026-09-25],
+                 now: @fixed_now
+               )
+    end
+
+    test "rejects the schedule of a pending_activation professional", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        """
+        UPDATE internal_accounts
+        SET state = 'pending_activation', password_hash = NULL, totp_secret = NULL, activated_at = NULL
+        WHERE id = $1
+        """,
+        [account_id]
+      )
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25], now: @fixed_now)
+    end
+
+    test "restores the schedule after reactivation without erasing settings", %{
+      account_id: account_id
+    } do
+      Repo.query!(
+        "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1",
+        [account_id]
+      )
+
+      assert {:error, :invalid_professional} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25], now: @fixed_now)
+
+      Repo.query!("UPDATE internal_accounts SET state = 'active' WHERE id = $1", [account_id])
+
+      assert {:ok, schedule} =
+               DatabaseCalendar.get_daily_schedule(account_id, ~D[2026-09-25],
+                 now: @fixed_now,
+                 duration_minutes: 30
+               )
+
+      assert Enum.map(schedule.slots, & &1.start_formatted) ==
+               ["14:00", "14:30", "15:00", "15:30", "16:00", "16:30"]
     end
   end
 end

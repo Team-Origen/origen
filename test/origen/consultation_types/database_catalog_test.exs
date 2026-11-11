@@ -64,4 +64,44 @@ defmodule Origen.ConsultationTypes.DatabaseCatalogTest do
     assert {:error, :unavailable} =
              DatabaseCatalog.execute({:list, %{professional_reference: "9223372036854775807"}})
   end
+
+  test "public snapshot is unavailable for a deactivated professional (contract #372, #373)" do
+    %{rows: [[id]]} =
+      Origen.Repo.query!("""
+      INSERT INTO internal_accounts (role, state, password_hash, totp_secret, activated_at)
+      VALUES ('professional', 'active', 'hash', decode('0102030405', 'hex'), NOW()) RETURNING id
+      """)
+
+    {:ok, %{session: principal}} = Sessions.create_session(id)
+
+    assert {:ok, _} =
+             ConsultationTypes.create_type(principal, %{
+               name: "Consulta baja",
+               currency: "ARS",
+               exact_price_ars: "15000.00",
+               color: "#0A7C86",
+               interval_count: 1
+             })
+
+    assert {:ok, %{} = active_snapshot} =
+             DatabaseCatalog.execute({:list, %{professional_reference: to_string(id)}})
+
+    assert active_snapshot.consultation_types != []
+
+    Origen.Repo.query!(
+      "UPDATE internal_accounts SET state = 'deactivated' WHERE id = $1",
+      [id]
+    )
+
+    assert {:error, :unavailable} =
+             DatabaseCatalog.execute({:list, %{professional_reference: to_string(id)}})
+
+    # Reactivation restores the public snapshot
+    Origen.Repo.query!("UPDATE internal_accounts SET state = 'active' WHERE id = $1", [id])
+
+    assert {:ok, restored} =
+             DatabaseCatalog.execute({:list, %{professional_reference: to_string(id)}})
+
+    assert restored.consultation_types != []
+  end
 end

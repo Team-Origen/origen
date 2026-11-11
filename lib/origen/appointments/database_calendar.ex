@@ -7,6 +7,7 @@ defmodule Origen.Appointments.DatabaseCalendar do
   @behaviour Origen.Appointments.Calendar
 
   alias Origen.Appointments.Availability
+  alias Origen.Booking.Expiry
   alias Origen.Repo
 
   @weekday_map %{
@@ -20,11 +21,9 @@ defmodule Origen.Appointments.DatabaseCalendar do
   }
 
   @default_policy %{
-    cutoff_description:
-      "Podés cancelar sin costo hasta las 18:00 del día anterior a la cita (D-1).",
-    penalty_percentage: 50,
-    penalty_description:
-      "Cancelaciones posteriores a las 18:00 de D-1 o inasistencias aplican una política de multa del 50% según RF-16."
+    cutoff_description: "Podés cancelar estrictamente antes del inicio de la cita.",
+    penalty_percentage: 0,
+    penalty_description: "No se aplica penalización automática por cancelación ni inasistencia."
   }
 
   @impl true
@@ -62,9 +61,13 @@ defmodule Origen.Appointments.DatabaseCalendar do
 
   @impl true
   def get_daily_schedule(professional_id, %Date{} = date, opts) do
+    timezone =
+      Keyword.get(opts, :timezone, Application.fetch_env!(:origen, :organization_timezone))
+
     with {:ok, owner_id} <- parse_owner_id(professional_id),
          {:ok, settings} <- fetch_agenda_settings(owner_id),
-         {:ok, occupancies} <- fetch_occupancies(owner_id, date, opts),
+         {:ok, occupancies} <-
+           fetch_occupancies(owner_id, date, Keyword.put(opts, :timezone, timezone)),
          {:ok, identity} <- fetch_professional_identity(owner_id) do
       day_key = Map.fetch!(@weekday_map, Date.day_of_week(date))
       week = decode_week(settings.weekly_availability)
@@ -86,7 +89,7 @@ defmodule Origen.Appointments.DatabaseCalendar do
           min_lead_time_minutes: settings.minimum_lead_minutes,
           booking_horizon_days: settings.booking_horizon_days,
           now: Keyword.get(opts, :now, DateTime.utc_now()),
-          timezone: Keyword.get(opts, :timezone, "Etc/UTC")
+          timezone: timezone
         )
 
       {:ok,
@@ -116,9 +119,10 @@ defmodule Origen.Appointments.DatabaseCalendar do
 
   defp fetch_agenda_settings(owner_id) do
     query = """
-    SELECT weekly_availability, booking_horizon_days, minimum_lead_minutes, interval_minutes
-    FROM agenda_settings
-    WHERE owner_account_id = $1
+    SELECT s.weekly_availability, s.booking_horizon_days, s.minimum_lead_minutes, s.interval_minutes
+    FROM agenda_settings s
+    JOIN internal_accounts a ON a.id = s.owner_account_id
+    WHERE s.owner_account_id = $1 AND a.role = 'professional' AND a.state = 'active'
     """
 
     case Repo.query(query, [owner_id]) do
@@ -140,43 +144,51 @@ defmodule Origen.Appointments.DatabaseCalendar do
   end
 
   defp fetch_occupancies(owner_id, date, opts) do
-    case Keyword.fetch(opts, :occupancies) do
-      {:ok, occupancies} ->
-        {:ok, occupancies}
+    timezone = Keyword.fetch!(opts, :timezone)
 
-      :error ->
-        start_day = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
-        end_day = DateTime.add(start_day, 1, :day)
+    with {:ok, _result} <- Expiry.expire_due_requested(now: Keyword.get(opts, :now)) do
+      case Keyword.fetch(opts, :occupancies) do
+        {:ok, occupancies} ->
+          {:ok, occupancies}
 
-        query = """
-        SELECT start_time, end_time
-        FROM appointments
-        WHERE professional_account_id = $1
-          AND status NOT IN ('cancelled', 'rejected')
-          AND start_time < $2 AND end_time > $3
-        ORDER BY start_time
-        """
+        :error ->
+          start_day =
+            DateTime.new!(date, ~T[00:00:00], timezone) |> DateTime.shift_zone!("Etc/UTC")
 
-        case Repo.query(query, [owner_id, end_day, start_day]) do
-          {:ok, %{rows: rows}} ->
-            {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day))}
+          end_day = DateTime.add(start_day, 1, :day)
 
-          _error ->
-            {:error, :unavailable}
-        end
+          query = """
+          SELECT start_time, end_time
+          FROM appointments
+          WHERE professional_account_id = $1
+            AND status NOT IN ('cancelled', 'rejected', 'expired')
+            AND start_time < $2 AND end_time > $3
+          ORDER BY start_time
+          """
+
+          case Repo.query(query, [owner_id, end_day, start_day]) do
+            {:ok, %{rows: rows}} ->
+              {:ok, Enum.map(rows, &occupancy_for_day(&1, start_day, end_day, timezone))}
+
+            _error ->
+              {:error, :unavailable}
+          end
+      end
+    else
+      {:error, reason} -> {:error, {:expiry_failed, reason}}
     end
   end
 
-  defp occupancy_for_day([start_datetime, end_datetime], start_day, end_day) do
+  defp occupancy_for_day([start_datetime, end_datetime], start_day, end_day, timezone) do
     start_time =
       if DateTime.compare(start_datetime, start_day) == :lt,
         do: ~T[00:00:00],
-        else: DateTime.to_time(start_datetime)
+        else: DateTime.shift_zone!(start_datetime, timezone) |> DateTime.to_time()
 
     end_time =
       if DateTime.compare(end_datetime, end_day) != :lt,
         do: ~T[23:59:59.999999],
-        else: DateTime.to_time(end_datetime)
+        else: DateTime.shift_zone!(end_datetime, timezone) |> DateTime.to_time()
 
     {start_time, end_time}
   end

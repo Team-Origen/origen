@@ -1,8 +1,11 @@
 defmodule OrigenWeb.PatientBookingCalendarLiveTest do
   use OrigenWeb.LiveViewCase
 
-  alias Origen.{Patients, Repo}
+  alias Origen.{Booking, Patients, Repo}
+  alias Origen.Appointments.{AssistedBooking, BookingService}
+  alias Origen.Booking.{Appointment, ProfessionalPatientRelationship}
   alias Origen.Patients.{PatientProfile, Persona}
+  alias Origen.Sessions
   alias OrigenWeb.PatientBookingCalendarFixtures
 
   @email "ana_cal@example.test"
@@ -140,16 +143,16 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       unauthenticated_conn =
         Phoenix.ConnTest.build_conn() |> Phoenix.ConnTest.init_test_session(%{})
 
-      assert {:error, {:redirect, %{to: "/access"}}} =
-               live(unauthenticated_conn, ~p"/patient/calendar")
+      assert {:error, {:redirect, %{to: "/paciente/acceso"}}} =
+               live(unauthenticated_conn, ~p"/paciente/turnos/reservar")
     end
 
     test "redirects when the patient session was invalidated", %{conn: conn, profile: profile} do
       invalidated_at = DateTime.add(DateTime.utc_now(), 1, :second)
       Repo.update!(Ecto.Changeset.change(profile, sessions_invalidated_at: invalidated_at))
 
-      assert {:error, {:redirect, %{to: "/access"}}} =
-               live(conn, ~p"/patient/calendar")
+      assert {:error, {:redirect, %{to: "/paciente/acceso"}}} =
+               live(conn, ~p"/paciente/turnos/reservar")
     end
   end
 
@@ -161,7 +164,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.ErrorCalendar
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No se pudo cargar la lista de profesionales"
       assert has_element?(view, "#patient-professionals-error")
@@ -175,7 +178,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.UnavailableCatalog
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No se pudieron cargar los tipos de consulta"
       assert has_element?(view, "#patient-catalog-error")
@@ -189,7 +192,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.EmptyCatalog
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No hay tipos de consulta disponibles"
       assert has_element?(view, "#patient-catalog-empty")
@@ -209,7 +212,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         PatientBookingCalendarFixtures.AvailableCatalog
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "No pudimos cargar la disponibilidad"
       refute has_element?(view, "button[phx-click='select_slot']")
@@ -226,7 +229,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       )
 
       before = Repo.query!("SELECT count(*) FROM appointments").rows
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       assert html =~ "No hay profesionales disponibles"
       refute has_element?(view, "#professional-form")
       refute has_element?(view, "button[phx-click='select_slot']")
@@ -250,7 +253,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -273,7 +276,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
       before = view |> element("#professional-form") |> render()
@@ -287,7 +290,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -315,7 +318,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
          } do
       Repo.update!(Ecto.Changeset.change(profile, state: "pending_completion"))
 
-      {:ok, _view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, _view, html} = live(conn, ~p"/paciente/turnos/reservar")
 
       assert html =~ "Completá tu perfil para reservar"
       refute html =~ "verificar tu teléfono"
@@ -323,7 +326,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     end
 
     test "booking fixture chooses a configured weekday for booking journeys", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
 
       for offset <- 0..6 do
         reference_date = Date.add(Date.utc_today(), offset)
@@ -338,7 +341,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     end
 
     test "renders the real profile and slots and navigates dates", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
 
       assert html =~ "Calendario de Reservas" and html =~ "Medicina General"
@@ -402,7 +405,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         [prof_id]
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       assert html =~ "Consulta general (60 min)"
 
       html = render_change(view, "change_date", %{"date" => Date.to_iso8601(friday)})
@@ -417,9 +420,83 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
     end
   end
 
+  for {origin, approval_mode} <- [
+        {:patient, "automatic"},
+        {:patient, "manual"},
+        {:professional, "automatic"},
+        {:professional, "manual"},
+        {:secretary, "automatic"},
+        {:secretary, "manual"}
+      ] do
+    test "reuses the original relationship after a #{origin} first booking in #{approval_mode} mode",
+         %{
+           conn: conn,
+           profile: profile,
+           prof_id: prof_id
+         } do
+      Repo.query!(
+        "UPDATE agenda_settings SET approval_mode = $1 WHERE owner_account_id = $2",
+        [unquote(approval_mode), prof_id]
+      )
+
+      booking_date = next_booking_weekday(Date.utc_today())
+      first_start = DateTime.new!(booking_date, ~T[08:00:00], "Etc/UTC")
+      second_start = DateTime.new!(booking_date, ~T[09:00:00], "Etc/UTC")
+
+      assert {:ok, _first_result} =
+               first_booking_from!(unquote(origin), profile, prof_id, booking_date, first_start)
+
+      first_appointment =
+        Repo.get_by!(Appointment,
+          professional_account_id: prof_id,
+          patient_profile_id: profile.id,
+          start_time: first_start
+        )
+
+      original_relationship =
+        Repo.get_by!(ProfessionalPatientRelationship,
+          professional_account_id: prof_id,
+          patient_profile_id: profile.id
+        )
+
+      assert original_relationship.first_appointment_id == first_appointment.id
+
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      view
+      |> element(~s(button[phx-value-slot_id="SLOT-#{Date.to_iso8601(booking_date)}-0900"]))
+      |> render_click()
+
+      html = render_click(view, "confirm_booking")
+
+      expected_status = if unquote(approval_mode) == "manual", do: "requested", else: "confirmed"
+
+      if expected_status == "requested" do
+        assert html =~ "Solicitud enviada"
+      else
+        assert html =~ "Turno confirmado"
+      end
+
+      second_appointment =
+        Repo.get_by!(Appointment,
+          professional_account_id: prof_id,
+          patient_profile_id: profile.id,
+          start_time: second_start
+        )
+
+      assert second_appointment.status == expected_status
+      assert Repo.aggregate(Appointment, :count, :id) == 2
+      assert Repo.aggregate(ProfessionalPatientRelationship, :count, :id) == 1
+
+      assert Repo.get!(ProfessionalPatientRelationship, original_relationship.id) ==
+               original_relationship
+    end
+  end
+
   describe "slot selection, policies and booking confirmation" do
     test "selecting a slot shows confirmation panel with policies and clears slot", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
 
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
@@ -444,7 +521,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       profile: profile,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -500,7 +577,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -538,7 +615,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         [prof_id]
       )
 
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -556,7 +633,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       conn: conn,
       prof_id: prof_id
     } do
-      {:ok, view, _html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
       render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
 
@@ -601,6 +678,106 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       refute html =~ "No se pudo realizar la reserva:"
     end
 
+    test "stale booking feedback clears when another slot is selected", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
+      booking_date = next_booking_weekday(Date.utc_today())
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      slot =
+        view
+        |> render()
+        |> then(fn _ ->
+          {:ok, schedule} =
+            Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+              duration_minutes: 60
+            )
+
+          Enum.find(schedule.slots, &(&1.start_formatted == "08:00"))
+        end)
+
+      view |> element(~s(button[phx-value-slot_id="#{slot.id}"])) |> render_click()
+
+      {:ok, %{profile: other}} =
+        Patients.complete_profile("stale-feedback-other@example.test", %{
+          first_name: "Otro",
+          last_name: "Paciente",
+          document_type: "dni",
+          document_number: "38123457",
+          birthdate: ~D[1994-05-20],
+          phone: "+5491133445567"
+        })
+
+      assert {:ok, _} =
+               BookingService.reserve(other, %{
+                 professional_id: prof_id,
+                 consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+                 date: booking_date,
+                 slot:
+                   Map.put(slot, :start_time, Time.from_iso8601!(slot.start_formatted <> ":00"))
+               })
+
+      assert render_click(view, "confirm_booking") =~ "Ese horario ya no está disponible"
+
+      alternate_id = "SLOT-#{Date.to_iso8601(booking_date)}-0900"
+      html = render_click(view, "select_slot", %{"slot_id" => alternate_id})
+      refute html =~ "Ese horario ya no está disponible"
+      assert html =~ "Confirmar Reserva"
+    end
+
+    test "refreshes availability after external bookings and cancellations", %{
+      conn: conn,
+      prof_id: prof_id
+    } do
+      {:ok, view, _html} = live(conn, ~p"/paciente/turnos/reservar")
+      booking_date = next_booking_weekday(Date.utc_today())
+      render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)})
+
+      {:ok, schedule} =
+        Origen.Appointments.Calendar.get_daily_schedule(to_string(prof_id), booking_date,
+          duration_minutes: 60
+        )
+
+      slot = Enum.find(schedule.slots, &(&1.start_formatted == "08:00"))
+      view |> element(~s(button[phx-value-slot_id="#{slot.id}"])) |> render_click()
+
+      {:ok, %{profile: other}} =
+        Patients.complete_profile("refresh-other@example.test", %{
+          first_name: "Otro",
+          last_name: "Paciente",
+          document_type: "dni",
+          document_number: "38123458",
+          birthdate: ~D[1994-05-20],
+          phone: "+5491133445568"
+        })
+
+      assert {:ok, reservation} =
+               BookingService.reserve(other, %{
+                 professional_id: prof_id,
+                 consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+                 date: booking_date,
+                 slot:
+                   Map.put(slot, :start_time, Time.from_iso8601!(slot.start_formatted <> ":00"))
+               })
+
+      send(view.pid, :refresh)
+      refute has_element?(view, "button[phx-click='confirm_booking']")
+      refute has_element?(view, "button[phx-value-slot_id='#{slot.id}']")
+
+      {:ok, %{session: professional}} = Sessions.create_session(prof_id)
+
+      assert {:ok, _} =
+               Booking.cancel_appointment(professional, reservation.appointment_id,
+                 reason: "Cambio operativo",
+                 now: DateTime.utc_now()
+               )
+
+      send(view.pid, :refresh)
+      assert has_element?(view, "button[phx-value-slot_id='#{slot.id}']")
+    end
+
     test "changing consultation type recalculates slot availability", %{
       conn: conn,
       prof_id: prof_id
@@ -616,7 +793,7 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
         [Ecto.UUID.dump!(control_id), prof_id]
       )
 
-      {:ok, view, html} = live(conn, ~p"/patient/calendar")
+      {:ok, view, html} = live(conn, ~p"/paciente/turnos/reservar")
       booking_date = next_booking_weekday(Date.utc_today())
 
       assert html =~ "Tipo de Consulta"
@@ -631,6 +808,60 @@ defmodule OrigenWeb.PatientBookingCalendarLiveTest do
       assert render_change(view, "change_date", %{"date" => Date.to_iso8601(booking_date)}) =~
                "09:00"
     end
+  end
+
+  defp first_booking_from!(:patient, profile, prof_id, booking_date, first_start) do
+    BookingService.reserve(profile, %{
+      professional_id: prof_id,
+      consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+      date: booking_date,
+      slot: %{start_time: DateTime.to_time(first_start)},
+      now: DateTime.utc_now()
+    })
+  end
+
+  defp first_booking_from!(:professional, profile, prof_id, _booking_date, first_start) do
+    {:ok, %{session: principal}} = Sessions.create_session(prof_id)
+
+    Booking.reserve_professional_appointment(
+      principal,
+      %{
+        patient_id: profile.id,
+        consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+        start_time: first_start,
+        patient_document_number: "38123456"
+      },
+      now: DateTime.utc_now()
+    )
+  end
+
+  defp first_booking_from!(:secretary, profile, prof_id, _booking_date, first_start) do
+    secretary_id = insert_secretary!()
+
+    AssistedBooking.reserve(
+      secretary_id,
+      profile.id,
+      %{
+        professional_id: prof_id,
+        consultation_type_id: "018f4a5b-0d62-7a44-8e32-2f608bfcb001",
+        start_time: first_start
+      },
+      now: DateTime.utc_now()
+    )
+  end
+
+  defp insert_secretary! do
+    Repo.query!(
+      """
+      INSERT INTO internal_accounts
+        (role, state, email, password_hash, totp_secret, activated_at)
+      VALUES ('secretary', 'active', $1, 'hash', decode('0102030405', 'hex'), clock_timestamp())
+      RETURNING id
+      """,
+      ["secretary-#{System.unique_integer([:positive])}@example.test"]
+    ).rows
+    |> hd()
+    |> hd()
   end
 
   defp next_booking_weekday(date) do
