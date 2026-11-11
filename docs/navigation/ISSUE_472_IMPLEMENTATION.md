@@ -66,3 +66,14 @@ Prior theme RED failed before implementation; GREEN36/36 search/access-maintenan
 tests passed. The integrated suite1115 passes with both theme and summary cleanup.
 Code evidence is not a reproduction of a visual defect; browser capture remains
 unavailable. No application-wide dark theme or patient-management feature added.
+
+## Patient appointment history
+
+`/paciente/turnos` renders newest appointments first by start time and ID descending.
+Ordering is presentation-only in PatientAppointmentsLive; the shared public history
+API stays ascending and professional/secretary history behavior does not change.
+Cancellation, statuses, information and authorization remain unchanged.
+
+RED: exact rendered order failed before sorting (exit 2). GREEN5/5 patient-history
+tests passed, retaining the public API's original ascending-order assertion and
+foreign-record/cancellation checks. Included in the integrated1115-test pass.
