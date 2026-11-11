@@ -79,7 +79,8 @@ defmodule Origen.BootstrapAdmin.OperatorInvitation do
   defp valid_key(key) when is_binary(key) and byte_size(key) >= 32, do: :ok
   defp valid_key(_key), do: {:error, :invalid_verifier_key}
 
-  defp issue(nil, key), do: Account.issue_first(%{verifier_key: key, issued_by_ref: @issued_by_ref})
+  defp issue(nil, key),
+    do: Account.issue_first(%{verifier_key: key, issued_by_ref: @issued_by_ref})
 
   defp issue(account_id, key),
     do: Account.reissue_first(account_id, %{verifier_key: key, issued_by_ref: @issued_by_ref})
@@ -106,7 +107,10 @@ defmodule Origen.BootstrapAdmin.OperatorInvitation do
 
   defp audit_handoff(invitation_id) do
     with {:ok, event} <-
-           Events.invitation_delivery_handoff({:provider, @issued_by_ref}, to_string(invitation_id)),
+           Events.invitation_delivery_handoff(
+             {:provider, @issued_by_ref},
+             to_string(invitation_id)
+           ),
          {:ok, _row} <- Writer.append(event, {:allow, :sys_01}) do
       :ok
     else

@@ -92,9 +92,12 @@ defmodule Origen.BootstrapAdmin.OperatorInvitationTest do
       assert {:ok, result} = run(["--host", @host])
 
       assert %{rows: [["operator_cli"]]} =
-               Repo.query!("SELECT issued_by_ref FROM internal_account_invitations WHERE id = $1", [
-                 result.invitation_id
-               ])
+               Repo.query!(
+                 "SELECT issued_by_ref FROM internal_account_invitations WHERE id = $1",
+                 [
+                   result.invitation_id
+                 ]
+               )
 
       events = Repo.query!("SELECT event, result FROM audit_events ORDER BY id").rows
       assert ["bootstrap_admin", "allowed"] in events
@@ -159,7 +162,8 @@ defmodule Origen.BootstrapAdmin.OperatorInvitationTest do
     test "prints the login identifier, the expiry and the activation link" do
       System.put_env("ORIGEN_OPERATOR_INVITATION_ENABLED", "true")
 
-      output = capture_io(fn -> assert :ok = Release.issue_admin_invitation(["--host", @host]) end)
+      output =
+        capture_io(fn -> assert :ok = Release.issue_admin_invitation(["--host", @host]) end)
 
       [[account_id]] = Repo.query!("SELECT id FROM internal_accounts").rows
       assert output =~ "Login identifier (account id): #{account_id}"
