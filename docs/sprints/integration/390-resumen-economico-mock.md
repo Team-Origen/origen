@@ -36,15 +36,26 @@ Con una sesión interna activa del rol correspondiente:
 
 Ambas vistas están conectadas al ítem Resumen económico de su navbar. La autenticación sigue siendo real; **los datos financieros y las opciones de profesionales son ficticios**, no autorizaciones sobre cuentas reales. Administrador, Paciente y sesiones anónimas no reciben una pantalla financiera.
 
-La franja «Datos ficticios» permanece visible. Los ejemplos se generan en el mes actual de la zona organizacional al montar la vista; no representan atenciones reales ni se persisten. Otros meses permiten visualizar el estado vacío. Cambiar de Profesional muestra otro conjunto ficticio, nunca un agregado.
+Por indicación posterior del usuario, la pantalla ya no muestra «Vista de demostración», la franja «Datos ficticios» ni aclaraciones del prototipo. Esto es un cambio de presentación: los ejemplos siguen siendo locales, ficticios, sin persistencia y sin conexión al backend de pagos. Los recuadros conservan solo importes y explicaciones, sin cantidades de turnos por ahora.
 
-- Ejemplo A: Pagado ARS 25.000,00; Pendiente ARS 10.000,00; Total considerado ARS 35.000,00. La tabla sólo contiene un asistido impago de ARS 4.000,00 el día 1. Los ARS 6.000,00 restantes son una reserva confirmada impaga que no aparece en la tabla.
-- Ejemplo B: importes dobles y nombres ficticios distintos.
+Los ejemplos se generan en el mes actual de la zona organizacional y en noviembre y diciembre de ese mismo año al montar la vista. Si el mes actual es noviembre o diciembre, no se duplican sus datos. Otros meses permiten visualizar el estado vacío. Hay 15 ejemplos de pacientes/turnos por profesional y mes, con nombres ficticios naturales, sin etiquetas «Paciente Demo». Cambiar de Profesional muestra otro conjunto ficticio, nunca un agregado.
+
+- Ejemplo A (Lucía Méndez): Pagado ARS 45.000,00; Pendiente ARS 36.000,00; Total considerado ARS 81.000,00. La tabla contiene cuatro asistidos impagos: Valentina Ríos (día 1, ARS 4.000,00), Benjamín Paz (día 8, ARS 5.000,00), Renata Silva (día 10, ARS 7.500,00) y Malena Costa (día 27, ARS 5.500,00). Los ARS 14.000,00 restantes de Pendiente son reservas confirmadas impagas que no aparecen en la tabla. Pagado incluye ejemplos de turnos confirmados, asistidos, cancelados y ausentes con pago conservado.
+- Ejemplo B (Martín Salvatierra): importes dobles y nombres ficticios distintos; por mes, Pagado ARS 90.000,00, Pendiente ARS 72.000,00 y Total considerado ARS 162.000,00.
 - Mes anterior/siguiente y selección directa de mes consultan inmediatamente. El botón Consultar resumen sólo aparece en Rango de fechas; editar sus extremos no consulta hasta presionarlo.
 - Rango invertido o incompleto: error y conservación del contexto y resultados de la última consulta válida; nunca se convierte un error en cero.
 - Un período vacío muestra ceros con explicación. El desplegable tiene su propio estado sin atenciones pendientes.
 
 ## Verificación y límites
+
+### Ampliación visual de ejemplos y eliminación de avisos
+
+- Alcance confirmado: no mostrar cantidades de turnos en los tres recuadros por ahora. No se cambian cálculos, permisos, rutas ni persistencia.
+- RED: 8 fallos de 9 pruebas, salida 2, antes de modificar avisos, nombres y ejemplos.
+- GREEN enfocado: 18 pruebas de resumen económico/navegación, salida 0. Incluye noviembre/diciembre para ambos profesionales, importes exactos, cuatro filas de atenciones impagas, ausencia de avisos y conteos, filtros de mes/rango/día, estados vacíos y selección sin agregado.
+- Suite completa posterior: `MIX_TEST_PARTITION=_issue472 mix test`, **1116 aprobadas, 32 omitidas y 8 excluidas**, salida 0. El log incluye mensajes de ownership del SQL Sandbox; no se atribuyen a una causa confirmada ni se presenta como un log limpio.
+- Build de assets, formato de los archivos modificados y `git diff --check`: salida 0. RDD permanece desactivado; no se abrió una revisión nativa.
+- Las pruebas de DOM no constituyen evidencia visual en navegador. Esta ampliación no declara resueltas las limitaciones de revisión independiente o navegador registradas anteriormente.
 
 ### Actualización del PR #464 con develop
 

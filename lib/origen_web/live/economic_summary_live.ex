@@ -5,7 +5,7 @@ defmodule OrigenWeb.EconomicSummaryLive do
   """
   use OrigenWeb, :live_view
 
-  @professionals [{"demo-a", "Profesional Demo A"}, {"demo-b", "Profesional Demo B"}]
+  @professionals [{"demo-a", "Lucía Méndez"}, {"demo-b", "Martín Salvatierra"}]
   @specialties %{"demo-a" => "Psicología", "demo-b" => "Nutrición"}
   @months ~w(Enero Febrero Marzo Abril Mayo Junio Julio Agosto Septiembre Octubre Noviembre Diciembre)
 
@@ -160,26 +160,82 @@ defmodule OrigenWeb.EconomicSummaryLive do
   defp summarize(socket) do
     a = socket.assigns
     multiplier = if a.selected_professional == "demo-b", do: 2, else: 1
-    suffix = if a.selected_professional == "demo-b", do: "B", else: "A"
+
+    names =
+      if a.selected_professional == "demo-b" do
+        [
+          "Camila Torres",
+          "Bruno Medina",
+          "Elena Suárez",
+          "Gabriel Molina",
+          "Clara Navarro",
+          "Diego Ferreyra",
+          "Inés Ponce",
+          "Mateo Aguirre",
+          "Paula Villalba",
+          "Santiago Vera",
+          "Florencia Castro",
+          "Tomás Peralta",
+          "Marina Godoy",
+          "Lautaro Ibáñez",
+          "Victoria Luna"
+        ]
+      else
+        [
+          "Valentina Ríos",
+          "Julián Acosta",
+          "Sofía Benítez",
+          "Nicolás Duarte",
+          "Emilia Sosa",
+          "Agustín Cabrera",
+          "Catalina Funes",
+          "Benjamín Paz",
+          "Renata Silva",
+          "Franco Correa",
+          "Olivia Ramos",
+          "Manuel Quiroga",
+          "Josefina Arias",
+          "Ignacio Leiva",
+          "Malena Costa"
+        ]
+      end
+
+    # Keep the initial month available and add November/December of that year.
+    # Deduplicate when mounting in November or December to avoid double totals.
+    months =
+      [a.seed_month, Date.new!(a.seed_month.year, 11, 1), Date.new!(a.seed_month.year, 12, 1)]
+      |> Enum.uniq()
 
     rows =
-      [
-        {1, "Paciente Demo #{suffix}", :attended, false, 400_000},
-        {2, "Reserva Demo #{suffix}", :confirmed, false, 600_000},
-        {3, "Pago Demo #{suffix}", :confirmed, true, 1_000_000},
-        {4, "Cancelación Demo #{suffix}", :cancelled, true, 800_000},
-        {5, "Ausencia Demo #{suffix}", :no_show, true, 700_000},
-        {6, "Cancelación impaga Demo", :cancelled, false, 300_000},
-        {7, "Ausencia impaga Demo", :no_show, false, 300_000}
-      ]
-      |> Enum.map(fn {day, name, status, paid, cents} ->
-        %{
-          date: %{a.seed_month | day: day},
-          patient: name,
-          status: status,
-          paid: paid,
-          cents: cents * multiplier
-        }
+      months
+      |> Enum.flat_map(fn month ->
+        [
+          {1, :attended, false, 400_000},
+          {2, :confirmed, false, 600_000},
+          {3, :confirmed, true, 1_000_000},
+          {4, :cancelled, true, 800_000},
+          {5, :no_show, true, 700_000},
+          {6, :cancelled, false, 300_000},
+          {7, :no_show, false, 300_000},
+          {8, :attended, false, 500_000},
+          {10, :attended, false, 750_000},
+          {12, :confirmed, false, 800_000},
+          {15, :attended, true, 900_000},
+          {18, :confirmed, true, 650_000},
+          {20, :cancelled, true, 450_000},
+          {23, :no_show, false, 350_000},
+          {27, :attended, false, 550_000}
+        ]
+        |> Enum.zip(names)
+        |> Enum.map(fn {{day, status, paid, cents}, name} ->
+          %{
+            date: %{month | day: day},
+            patient: name,
+            status: status,
+            paid: paid,
+            cents: cents * multiplier
+          }
+        end)
       end)
       |> Enum.filter(
         &(Date.compare(&1.date, a.consulted_from) != :lt and
@@ -418,21 +474,13 @@ defmodule OrigenWeb.EconomicSummaryLive do
               Resumen de los turnos del período seleccionado.
             </p>
           </div>
-          <span class="rounded-full border border-accent-300 bg-accent-200 px-4 py-2 text-xs font-semibold">Vista de demostración</span>
         </div>
-        <aside
-          id="mock-notice"
-          class="rounded-surface border border-accent-300 bg-accent-100 px-5 py-4 text-sm text-primary-800"
-        >
-          <strong>Datos ficticios.</strong>
-          Este prototipo no está conectado a pagos ni muestra información financiera real. Los ejemplos están en el mes actual; otros períodos pueden estar vacíos.
-        </aside>
         <p
           :if={@selected_professional == ""}
           id="select-professional-notice"
           class="rounded-surface border border-gray-200 bg-surface p-8 text-center text-text-muted"
         >
-          Seleccioná un profesional para consultar su resumen de demostración.
+          Seleccioná un profesional para consultar su resumen.
         </p>
         <div :if={@selected_professional != ""} class="space-y-6">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-4">
@@ -480,7 +528,7 @@ defmodule OrigenWeb.EconomicSummaryLive do
             role="status"
             class="rounded-surface border border-gray-200 bg-surface p-5 text-sm"
           >
-            No hay turnos elegibles en este período de demostración. Los tres importes son cero.
+            No hay turnos elegibles en este período. Los tres importes son cero.
           </p>
           <details
             id="attended-unpaid"
@@ -498,7 +546,7 @@ defmodule OrigenWeb.EconomicSummaryLive do
               <div :if={@detail != []} class="overflow-x-auto">
                 <table class="w-full text-left text-sm">
                   <caption class="sr-only">
-                    Atenciones impagas del profesional y período consultados. Datos ficticios.
+                    Atenciones impagas del profesional y período consultados.
                   </caption>
                   <thead class="bg-accent-100 text-text-muted">
                     <tr>
