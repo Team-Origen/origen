@@ -84,7 +84,17 @@ defmodule Origen.Authorization.Rules do
            {:s1_02, :create_professional_account, {:role, :administrator}, :active,
             %{role: :professional, state: :pending_activation}, :not_applicable},
            {:s1_03, :create_secretary_account, {:role, :administrator}, :active,
-            %{role: :secretary, state: :pending_activation}, :not_applicable}
+            %{role: :secretary, state: :pending_activation}, :not_applicable},
+           {:pay_01, :read_payment, {:role, :patient}, :not_applicable,
+            %{patient_matches_actor: true}, %{authenticated: true}},
+           {:pay_01, :read_payment, {:role, :professional}, :active, %{owner_matches_actor: true},
+            %{authenticated: true}},
+           {:pay_01, :read_payment, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_02, :edit_appointment_price, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_02, :edit_appointment_price, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}}
          ] ++
            for(
              role <- [:administrator, :professional, :secretary],

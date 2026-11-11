@@ -25,6 +25,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.Lifecycle
   alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
+  alias Origen.Booking.Payments
   alias Origen.Booking.ReservationResponse
   alias Origen.Repo
 
@@ -190,6 +191,14 @@ defmodule Origen.Booking do
 
   @doc "Records attended or no_show for a confirmed appointment within the actor's scope."
   defdelegate record_attendance(principal, appointment_id, outcome, opts \\ []), to: Lifecycle
+
+  @doc "Returns the authorized final-price and payment-state projection."
+  defdelegate get_payment(principal, appointment_id), to: Payments, as: :read
+
+  @doc "Updates an unpaid appointment's final price through the authorized public facade."
+  defdelegate update_final_price(principal, appointment_id, value),
+    to: Payments,
+    as: :update_price
 
   @doc """
   Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).

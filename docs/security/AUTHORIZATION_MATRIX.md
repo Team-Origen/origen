@@ -59,6 +59,8 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | S4-06 | Consultar historial operativo del centro | Denegar | Denegar | Condicional/alcance — `LIFE-06` | Denegar | No aplica | #377 / E8, E13 |
 | S4-07 | Registrar asistencia o ausencia en un turno confirmado de la agenda propia | Denegar | Condicional/alcance — `LIFE-07` | Denegar | Denegar | No aplica | #377 / E11–E12 |
 | S4-08 | Registrar asistencia o ausencia en un turno confirmado de cualquier agenda | Denegar | Denegar | Condicional/alcance — `LIFE-08` | Denegar | No aplica | #377 / E11–E12 |
+| S4-09 | Consultar precio final y estado de pago de un turno propio | Denegar | Condicional/alcance — `PAY-01` | Condicional/alcance — `PAY-01` | Condicional/alcance — `PAY-01` | No aplica | #384 / P3–P4 |
+| S4-10 | Editar el precio final impago de un turno | Denegar | Condicional/alcance — `PAY-02` | Condicional/alcance — `PAY-02` | Denegar | No aplica | #384 / P3, P5–P6 |
 
 ### Condiciones y alcances
 
@@ -93,6 +95,8 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | `LIFE-06` | Secretaría autenticada; la consulta conserva el alcance operativo del centro. Administrador no obtiene acceso implícito a ninguna de estas operaciones. |
 | `LIFE-07` | Profesional autenticado mediante `Origen.Sessions.revalidate_principal/2`; el backend deriva su cuenta, limita la operación a su agenda y solo permite transformar un turno `confirmed` en `attended` o `no_show`. No se fija una ventana temporal ni un flujo de corrección terminal. |
 | `LIFE-08` | Secretaría autenticada mediante `Origen.Sessions.revalidate_principal/2`; puede transformar un turno `confirmed` de cualquier agenda en `attended` o `no_show`. No concede acceso a otras operaciones de #284 ni permisos implícitos al Administrador. |
+| `PAY-01` | Profesional o Secretaría con cuenta `Activa` y sesión revalidada consulta sólo su agenda o todas las agendas, respectivamente. Paciente con sesión passwordless revalidada consulta únicamente sus propios turnos. La proyección del Paciente contiene sólo `final_price_ars` y `payment_status` junto al identificador del turno; nunca método, actor, fecha o historial. Administrador, anónimo, sesión inválida y cuentas inactivas quedan denegados. |
+| `PAY-02` | Profesional con sesión revalidada sólo sobre su agenda y Secretaría con sesión revalidada sobre cualquier agenda pueden editar el precio final mientras el pago esté `pending`. El backend deriva actor y alcance, valida un Decimal finito no negativo —incluido cero— y bloquea la fila antes de mutar. Paciente, Administrador, cuentas inactivas, sesiones inválidas y agendas ajenas quedan denegados. |
 
 ## Pruebas mínimas de autorización
 
@@ -136,7 +140,7 @@ Estas pruebas son obligatorias en backend para las operaciones críticas. Deben 
 | Reserva por Profesional relacionado y agenda propia | RF-05, RF-08, RF-10, RF-23 |
 | Consulta e inmutabilidad de auditoría | RNF-02; RF-23; `SPRINT_00.md`, decisiones de auditoría append-only |
 
-Quedan fuera de esta versión la representación de Pacientes, ausencias y feriados, cambios de disponibilidad que afecten turnos, aprobación manual y gestión posterior del turno, WhatsApp, lista de espera, pagos, comprobantes, reportes y gestión posterior de datos o credenciales. También quedan fuera los perfiles representados en la reserva autónoma. Su ausencia no concede acceso: toda combinación rol–operación no declarada, incluida cualquier inferencia de jerarquía para Administrador, permanece denegada por defecto hasta incorporarse con fuente, alcance y pruebas.
+Quedan fuera de esta versión la representación de Pacientes, ausencias y feriados, cambios de disponibilidad que afecten turnos, aprobación manual y gestión posterior del turno, WhatsApp, lista de espera, comprobantes, reportes y gestión posterior de datos o credenciales. La consulta y edición de precio final de #384 se declara arriba; el registro y la corrección de pagos, sus acciones y el resumen económico siguen denegados hasta sus filas y pruebas propias. También quedan fuera los perfiles representados en la reserva autónoma. Su ausencia no concede acceso: toda combinación rol–operación no declarada, incluida cualquier inferencia de jerarquía para Administrador, permanece denegada por defecto hasta incorporarse con fuente, alcance y pruebas.
 
 ## Estado de decisiones
 
@@ -157,6 +161,7 @@ La versión actual `0.8-draft`, incluidas las condiciones agregadas para acceso,
 
 | Versión | Fecha | Estado | Cambio |
 | --- | --- | --- | --- |
+| `0.9-draft` | 2026-11-08 | Draft — pending independent review | Agrega la consulta financiera mínima y la edición del precio final impago de #384: Profesional sobre su agenda, Secretaría sobre todas y Paciente sólo sobre sus turnos con proyección reducida; conserva default deny para Administrador y las sesiones inválidas. No acredita implementación ni ejecución de pruebas. |
 | `0.8-draft` | 2026-11-08 | Draft — pending independent review | Agrega el registro autenticado de asistencia/ausencia de #377: Profesional sólo en su agenda y Secretaría en todas, únicamente sobre turnos `confirmed`; conserva default deny para Paciente y Administrador y explicita que no fija ventana temporal ni corrección terminal. No acredita implementación ni ejecución de pruebas. |
 | `0.7-draft` | 2026-10-24 | Draft — pending independent review | Agrega cancelación autenticada e historial operativo SQL-acotado de #377 para Paciente, Profesional y Secretaría; exige motivo no blanco al personal, conserva default deny para Administrador y registra pruebas de alcance. No acredita implementación ni ejecución de pruebas. |
 | `0.6-draft` | 2026-09-02 | Draft — pending independent review | Amplía el alcance de demo con acceso y perfil propio de Paciente, verificación telefónica propia, tipo y disponibilidad propios del Profesional, primera reserva autónoma o asistida, reserva relacionada del Profesional y agenda propia. Define que solo la persistencia atómica exitosa crea la relación y agrega pruebas mínimas positivas y negativas. No acredita implementación ni pruebas ejecutadas. |

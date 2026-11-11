@@ -7,6 +7,7 @@ defmodule Origen.Authorization.Policy do
   """
 
   @lifecycle_operations [:cancel_appointment, :read_appointment_history, :record_attendance]
+  @payment_operations [:read_payment, :edit_appointment_price]
 
   @spec lifecycle_allowed?(atom(), atom()) :: boolean()
   def lifecycle_allowed?(role, operation) when operation in @lifecycle_operations do
@@ -24,4 +25,18 @@ defmodule Origen.Authorization.Policy do
   end
 
   def lifecycle_allowed?(_role, _operation), do: false
+
+  @spec payment_allowed?(atom(), atom()) :: boolean()
+  def payment_allowed?(role, operation) when operation in @payment_operations do
+    case {role, operation} do
+      {:patient, :read_payment} -> true
+      {:professional, :read_payment} -> true
+      {:secretary, :read_payment} -> true
+      {:professional, :edit_appointment_price} -> true
+      {:secretary, :edit_appointment_price} -> true
+      _ -> false
+    end
+  end
+
+  def payment_allowed?(_role, _operation), do: false
 end
