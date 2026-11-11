@@ -53,6 +53,7 @@ defmodule Origen.Booking.EconomicSummaryTest do
           {~D[2026-11-10], "cancelled"},
           {~D[2026-11-11], "requested"},
           {~D[2026-11-12], "expired"},
+          {~D[2026-11-15], "reserved"},
           {~D[2026-11-13], "no_show"}
         ] do
       appointment!(f, date, 9, status, "9000")
@@ -82,6 +83,42 @@ defmodule Origen.Booking.EconomicSummaryTest do
              Map.take(range, [:paid, :pending, :total, :professional])
 
     assert Decimal.equal?(month.pending, Decimal.new("5000"))
+  end
+
+  test "appointments are assigned to the local organization date, not the UTC date", %{
+    fixture: f
+  } do
+    Application.put_env(:origen, :organization_timezone, "America/Argentina/Buenos_Aires")
+    professional = Fixtures.professional_principal(f)
+
+    # 2026-11-01 02:00 UTC is 2026-10-31 23:00 in Buenos Aires.
+    appointment_at!(f, ~U[2026-11-01 02:00:00Z], "1000")
+    # 2026-11-01 03:00 UTC is the first local minute of November.
+    appointment_at!(f, ~U[2026-11-01 03:00:00Z], "2000")
+    # 2026-12-01 00:30 UTC is 2026-11-30 21:30 in Buenos Aires.
+    appointment_at!(f, ~U[2026-12-01 00:30:00Z], "4000")
+    # 2026-12-01 03:00 UTC is the first local minute of December.
+    appointment_at!(f, ~U[2026-12-01 03:00:00Z], "8000")
+
+    assert {:ok, november} = Booking.economic_summary(professional, f.professional_id, @month)
+    assert Decimal.equal?(november.pending, Decimal.new("6000"))
+
+    assert {:ok, last_day} =
+             Booking.economic_summary(professional, f.professional_id, %{
+               "mode" => "range",
+               "from" => "2026-11-30",
+               "to" => "2026-11-30"
+             })
+
+    assert Decimal.equal?(last_day.pending, Decimal.new("4000"))
+
+    assert {:ok, december} =
+             Booking.economic_summary(professional, f.professional_id, %{
+               "mode" => "month",
+               "month" => "2026-12"
+             })
+
+    assert Decimal.equal?(december.pending, Decimal.new("8000"))
   end
 
   test "equal range endpoints include the complete local day and reversed ranges do not query", %{
@@ -329,11 +366,11 @@ defmodule Origen.Booking.EconomicSummaryTest do
   end
 
   defp appointment!(fixture, date, hour, status, price) do
-    appointment =
-      Fixtures.appointment!(fixture,
-        start_time: DateTime.new!(date, Time.new!(hour, 0, 0), "Etc/UTC"),
-        status: status
-      )
+    appointment_at!(fixture, DateTime.new!(date, Time.new!(hour, 0, 0), "Etc/UTC"), price, status)
+  end
+
+  defp appointment_at!(fixture, start_time, price, status \\ "confirmed") do
+    appointment = Fixtures.appointment!(fixture, start_time: start_time, status: status)
 
     principal = Fixtures.professional_principal(fixture)
 
