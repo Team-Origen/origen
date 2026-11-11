@@ -91,8 +91,11 @@ if config_env() == :prod do
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
+  # The web service reaches Render Postgres over the private network without TLS.
+  # Set DATABASE_SSL=true when connecting from outside (Render's external URL
+  # requires TLS); Postgrex then verifies the certificate and hostname.
   config :origen, Origen.Repo,
-    # ssl: true,
+    ssl: System.get_env("DATABASE_SSL") in ~w(true 1),
     url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     # For machines with several cores, consider starting multiple pools of `pool_size`
