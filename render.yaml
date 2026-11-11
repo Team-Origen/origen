@@ -1,0 +1,48 @@
+# Render Blueprint for the Origen academic deployment.
+# Reference: https://render.com/docs/blueprint-spec
+#
+# Deploys are triggered by .github/workflows/cd.yml after a merge to main,
+# not by Render's own Git auto-deploy. See docs/deployment/RENDER.md.
+
+services:
+  - type: web
+    name: origen
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: virginia
+    # Free plan: sleeps after 15 minutes without traffic and has no
+    # preDeployCommand, so bin/server runs the migrations before starting.
+    # To move to a paid plan (no sleep), see docs/deployment/RENDER.md.
+    plan: free
+    branch: main
+    autoDeployTrigger: "off"
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: origen-db
+          property: connectionString
+      - key: POOL_SIZE
+        value: "5"
+      # Phoenix needs at least 64 bytes. Set it by hand: `mix phx.gen.secret`.
+      - key: SECRET_KEY_BASE
+        sync: false
+      # Encrypts TOTP seeds. Exactly 32 bytes: `openssl rand -hex 16`.
+      # Never rotate it by hand: existing seeds would become unreadable.
+      - key: ORIGEN_TOTP_KEY
+        sync: false
+      # Signs activation tokens. At least 32 bytes; Render generates 44.
+      - key: ORIGEN_VERIFIER_KEY
+        generateValue: true
+
+databases:
+  - name: origen-db
+    databaseName: origen
+    user: origen
+    region: virginia
+    postgresMajorVersion: "17"
+    # Free plan: 1 GB, and Render deletes it 30 days after creation
+    # (plus a 14-day grace period) unless it is upgraded to a paid plan.
+    plan: free
+    # Only the web service connects; no access from the internet.
+    ipAllowList: []
