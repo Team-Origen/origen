@@ -16,6 +16,7 @@ defmodule OrigenWeb.PatientAppointmentsLive do
        page_title: "Mis turnos",
        principal: principal,
        appointments: [],
+       payments: %{},
        history_error: nil,
        feedback: nil,
        now: DateTime.utc_now(),
@@ -59,12 +60,22 @@ defmodule OrigenWeb.PatientAppointmentsLive do
               &{DateTime.to_unix(&1.start_time, :microsecond), &1.id},
               :desc
             ),
+          payments:
+            Map.new(appointments, fn appointment ->
+              projection =
+                case Booking.get_payment(socket.assigns.principal, appointment.id) do
+                  {:ok, payment} -> payment
+                  {:error, _} -> nil
+                end
+
+              {appointment.id, projection}
+            end),
           history_error: nil,
           professional_names: professional_names()
         )
 
       {:error, _reason} ->
-        assign(socket, appointments: [], history_error: :unavailable)
+        assign(socket, appointments: [], payments: %{}, history_error: :unavailable)
     end
   end
 
@@ -238,10 +249,21 @@ defmodule OrigenWeb.PatientAppointmentsLive do
               </div>
 
               <div class="mt-4 grid gap-3 border-t border-stone-100 pt-4 text-sm sm:grid-cols-2">
-                <p>
-                  <span class="block text-xs font-semibold uppercase tracking-wide text-stone-500">Importe</span>
-                  <span class="text-stone-800">${appointment.price_ars}</span>
-                </p>
+                <% payment = Map.get(@payments, appointment.id) %>
+                <%= if payment do %>
+                  <p>
+                    <span class="block text-xs font-semibold uppercase tracking-wide text-stone-500">Precio final</span>
+                    <span id={"patient-final-price-#{appointment.id}"} class="text-stone-800">${payment.final_price_ars}</span>
+                  </p>
+                  <p>
+                    <span class="block text-xs font-semibold uppercase tracking-wide text-stone-500">Estado de pago</span>
+                    <span id={"patient-payment-state-#{appointment.id}"} class="text-stone-800">
+                      {if payment.payment_status == "paid", do: "Pagado", else: "Pendiente"}
+                    </span>
+                  </p>
+                <% else %>
+                  <p class="text-stone-600">Precio y estado de pago no disponibles.</p>
+                <% end %>
                 <div :if={appointment.cancellation_origin || appointment.cancellation_reason}>
                   <span class="block text-xs font-semibold uppercase tracking-wide text-stone-500">Cancelación</span>
                   <p :if={appointment.cancellation_origin} class="text-stone-800">
