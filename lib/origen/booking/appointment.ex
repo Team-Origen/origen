@@ -28,6 +28,8 @@ defmodule Origen.Booking.Appointment do
     field :snapshot_consultation_type_name, :string
     field :snapshot_duration_minutes, :integer
     field :snapshot_exact_price_ars, :decimal
+    # Final price is server-managed and intentionally excluded from changeset/2.
+    field :final_price_ars, :decimal, read_after_writes: true
 
     timestamps(inserted_at: :created_at, updated_at: :updated_at, type: :utc_datetime_usec)
   end
