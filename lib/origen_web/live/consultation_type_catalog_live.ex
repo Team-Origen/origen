@@ -81,12 +81,6 @@ defmodule OrigenWeb.ConsultationTypeCatalogLive do
   # Los motivos de error se mapean a mensajes claros en español; nunca se filtra
   # el término interno (`inspect/1`) hacia la interfaz.
 
-  defp resolution_error_message(:invalid_status_transition),
-    do: "La solicitud ya fue procesada o cambió de estado."
-
-  defp resolution_error_message(:appointment_not_found),
-    do: "El turno solicitado no fue encontrado."
-
   defp resolution_error_message(:unauthorized),
     do: "No tenés permiso para resolver esta solicitud."
 
