@@ -2,6 +2,12 @@
 
 Estado: **entrega aprobada por el usuario por ahora**, con los límites de verificación registrados. Última suite completa de la implementación: 1169 aprobadas, 35 omitidas y 8 excluidas, exit 0. La aprobación humana no sustituye el dictamen independiente ni la comprobación en navegador, que siguen sin evidencia disponible. El usuario autorizó commits, publicación y PRs con `Refs #387`, sin cierre automático ni merge. `status:approved` agregado a #387 por autorización explícita. Se conserva la evidencia histórica de fallos y resultados anteriores.
 
+## Evidencia de entrega
+
+Después del fast-forward a `develop` `7372371`, `MIX_TEST_PARTITION=_387_delivery mix test && mix format --check-formatted && git diff --check` terminó con exit 0: **1170 aprobadas, 35 omitidas y 8 excluidas**. El incremento respecto de 1169 incluye la prueba incorporada por el nuevo develop. El log contiene mensajes de ownership del sandbox y una advertencia de redefinición de módulo de migración; no se afirman logs libres de advertencias. CI remoto aún pendiente al registrar la entrega.
+
+Commits de implementación: `975fdd9` (tracker/trazabilidad), `ac74553` (proyección Paciente) y `b529aa4` (modal Staff y correcciones visuales, con pruebas). La unidad Staff suma 1003 líneas cambiadas antes de esta actualización documental: se mantiene cohesionada porque el componente LiveView, sus eventos y los controles de ambas agendas se verifican juntos. La separación adicional dejaría slices sin recorrido funcional; no se eliminaron pruebas ni se comprimió código para ajustarse al presupuesto orientativo de 400 líneas.
+
 ## Alcance y fuentes
 
 - Padre: [#287](https://github.com/Team-Origen/origen/issues/287).
