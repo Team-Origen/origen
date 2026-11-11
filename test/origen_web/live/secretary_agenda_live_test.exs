@@ -87,7 +87,69 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
     assert has_element?(view, "#navigation-secretary-name", "Secretaría")
     assert has_element?(view, "#navigation-secretary-email")
     assert has_element?(view, "#navigation-account-menu form[action='/logout'][method='post']")
-    assert html =~ "Paciente ##{fixture.patient_id}"
+    assert html =~ "Paciente no identificado"
+    refute html =~ "Paciente ##{fixture.patient_id}"
+  end
+
+  test "shows real patient and corresponding professional names without visible appointment IDs",
+       %{fixture: fixture, conn: conn} do
+    %{rows: [[persona_id]]} =
+      Repo.query!(
+        """
+        INSERT INTO personas (first_name, last_name, document_type, document_number, birthdate, created_at, updated_at)
+        VALUES ('Juan', 'Pérez', 'dni', $1, '1990-01-01', clock_timestamp(), clock_timestamp()) RETURNING id
+        """,
+        ["#{System.unique_integer([:positive])}"]
+      )
+
+    Repo.query!("UPDATE patient_profiles SET persona_id = $1 WHERE id = $2", [
+      persona_id,
+      fixture.patient_id
+    ])
+
+    for {professional_id, name} <- [
+          {fixture.professional_id, "Ana"},
+          {fixture.other_professional_id, "Lucía"}
+        ] do
+      Repo.query!(
+        "INSERT INTO professional_profiles (owner_account_id, first_name, last_name) VALUES ($1, $2, 'Gómez')",
+        [professional_id, name]
+      )
+    end
+
+    now = DateTime.utc_now()
+
+    for {professional_id, name, offset} <- [
+          {fixture.professional_id, "Ana", 0},
+          {fixture.other_professional_id, "Lucía", 3600}
+        ] do
+      appointment =
+        Fixtures.appointment!(fixture,
+          status: "confirmed",
+          professional_account_id: professional_id,
+          start_time: DateTime.add(now, offset, :second)
+        )
+
+      {:ok, view, _} = live(conn, @path)
+
+      for selector <- [
+            "#secretary-appointment-#{appointment.id}",
+            "#secretary-history-appointment-#{appointment.id}-wrapper"
+          ] do
+        assert has_element?(view, selector, "Juan Pérez")
+        assert has_element?(view, selector, "Profesional: #{name} Gómez")
+        assert has_element?(view, selector, "Lifecycle consultation")
+        refute element(view, selector) |> render() =~ "Paciente ##{fixture.patient_id}"
+        refute element(view, selector) |> render() =~ "Turno ##{appointment.id}"
+      end
+
+      view |> element("#view-turn-#{appointment.id}") |> render_click()
+      assert has_element?(view, "#turn-detail", "Juan Pérez")
+      assert has_element?(view, "#turn-detail", "Profesional: #{name} Gómez")
+      assert has_element?(view, "#turn-detail", "Lifecycle consultation")
+      refute element(view, "#turn-detail") |> render() =~ "Paciente ##{fixture.patient_id}"
+      refute element(view, "#turn-detail") |> render() =~ "Turno ##{appointment.id}"
+    end
   end
 
   test "renders the agenda date control with explicit light native colors", %{conn: conn} do
@@ -151,7 +213,7 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
     assert has_element?(
              view,
              "#secretary-history-appointment-#{requested.id}-wrapper",
-             "Paciente ##{fixture.patient_id}"
+             "Paciente no identificado"
            )
 
     view |> element("#cancel-appointment-#{requested.id}") |> render_click()
@@ -159,7 +221,7 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
     assert has_element?(
              view,
              "#appointment-cancellation-form-#{requested.id} #cancellation-patient-#{requested.id}",
-             "Paciente ##{fixture.patient_id}"
+             "Paciente no identificado"
            )
 
     html =
@@ -269,7 +331,10 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
 
     {:ok, view, html} = live(conn, @path)
     assert html =~ "Historial operativo del centro"
-    assert html =~ "##{foreign.id}"
+    assert has_element?(view, "#secretary-history-appointment-#{foreign.id}", "Confirmado")
+
+    refute element(view, "#secretary-history-appointment-#{foreign.id}") |> render() =~
+             "Turno ##{foreign.id}"
 
     html =
       render_click(view, "submit_cancellation", %{

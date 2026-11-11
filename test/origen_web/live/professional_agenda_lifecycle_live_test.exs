@@ -113,8 +113,14 @@ defmodule OrigenWeb.ProfessionalAgendaLifecycleLiveTest do
     assert html =~ "Profesional"
     assert html =~ "Motivo:"
     assert html =~ "Guardia reprogramada"
-    assert html =~ "##{expired.id}"
-    assert html =~ "##{cancelled.id}"
+    assert has_element?(view, "#professional-history-appointment-#{expired.id}", "Vencido")
+    assert has_element?(view, "#professional-history-appointment-#{cancelled.id}", "Cancelado")
+
+    refute element(view, "#professional-history-appointment-#{expired.id}") |> render() =~
+             "Turno #{expired.id}"
+
+    refute element(view, "#professional-history-appointment-#{cancelled.id}") |> render() =~
+             "Turno #{cancelled.id}"
 
     assert {:ok, history} = Booking.list_appointment_history(principal)
     assert Enum.map(history, & &1.id) == [expired.id, cancelled.id]

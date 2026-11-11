@@ -24,6 +24,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
     {:ok,
      socket
      |> assign(
+       selected_appointment: nil,
        page_title: "Agenda Diaria",
        date: date,
        loading: false,
@@ -60,6 +61,20 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
             {:noreply, assign(socket, error: :invalid_date, appointments: [], loading: false)}
         end
     end
+  end
+
+  @impl true
+  def handle_event("open_turn_detail", %{"appointment_id" => id}, socket) do
+    appointment =
+      Enum.find(socket.assigns.appointments ++ socket.assigns.history, fn appointment ->
+        to_string(appointment.id) == id
+      end)
+
+    {:noreply, assign(socket, selected_appointment: appointment)}
+  end
+
+  def handle_event("close_turn_detail", _params, socket) do
+    {:noreply, assign(socket, selected_appointment: nil)}
   end
 
   @impl true
@@ -540,11 +555,11 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                   </p>
 
                   <div
-                    :if={to_string(appt.status) in @lifecycle_statuses}
                     id={"lifecycle-actions-#{appt.id}"}
                     class="pt-2 flex flex-wrap items-center gap-2"
                   >
                     <button
+                      :if={to_string(appt.status) in @lifecycle_statuses}
                       type="button"
                       id={"cancel-appointment-#{appt.id}"}
                       phx-click="open_cancellation"
@@ -573,6 +588,10 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                     >
                       Marcar ausencia
                     </button>
+                    <OrigenWeb.AppointmentPaymentComponent.detail_button
+                      id={"view-turn-#{appt.id}"}
+                      appointment_id={appt.id}
+                    />
                   </div>
 
                   <%= if @cancellation_appointment_id == appt.id do %>
@@ -774,12 +793,29 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
             id="professional-history-list"
             class="space-y-3"
           >
-            <AppointmentLifecycle.history
-              :for={appointment <- @history}
-              appointment={appointment}
-              timezone={@organization_timezone}
-            />
+            <div :for={appointment <- @history}>
+              <AppointmentLifecycle.history
+                appointment={appointment}
+                timezone={@organization_timezone}
+                professional_history={true}
+              >
+                <:actions>
+                  <OrigenWeb.AppointmentPaymentComponent.detail_button
+                    id={"history-view-turn-#{appointment.id}"}
+                    appointment_id={appointment.id}
+                  />
+                </:actions>
+              </AppointmentLifecycle.history>
+            </div>
           </div>
+          <.live_component
+            :if={@selected_appointment}
+            module={OrigenWeb.AppointmentPaymentComponent}
+            id={"payment-#{@selected_appointment.id}"}
+            appointment={@selected_appointment}
+            principal={@current_internal_session}
+            timezone={@organization_timezone}
+          />
         </section>
       </div>
     </div>

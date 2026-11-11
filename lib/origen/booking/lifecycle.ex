@@ -288,9 +288,19 @@ defmodule Origen.Booking.Lifecycle do
 
   defp query_history(%{role: :professional, account_id: account_id}) do
     from(a in Appointment,
+      join: patient in Origen.Patients.PatientProfile,
+      on: patient.id == a.patient_profile_id,
+      left_join: persona in Origen.Patients.Persona,
+      on: persona.id == patient.persona_id,
       where: a.professional_account_id == ^account_id,
       order_by: [asc: a.start_time, asc: a.id],
       select: %{
+        patient_name:
+          fragment(
+            "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', ?, ?)), ''), 'Paciente')",
+            persona.first_name,
+            persona.last_name
+          ),
         id: a.id,
         patient_profile_id: a.patient_profile_id,
         professional_account_id: a.professional_account_id,
@@ -310,8 +320,26 @@ defmodule Origen.Booking.Lifecycle do
 
   defp query_history(%{role: :secretary}) do
     from(a in Appointment,
+      join: patient in Origen.Patients.PatientProfile,
+      on: patient.id == a.patient_profile_id,
+      left_join: persona in Origen.Patients.Persona,
+      on: persona.id == patient.persona_id,
+      left_join: professional in "professional_profiles",
+      on: professional.owner_account_id == a.professional_account_id,
       order_by: [asc: a.start_time, asc: a.id],
       select: %{
+        patient_name:
+          fragment(
+            "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', ?, ?)), ''), 'Paciente no identificado')",
+            persona.first_name,
+            persona.last_name
+          ),
+        professional_name:
+          fragment(
+            "COALESCE(NULLIF(TRIM(CONCAT_WS(' ', ?, ?)), ''), 'Profesional no identificado')",
+            professional.first_name,
+            professional.last_name
+          ),
         id: a.id,
         patient_profile_id: a.patient_profile_id,
         professional_account_id: a.professional_account_id,
