@@ -818,16 +818,14 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       assert has_element?(view, "#patient-access-status-#{ctx.patient_1.id}")
       assert has_element?(view, "#patient-access-status-#{ctx.patient_1.id}-#{r2.appointment_id}")
-      assert has_element?(view, "#btn-open-replace-access-#{ctx.patient_1.id}")
+      refute has_element?(view, "#btn-open-replace-access-#{ctx.patient_1.id}")
 
-      assert has_element?(
+      refute has_element?(
                view,
                "#btn-open-replace-access-#{ctx.patient_1.id}-#{r2.appointment_id}"
              )
 
-      view
-      |> element("#btn-open-replace-access-#{ctx.patient_1.id}-#{r2.appointment_id}")
-      |> render_click()
+      render_click(view, "open_replace_access", %{"patient-id" => to_string(ctx.patient_1.id)})
 
       assert has_element?(view, "#patient-access-form-#{ctx.patient_1.id}")
       refute has_element?(view, "#patient-access-form-#{ctx.patient_1.id}-#{r2.appointment_id}")

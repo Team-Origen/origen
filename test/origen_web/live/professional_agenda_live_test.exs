@@ -454,7 +454,9 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       assert html =~ "Consulta General"
       assert html =~ "Reservado"
       assert html =~ "Confirmado"
-      assert html =~ "Tel: +5491144445555"
+      refute html =~ "Tel:"
+      refute html =~ "+5491144445555"
+      refute has_element?(view, "[phx-click=open_replace_access]")
       assert html =~ "DNI: 35111222"
 
       # Validar orden cronológico: 09:00 debe aparecer antes que 11:00 en el HTML
@@ -466,7 +468,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       assert has_element?(view, "#agenda-appointments-list")
     end
 
-    test "profesional puede vincular y reemplazar el correo desde la agenda", %{
+    test "link and replace capabilities remain available without the replace card button", %{
       conn: conn,
       prof_token: prof_token,
       professional_id: prof_id,
@@ -502,7 +504,8 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
                "Pendiente de verificación"
              )
 
-      view |> element("#btn-open-replace-access-#{patient.profile_id}") |> render_click()
+      refute has_element?(view, "#btn-open-replace-access-#{patient.profile_id}")
+      render_click(view, "open_replace_access", %{"patient-id" => to_string(patient.profile_id)})
 
       view
       |> form("#patient-access-form-fields-#{patient.profile_id}",
@@ -522,12 +525,13 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
              )
     end
 
-    test "muestra estado de acceso verificado cuando el paciente consumió el enlace", %{
-      conn: conn,
-      prof_token: prof_token,
-      professional_id: prof_id,
-      patient_1: patient
-    } do
+    test "verified access is hidden on the card but possession and patient details remain intact",
+         %{
+           conn: conn,
+           prof_token: prof_token,
+           professional_id: prof_id,
+           patient_1: patient
+         } do
       email = "mario.verificado@example.test"
       Repo.query!("UPDATE patient_profiles SET email = NULL WHERE id = $1", [patient.profile_id])
       profile = Origen.Repo.get!(Origen.Patients.PatientProfile, patient.profile_id)
@@ -552,11 +556,22 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       {:ok, view, _html} =
         live(put_internal_session(conn, prof_token), ~p"/profesional/agenda?date=2026-10-15")
 
-      assert has_element?(
-               view,
-               "#patient-access-status-#{patient.profile_id}",
-               "Acceso verificado"
-             )
+      refute has_element?(view, "#patient-access-status-#{patient.profile_id}")
+      refute has_element?(view, "[phx-click=open_replace_access]")
+      refute render(view) =~ "Acceso verificado"
+      refute render(view) =~ "+5491144445555"
+      assert render(view) =~ "Mario Bros"
+      assert render(view) =~ "DNI: 35111222"
+      assert render(view) =~ "Acceso: #{email}"
+      assert render(view) =~ "09:00 - 09:30"
+      assert render(view) =~ "Consulta General"
+      assert Origen.PatientAccess.access_status(email) == :verified
+
+      assert {:ok, %{appointments: [%{patient: %{phone: "+5491144445555", email: ^email}}]}} =
+               Origen.Booking.get_professional_agenda(
+                 Sessions.fetch_session(prof_token) |> elem(1),
+                 %{date: ~D[2026-10-15]}
+               )
     end
 
     test "muestra estado de agenda vacía cuando no hay turnos", %{

@@ -630,11 +630,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       {format_document_type(appt.patient.document_type)}: {appt.patient.document_number}
                     </div>
                   <% end %>
-                  <%= if appt.patient.phone do %>
-                    <div class="text-xs text-stone-500">
-                      Tel: {appt.patient.phone}
-                    </div>
-                  <% end %>
 
                   <div :if={appt.patient.email} class="text-xs text-stone-500">
                     Acceso: {appt.patient.email}
@@ -642,6 +637,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
 
                   <% {access_label, access_classes} = access_badge(appt.patient.access_status) %>
                   <div
+                    :if={appt.patient.access_status != :verified}
                     id={"patient-access-status-#{patient_dom_key}"}
                     class={"mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold " <> access_classes}
                     role="status"
@@ -659,16 +655,6 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
                     >
                       Vincular correo
-                    </button>
-                    <button
-                      :if={appt.patient.access_status != :unlinked}
-                      type="button"
-                      id={"btn-open-replace-access-#{patient_dom_key}"}
-                      phx-click="open_replace_access"
-                      phx-value-patient-id={appt.patient.id}
-                      class="rounded-md border border-[#0A3847] px-2.5 py-1 text-xs font-semibold text-[#0A3847] hover:bg-stone-50"
-                    >
-                      Reemplazar correo
                     </button>
                   </div>
 

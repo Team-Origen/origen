@@ -38,3 +38,16 @@ RED: the new adjacency assertion failed before moving the panel (exit 2).
 GREEN: 44 Agenda/Requests/catalog/manual-approval tests passed, including saving
 both selectors and preservation of pending requests. DOM position is verified;
 real-browser desktop/mobile presentation remains unverified.
+
+## Professional Agenda patient cards
+
+Only the phone label/value, verified-access indicator and replace-email trigger
+are hidden from the patient card. Patient identity, email, appointment details,
+unlinked/pending-access states and link-email action remain. No data, replacement
+handlers, forms, validation or permissions are removed. Public API assertions
+verify phone and verified-access state retention; replacement regression tests
+invoke the existing public LiveView event rather than the hidden button.
+
+Prior card-cleanup RED: 12 failures/80 tests; final focused GREEN85/85 and expanded
+suite1114 passed before the three later handoff adjustments. The integrated
+post-adjustment suite1115 also passes. No before/after browser capture is claimed.
