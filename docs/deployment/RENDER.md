@@ -13,7 +13,7 @@ How Origen is deployed to Render for the academic delivery (#292), and how a mer
 
 Render's own Git auto-deploy is off (`autoDeployTrigger: "off"` in `render.yaml`), so the workflow is the only automatic trigger. It can also be run by hand from the Actions tab (`workflow_dispatch`).
 
-After the hook call succeeds, the workflow tags the commit as `v<YYYY.MM.DD>-<run number>` (UTC), for example `v2026.11.11-12`. The tag records that a deploy was **requested** for that commit; whether it went live is shown in the Render dashboard. A manual re-run on an already tagged commit does not add a second tag. The tag runs in its own job (`tag`), the only one with write access to the repository; if it fails, use **Re-run failed jobs** so the deploy hook is not called again.
+After the hook call succeeds, the workflow tags the commit with the next semantic version, computed from the Conventional Commits since the last version tag (`.github/scripts/next-version.sh`): a breaking change (`type!:` or a `BREAKING CHANGE:` footer) bumps the major, any `feat` bumps the minor, anything else bumps the patch; the first one is `v1.0.0`. The tag records that a deploy was **requested** for that commit; whether it went live is shown in the Render dashboard. A commit that already has a version tag is not tagged again. The tag runs in its own job (`tag`), the only one with write access to the repository; if it fails, use **Re-run failed jobs** so the deploy hook is not called again. Earlier date tags such as `v2026.11.11-3` are kept and ignored when computing versions. Script tests: `bash .github/scripts/next-version.test.sh`.
 
 ## What `render.yaml` creates
 
