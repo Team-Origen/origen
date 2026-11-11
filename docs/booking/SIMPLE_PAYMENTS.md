@@ -1,17 +1,18 @@
-# Pagos simples: precio final, registro y estado pendiente
+# Pagos simples: precio final, registro y corrección
 
 T1 agrega la base persistida y autorizada para pagos simples; T2 agrega el
 registro total. Cada turno conserva su snapshot histórico, un precio final
-editable independiente y una fila de pago inicialmente `pending`. Este slice no
-revierte marcas ni crea resumen económico.
+editable independiente y una fila de pago inicialmente `pending`. La corrección
+revierte una marca pagada sin representar una devolución ni crear resumen económico.
 
 ## Recorrido disponible
 
 1. `Origen.Booking.get_payment/2` devuelve la proyección financiera autorizada.
 2. `Origen.Booking.update_final_price/3` cambia el precio final de un turno impago.
 3. `Origen.Booking.record_payment/3` registra un único total en efectivo o transferencia para un turno `confirmed` o `attended`.
-4. `Origen.Booking.list_payment_actions/2` devuelve la historia interna sólo a Profesional dentro de su agenda y Secretaría del centro.
-5. Profesional opera sólo su agenda; Secretaría opera todas; Paciente sólo lee
+4. `Origen.Booking.revert_payment/4` revierte una marca pagada sólo con confirmación explícita `true`, conserva su acción y habilita corregir el precio.
+5. `Origen.Booking.list_payment_actions/2` devuelve la historia interna sólo a Profesional dentro de su agenda y Secretaría del centro.
+6. Profesional opera sólo su agenda; Secretaría opera todas; Paciente sólo lee
    precio final y estado; Administrador no tiene acceso financiero.
 
 ## Contrato de la interfaz pública
@@ -31,8 +32,14 @@ Origen.Booking.record_payment(principal, appointment_id, method)
 #         payment_method: method, paid_actor_kind: kind,
 #         paid_actor_ref: server_ref, paid_at: server_time}}
 
+Origen.Booking.revert_payment(principal, appointment_id, true)
+# {:ok, %{payment_status: "pending", payment_method: nil,
+#         paid_amount_ars: nil, paid_actor_ref: nil, paid_at: nil}}
+# false, nil o :cancelled retornan {:error, :confirmation_required} sin mutación.
+# opts sólo acepta los fail_at de las pruebas transaccionales; no hay motivo escrito.
+
 Origen.Booking.list_payment_actions(principal, appointment_id)
-# {:ok, [%{action: "paid", amount_ars: decimal, method: method,
+# {:ok, [%{action: "paid" | "reverted", amount_ars: decimal, method: method,
 #         actor_kind: kind, actor_ref: server_ref, occurred_at: server_time}]}
 ```
 
@@ -52,11 +59,16 @@ accesible.
 
 Registrar un pago deriva el importe desde `final_price_ars` y el actor y fecha
 desde la sesión y el reloj del servidor. No acepta importes, actores ni fechas
-suministrados por el cliente. Los errores públicos son `:invalid_payment_method`,
-`:invalid_payment_options`, `:payment_not_eligible`, `:payment_already_paid` y
+suministrados por el cliente. Revertir exige `confirmed == true`, deriva el actor y
+la fecha del servidor, limpia sólo la marca vigente y agrega una acción `reverted`
+con el importe y método de la marca anterior. Los errores públicos son
+`:invalid_payment_method`, `:invalid_payment_options`, `:payment_not_eligible`,
+`:payment_already_paid`, `:confirmation_required`, `:payment_not_paid` y
 `:audit_unavailable`; cualquier rechazo conserva precio, pago, acciones,
 historial operativo, snapshot y catálogo. El pago actual, la acción `paid` y el
-evento `appointment_payment_registered` se escriben atómicamente.
+evento `appointment_payment_registered` se escriben atómicamente. La reversión
+confirma el pago pendiente, la acción `reverted` y el evento
+`appointment_payment_reverted` en una única transacción.
 
 ## Persistencia y compatibilidad
 
@@ -67,7 +79,8 @@ evento `appointment_payment_registered` se escriben atómicamente.
   `pending`; T2 guarda en ella método, importe, actor y fecha al registrar el
   total.
 - `payment_actions` es una tabla append-only: T2 agrega la acción `paid` y T3
-  agregará las correcciones. Sus filas no se actualizan ni eliminan.
+  agrega la acción `reverted` con la evidencia de la marca anterior. Sus filas no
+  se actualizan ni eliminan.
 - Un trigger de inserción cubre también reservas creadas por recorridos internos
   existentes, mientras que la migración rellena explícitamente los turnos
   históricos.
@@ -114,8 +127,10 @@ destructivos como parte de T1.
 
 - T2 registra un único total `paid` sólo para `confirmed` o `attended`, con
   efectivo o transferencia, y agrega una acción inmutable y auditoría atómica.
-- T3 agregará la confirmación breve de reversión y las acciones de corrección,
-  conservando la secuencia completa y habilitando nuevamente el precio.
+- T3 agrega la confirmación breve de reversión y las acciones de corrección,
+  conservando la secuencia completa y habilitando nuevamente el precio. Una
+  reversión no es devolución, crédito ni traslado; tampoco permite volver a pagar
+  un turno cancelado o ausente.
 - El ciclo de cancelación/ausencia conserva la fila de pago y no transfiere
   pagos a otro turno.
 - No se implementan comprobantes, parciales, créditos, devoluciones ni resumen.
@@ -124,6 +139,7 @@ destructivos como parte de T1.
 
 T1 cubre S1–S3, S5, S7 y S9; T2 cubre S2, S3, S5 y S7 mediante el registro
 atómico, autorización y pruebas de concurrencia preparadas para la base
-Desechable. En el contrato #384 T2 cubre P1–P3, P5–P7, P13 y P15. P8–P12 y la
-corrección efectiva quedan para T3; P14 sólo queda preparado para el consumidor
-posterior y no se implementa el resumen.
+Desechable. En el contrato #384 T2 cubre P1–P3, P5–P7, P13 y P15. T3 cubre
+P8–P12 y P14–P15; P14 se cubre como conservación de fecha del turno y fechas de
+acciones, sin implementar el resumen. No se agregan comprobantes, parciales,
+créditos, devoluciones ni resumen.

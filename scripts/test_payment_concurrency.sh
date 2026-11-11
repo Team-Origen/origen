@@ -66,21 +66,26 @@ trap cleanup EXIT
 psql -X -v ON_ERROR_STOP=1 -d "$management_db" -c "CREATE DATABASE $database"
 owned=1
 
-set +e
-env \
-  -u ORIGEN_DATABASE_URL \
-  MIX_TEST_PARTITION="$partition" \
-  ORIGEN_PAYMENT_CONCURRENCY=1 \
-  mix test \
+if (($# == 0)); then
+  set -- \
     test/origen/booking/payment_registration_test.exs \
     test/origen/booking/payment_pricing_test.exs \
     test/origen/booking/payment_persistence_test.exs \
     test/origen/booking/payments_test.exs \
+    test/origen/booking/payment_correction_test.exs \
     test/origen/booking/authorization_test.exs \
     test/origen/booking/appointment_test.exs \
     test/origen/booking/lifecycle_test.exs \
     test/origen/booking/attendance_test.exs \
     test/origen/booking/payment_concurrency_test.exs
+fi
+
+set +e
+env \
+  -u ORIGEN_DATABASE_URL \
+  MIX_TEST_PARTITION="$partition" \
+  ORIGEN_PAYMENT_CONCURRENCY=1 \
+  mix test "$@"
 mix_exit=$?
 set -e
 

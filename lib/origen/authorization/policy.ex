@@ -11,6 +11,7 @@ defmodule Origen.Authorization.Policy do
     :read_payment,
     :edit_appointment_price,
     :register_payment,
+    :revert_payment,
     :read_payment_history
   ]
 
@@ -41,6 +42,8 @@ defmodule Origen.Authorization.Policy do
       {:secretary, :edit_appointment_price} -> true
       {:professional, :register_payment} -> true
       {:secretary, :register_payment} -> true
+      {:professional, :revert_payment} -> true
+      {:secretary, :revert_payment} -> true
       {:professional, :read_payment_history} -> true
       {:secretary, :read_payment_history} -> true
       _ -> false

@@ -135,6 +135,9 @@ defmodule Origen.Audit.Events do
   def payment_registered(actor, ref) when is_binary(ref),
     do: build(actor, "appointment_payment_registered", {:appointment, ref}, "succeeded")
 
+  def payment_reverted(actor, ref) when is_binary(ref),
+    do: build(actor, "appointment_payment_reverted", {:appointment, ref}, "succeeded")
+
   @spec agenda_interval_changed(term(), String.t()) :: {:ok, t()} | {:error, :invalid_event}
   def agenda_interval_changed(actor, ref) when is_binary(ref),
     do: build(actor, "agenda_interval_changed", {:account, ref}, "succeeded")

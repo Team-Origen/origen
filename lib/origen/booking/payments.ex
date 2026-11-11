@@ -77,6 +77,27 @@ defmodule Origen.Booking.Payments do
   def record_payment(_principal, _appointment_id, _method, _opts),
     do: {:error, :unauthorized}
 
+  @doc "Reverts a paid mark after explicit true confirmation, preserving immutable history."
+  @spec revert_payment(map() | InternalSession.t(), integer(), term(), keyword()) ::
+          {:ok, map()} | {:error, atom()}
+  def revert_payment(principal, appointment_id, confirmed, opts \\ [])
+
+  def revert_payment(principal, appointment_id, confirmed, opts)
+      when is_integer(appointment_id) do
+    with {:ok, options} <- normalize_payment_options(opts),
+         :ok <- normalize_confirmation(confirmed),
+         {:ok, actor} <- resolve_principal(principal),
+         true <- Policy.payment_allowed?(actor.role, :revert_payment) do
+      do_revert_payment(actor, appointment_id, options)
+    else
+      false -> {:error, :unauthorized}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def revert_payment(_principal, _appointment_id, _confirmed, _opts),
+    do: {:error, :unauthorized}
+
   @doc "Returns internal payment actions only to authorized staff in scope."
   @spec list_actions(map() | InternalSession.t(), integer()) ::
           {:ok, [map()]} | {:error, :unauthorized}
@@ -160,6 +181,61 @@ defmodule Origen.Booking.Payments do
 
       append_payment_audit!(actor, appointment, options)
 
+      payment_projection(appointment, updated_payment)
+    end)
+  end
+
+  defp do_revert_payment(actor, appointment_id, options) do
+    Repo.transaction(fn ->
+      appointment = lock_appointment!(appointment_id)
+      authorize_scope!(actor, appointment)
+      payment = lock_payment!(appointment_id)
+
+      if payment.status != "paid" do
+        Repo.rollback(:payment_not_paid)
+      end
+
+      now = DateTime.utc_now()
+      previous_amount = payment.paid_amount_ars
+      previous_method = payment.method
+
+      updated_payment =
+        payment
+        |> Payment.changeset(%{
+          status: "pending",
+          method: nil,
+          paid_amount_ars: nil,
+          paid_actor_kind: nil,
+          paid_actor_ref: nil,
+          paid_at: nil
+        })
+        |> Repo.update()
+        |> case do
+          {:ok, value} -> value
+          {:error, changeset} -> Repo.rollback({:validation_error, changeset})
+        end
+
+      if Keyword.get(options, :fail_at) == :payment_action do
+        Repo.rollback(:payment_action_unavailable)
+      end
+
+      %PaymentAction{}
+      |> PaymentAction.changeset(%{
+        appointment_id: appointment.id,
+        action: "reverted",
+        amount_ars: previous_amount,
+        method: previous_method,
+        actor_kind: audit_actor_kind(actor),
+        actor_ref: audit_actor_ref(actor),
+        occurred_at: now
+      })
+      |> Repo.insert()
+      |> case do
+        {:ok, _action} -> :ok
+        {:error, changeset} -> Repo.rollback({:validation_error, changeset})
+      end
+
+      append_revert_audit!(actor, appointment, options)
       payment_projection(appointment, updated_payment)
     end)
   end
@@ -316,6 +392,9 @@ defmodule Origen.Booking.Payments do
 
   defp normalize_payment_options(_options), do: {:error, :invalid_payment_options}
 
+  defp normalize_confirmation(true), do: :ok
+  defp normalize_confirmation(_confirmation), do: {:error, :confirmation_required}
+
   defp payment_projection(appointment, payment) do
     %{
       appointment_id: appointment.id,
@@ -350,6 +429,25 @@ defmodule Origen.Booking.Payments do
     values = [audit_actor_kind(actor), audit_actor_ref(actor), "appointment:#{appointment.id}"]
 
     case Ecto.Adapters.SQL.query(Repo, @audit_insert, values) do
+      {:ok, _result} -> :ok
+      {:error, _reason} -> Repo.rollback(:audit_unavailable)
+    end
+  end
+
+  defp append_revert_audit!(actor, appointment, options) do
+    if Keyword.get(options, :fail_at) == :audit_event do
+      Repo.rollback(:audit_unavailable)
+    end
+
+    case Ecto.Adapters.SQL.query(
+           Repo,
+           """
+           INSERT INTO public.audit_events
+             (actor_kind, actor_ref, event, entity_kind, entity_ref, result)
+           VALUES ($1, $2, 'appointment_payment_reverted', 'appointment', $3, 'succeeded')
+           """,
+           [audit_actor_kind(actor), audit_actor_ref(actor), "appointment:#{appointment.id}"]
+         ) do
       {:ok, _result} -> :ok
       {:error, _reason} -> Repo.rollback(:audit_unavailable)
     end

@@ -357,6 +357,10 @@ defmodule Origen.Booking.AuthorizationTest do
          %{owner_matches_actor: true}, %{authenticated: true}},
         {:register_payment, {:role, :secretary}, {:known, :active}, %{center_scope: true},
          %{authenticated: true}},
+        {:revert_payment, {:role, :professional}, {:known, :active}, %{owner_matches_actor: true},
+         %{authenticated: true}},
+        {:revert_payment, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
         {:read_payment_history, {:role, :professional}, {:known, :active},
          %{owner_matches_actor: true}, %{authenticated: true}},
         {:read_payment_history, {:role, :secretary}, {:known, :active}, %{center_scope: true},
@@ -377,7 +381,8 @@ defmodule Origen.Booking.AuthorizationTest do
                  {:allow, :pay_01},
                  {:allow, :pay_02},
                  {:allow, :pay_03},
-                 {:allow, :pay_04}
+                 {:allow, :pay_04},
+                 {:allow, :pay_05}
                ]
       end
 
@@ -418,6 +423,13 @@ defmodule Origen.Booking.AuthorizationTest do
       assert Policy.payment_allowed?(:secretary, :edit_appointment_price)
       refute Policy.payment_allowed?(:patient, :edit_appointment_price)
       refute Policy.payment_allowed?(:administrator, :edit_appointment_price)
+    end
+
+    test "allows payment reversals for professional and secretary only" do
+      assert Policy.payment_allowed?(:professional, :revert_payment)
+      assert Policy.payment_allowed?(:secretary, :revert_payment)
+      refute Policy.payment_allowed?(:patient, :revert_payment)
+      refute Policy.payment_allowed?(:administrator, :revert_payment)
     end
   end
 

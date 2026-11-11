@@ -52,6 +52,33 @@ defmodule Origen.Booking.PaymentConcurrencyTest do
     assert action.action == "paid"
   end
 
+  test "distinct PostgreSQL connections allow only one concurrent reversal" do
+    fixture = Fixtures.create!()
+
+    appointment =
+      Fixtures.appointment!(fixture,
+        start_time: ~U[2030-02-03 09:00:00Z],
+        status: "confirmed"
+      )
+
+    principal = Fixtures.professional_principal(fixture)
+    assert {:ok, _} = Booking.record_payment(principal, appointment.id, "cash")
+
+    results =
+      run_concurrently(
+        2,
+        fn -> Booking.revert_payment(principal, appointment.id, true) end
+      )
+
+    assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+    assert Enum.count(results, &(&1 == {:error, :payment_not_paid})) == 1
+
+    assert {:ok, projection} = Booking.get_payment(principal, appointment.id)
+    assert projection.payment_status == "pending"
+    assert {:ok, actions} = Booking.list_payment_actions(principal, appointment.id)
+    assert Enum.map(actions, & &1.action) == ["paid", "reverted"]
+  end
+
   test "distinct PostgreSQL connections serialize registration and price edit lawfully" do
     fixture = Fixtures.create!()
 
