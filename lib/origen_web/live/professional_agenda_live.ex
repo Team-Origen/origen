@@ -13,6 +13,7 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
   alias Origen.PatientAccess
   alias Origen.Patients
   alias OrigenWeb.Components.AppointmentLifecycle
+  alias OrigenWeb.Components.AgendaAppointmentCard
 
   @lifecycle_statuses ~w(requested confirmed)
 
@@ -714,13 +715,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                 if primary_patient_card?,
                   do: to_string(appt.patient.id),
                   else: "#{appt.patient.id}-#{appt.id}" %>
-              <div
-                id={"appointment-#{appt.id}"}
-                role="listitem"
-                class="bg-white rounded-xl shadow-sm border border-stone-200 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 hover:border-stone-300 transition"
-              >
-                <!-- Horario y tipo de consulta -->
-                <div class="space-y-1">
+              <AgendaAppointmentCard.card id={"appointment-#{appt.id}"}>
+                <:appointment>
                   <div class="flex items-center gap-2.5">
                     <span class="text-lg font-bold text-[#0A3847]">
                       {format_time(appt.start_time, @organization_timezone)} - {format_time(
@@ -845,10 +841,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       </div>
                     </.form>
                   <% end %>
-                </div>
-
-                <!-- Datos no clínicos del Paciente -->
-                <div class="text-left sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 border-stone-100 space-y-0.5">
+                </:appointment>
+                <:patient>
                   <div class="text-xs text-stone-400 font-medium">Paciente</div>
                   <div class="text-sm font-semibold text-stone-900">
                     {appt.patient.name}
@@ -973,8 +967,8 @@ defmodule OrigenWeb.ProfessionalAgendaLive do
                       </.form>
                     </section>
                   <% end %>
-                </div>
-              </div>
+                </:patient>
+              </AgendaAppointmentCard.card>
             <% end %>
           </div>
         <% end %>
