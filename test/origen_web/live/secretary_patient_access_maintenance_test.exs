@@ -158,8 +158,8 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       assert has_element?(view, "#access-feedback", "Correo de acceso vinculado exitosamente")
       assert has_element?(view, "#patient-summary-access-email", new_email)
 
-      # Button now switches to replace
-      assert has_element?(view, "#btn-open-replace-access", "Reemplazar correo de acceso")
+      # Replacement remains an application capability but has no trigger on this card.
+      refute has_element?(view, "#btn-open-replace-access")
       refute has_element?(view, "#btn-open-link-access")
       refute has_element?(view, "#link-access-section")
 
@@ -215,7 +215,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       assert has_element?(view, "#patient-summary-access-email", "Sin acceso web vinculado")
     end
 
-    test "renders current access email and replace button when patient already has email", %{
+    test "keeps access email and pending status while hiding phone and replacement trigger", %{
       conn: conn,
       secretary_account: secretary_account
     } do
@@ -241,8 +241,64 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       |> render_submit()
 
       assert has_element?(view, "#patient-summary-access-email", "titular@example.test")
-      assert has_element?(view, "#btn-open-replace-access", "Reemplazar correo de acceso")
+      assert has_element?(view, "#patient-summary-access-status", "Pendiente de verificación")
+      refute has_element?(view, "#patient-summary-phone")
+      refute has_element?(view, "#btn-open-replace-access")
       refute has_element?(view, "#btn-open-link-access")
+    end
+
+    test "verified access stays functional but only its verified badge is hidden", %{
+      conn: conn,
+      secretary_account: secretary_account
+    } do
+      {:ok, %{persona: persona, profile: profile}} =
+        Patients.register_absent_patient(@assisted_attrs, secretary_account.id)
+
+      email = "verified-card472@example.test"
+      {:ok, _} = Patients.link_patient_access_email(profile, email, secretary_account.id)
+
+      assert_email_sent(fn message ->
+        [_, token] = Regex.run(~r/token=([A-Za-z0-9_-]+)/, message.html_body)
+        assert {:ok, _} = Origen.PatientAccess.consume_magic_link(token)
+        true
+      end)
+
+      assert Origen.PatientAccess.access_status(email) == :verified
+      {:ok, view, _} = live(conn, @path)
+
+      html =
+        view
+        |> form("#persona-search-form",
+          search: %{
+            "document_type" => persona.document_type,
+            "document_number" => persona.document_number
+          }
+        )
+        |> render_submit()
+
+      refute has_element?(view, "#patient-summary-access-status")
+      refute has_element?(view, "#patient-summary-phone")
+      refute has_element?(view, "#btn-open-replace-access")
+      refute html =~ "Acceso verificado"
+      refute html =~ @assisted_attrs.phone
+      assert has_element?(view, "#patient-summary-full-name", "Lucía Vázquez")
+      assert has_element?(view, "#patient-summary-document", "39111222")
+      assert has_element?(view, "#patient-summary-profile-state", "Completado")
+      assert has_element?(view, "#patient-summary-access-email", email)
+      assert has_element?(view, "#patient-summary-phone-verified", "Teléfono no verificado")
+      assert has_element?(view, "#start-assisted-booking")
+      html = view |> element("#start-assisted-booking") |> render_click()
+      refute html =~ "Acceso verificado"
+      refute has_element?(view, "#patient-summary-phone")
+      refute has_element?(view, "#btn-open-replace-access")
+      assert Origen.PatientAccess.access_status(email) == :verified
+
+      assert {:ok, %{profile: %{phone: "+5491166667777", email: ^email}}} =
+               Patients.search_persona_by_document(
+                 persona.document_type,
+                 persona.document_number,
+                 secretary_account.id
+               )
     end
 
     test "opening and cancelling the replace access form", %{
@@ -270,9 +326,8 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       )
       |> render_submit()
 
-      view
-      |> element("#btn-open-replace-access")
-      |> render_click()
+      refute has_element?(view, "#btn-open-replace-access")
+      render_click(view, "open_replace_access")
 
       assert has_element?(view, "#replace-access-section")
       assert has_element?(view, "#replace-access-form")
@@ -282,7 +337,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       |> render_click()
 
       refute has_element?(view, "#replace-access-section")
-      assert has_element?(view, "#btn-open-replace-access")
+      refute has_element?(view, "#btn-open-replace-access")
     end
 
     test "submitting valid replace access updates email, invalidates prior link and shows feedback",
@@ -317,9 +372,8 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       )
       |> render_submit()
 
-      view
-      |> element("#btn-open-replace-access")
-      |> render_click()
+      refute has_element?(view, "#btn-open-replace-access")
+      render_click(view, "open_replace_access")
 
       view
       |> form("#replace-access-form",
@@ -364,9 +418,8 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       )
       |> render_submit()
 
-      view
-      |> element("#btn-open-replace-access")
-      |> render_click()
+      refute has_element?(view, "#btn-open-replace-access")
+      render_click(view, "open_replace_access")
 
       # Same email
       view

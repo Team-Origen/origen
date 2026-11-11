@@ -51,3 +51,18 @@ invoke the existing public LiveView event rather than the hidden button.
 Prior card-cleanup RED: 12 failures/80 tests; final focused GREEN85/85 and expanded
 suite1114 passed before the three later handoff adjustments. The integrated
 post-adjustment suite1115 also passes. No before/after browser capture is claimed.
+
+## Secretary patient search
+
+Search/assisted booking keeps its layout, forms and operations. A local light-theme
+boundary and institutional white surface replace inherited dark background; the
+h1 is one size smaller at each breakpoint. Existing semantic state colors remain.
+Only phone label/value, verified-access badge and replace-email trigger are hidden
+from the summary. Phone-verification indicators, contact email, other access
+states, linking and phone registration fields remain. Existing replacement forms,
+handlers, stored values, validations and permissions are preserved for #471.
+
+Prior theme RED failed before implementation; GREEN36/36 search/access-maintenance
+tests passed. The integrated suite1115 passes with both theme and summary cleanup.
+Code evidence is not a reproduction of a visual defect; browser capture remains
+unavailable. No application-wide dark theme or patient-management feature added.
