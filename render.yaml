@@ -24,6 +24,10 @@ services:
           property: connectionString
       - key: POOL_SIZE
         value: "5"
+      # Single node: no Erlang distribution. Without this the release listens
+      # on epmd (4369) and a distribution port that nothing needs.
+      - key: RELEASE_DISTRIBUTION
+        value: none
       # Phoenix needs at least 64 bytes. Set it by hand: `mix phx.gen.secret`.
       - key: SECRET_KEY_BASE
         sync: false
