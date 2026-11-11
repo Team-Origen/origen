@@ -66,6 +66,8 @@ trap cleanup EXIT
 psql -X -v ON_ERROR_STOP=1 -d "$management_db" -c "CREATE DATABASE $database"
 owned=1
 
+payment_concurrency=0
+
 if (($# == 0)); then
   set -- \
     test/origen/booking/payment_registration_test.exs \
@@ -78,13 +80,21 @@ if (($# == 0)); then
     test/origen/booking/lifecycle_test.exs \
     test/origen/booking/attendance_test.exs \
     test/origen/booking/payment_concurrency_test.exs
+  payment_concurrency=1
+else
+  for test_target in "$@"; do
+    if [[ "${test_target##*/}" == "payment_concurrency_test.exs" ]]; then
+      payment_concurrency=1
+      break
+    fi
+  done
 fi
 
 set +e
 env \
   -u ORIGEN_DATABASE_URL \
   MIX_TEST_PARTITION="$partition" \
-  ORIGEN_PAYMENT_CONCURRENCY=1 \
+  ORIGEN_PAYMENT_CONCURRENCY="$payment_concurrency" \
   mix test "$@"
 mix_exit=$?
 set -e

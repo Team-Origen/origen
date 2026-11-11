@@ -1,8 +1,10 @@
 defmodule Origen.Booking.PaymentPersistenceTest do
   use Origen.DataCase, async: false
 
+  alias Ecto.Adapters.SQL
   alias Origen.Booking
   alias Origen.Booking.Appointment
+  alias Origen.Repo
   alias Origen.TestSupport.AppointmentLifecycleFixtures, as: Fixtures
 
   setup do
@@ -100,5 +102,77 @@ defmodule Origen.Booking.PaymentPersistenceTest do
              Booking.get_payment(Fixtures.secretary_principal(f), response.appointment_id)
 
     assert projection.payment_status == "pending"
+  end
+
+  test "a preexisting pending appointment without history can be deleted", %{fixture: f} do
+    appointment =
+      Fixtures.appointment!(f, start_time: DateTime.add(DateTime.utc_now(), 36_000, :second))
+
+    assert {:ok, %{num_rows: 1}} =
+             SQL.query(Repo, "DELETE FROM public.appointments WHERE id = $1", [appointment.id])
+
+    assert SQL.query!(Repo, "SELECT count(*) FROM public.appointments WHERE id = $1", [
+             appointment.id
+           ]).rows ==
+             [[0]]
+
+    assert SQL.query!(
+             Repo,
+             "SELECT count(*) FROM public.appointment_payments WHERE appointment_id = $1",
+             [appointment.id]
+           ).rows == [[0]]
+  end
+
+  test "a paid appointment cannot be deleted and remains observable through financial history", %{
+    fixture: f
+  } do
+    appointment =
+      Fixtures.appointment!(f,
+        start_time: DateTime.add(DateTime.utc_now(), 39_600, :second),
+        status: "confirmed"
+      )
+
+    principal = Fixtures.professional_principal(f)
+    assert {:ok, _} = Booking.record_payment(principal, appointment.id, "cash")
+
+    assert_delete_rejected!(appointment.id)
+
+    assert {:ok, %{payment_status: "paid"}} = Booking.get_payment(principal, appointment.id)
+    assert {:ok, [%{action: "paid"}]} = Booking.list_payment_actions(principal, appointment.id)
+  end
+
+  test "a paid then reverted appointment cannot be deleted and retains its full history", %{
+    fixture: f
+  } do
+    appointment =
+      Fixtures.appointment!(f,
+        start_time: DateTime.add(DateTime.utc_now(), 43_200, :second),
+        status: "confirmed"
+      )
+
+    principal = Fixtures.professional_principal(f)
+    assert {:ok, _} = Booking.record_payment(principal, appointment.id, "transfer")
+
+    assert {:ok, %{payment_status: "pending"}} =
+             Booking.revert_payment(principal, appointment.id, true)
+
+    assert_delete_rejected!(appointment.id)
+
+    assert {:ok, %{payment_status: "pending"}} = Booking.get_payment(principal, appointment.id)
+    assert {:ok, actions} = Booking.list_payment_actions(principal, appointment.id)
+    assert Enum.map(actions, & &1.action) == ["paid", "reverted"]
+  end
+
+  defp assert_delete_rejected!(appointment_id) do
+    result =
+      SQL.query(
+        Repo,
+        "DELETE FROM public.appointments WHERE id = $1",
+        [appointment_id],
+        mode: :savepoint
+      )
+
+    assert {:error, %Postgrex.Error{} = error} = result
+    assert error.postgres.code == :restrict_violation
   end
 end

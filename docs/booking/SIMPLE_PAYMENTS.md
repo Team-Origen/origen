@@ -85,23 +85,33 @@ confirma el pago pendiente, la acción `reverted` y el evento
   existentes, mientras que la migración rellena explícitamente los turnos
   históricos.
 
-## Prueba de concurrencia con base desechable
+## Pruebas con base desechable
 
-La prueba de conexiones PostgreSQL distintas está omitida por defecto. No debe
-ejecutarse contra `origen_test` ni contra otra base existente: crea datos
-confirmados y eventos append-only. El runner crea una base nueva con el
-`MIX_TEST_PARTITION` generado por él, ejecuta una única invocación de la suite
-completa y elimina únicamente esa base si este mismo runner confirmó haberla
+Las pruebas que usan conexiones PostgreSQL distintas no deben ejecutarse contra
+`origen_test` ni contra otra base existente: crean datos confirmados y eventos
+append-only. El runner crea una base nueva con el `MIX_TEST_PARTITION` generado
+por él y elimina únicamente esa base si este mismo runner confirmó haberla
 creado.
+
+Los dos comandos requeridos son exactamente:
+
+```bash
+# Modo enfocado: habilita las tres carreras reales de pago.
+bash scripts/test_payment_concurrency.sh
+
+# Suite general: mantiene ORIGEN_PAYMENT_CONCURRENCY=0; las tres pruebas de
+# conexiones distintas quedan omitidas para no contaminar sus fixtures.
+bash scripts/test_payment_concurrency.sh test/
+```
+
+Un archivo seleccionado explícitamente como
+`test/origen/booking/payment_concurrency_test.exs` habilita su marcador de
+concurrencia. El modo general no debe habilitarlo indirectamente.
 
 Precondiciones: `psql`, `mix`, `deps/`, `_build/`, PostgreSQL local en el puerto
 configurado y las variables `ORIGEN_TEST_DB_USERNAME`,
 `ORIGEN_TEST_DB_PASSWORD` y opcionalmente `ORIGEN_TEST_DB_PORT`/`ORIGEN_TEST_DB_HOST`.
 No se configura `ORIGEN_DATABASE_URL`.
-
-```bash
-bash scripts/test_payment_concurrency.sh
-```
 
 El runner imprime el código de salida de `mix test` antes de limpiar y conserva
 stdout/stderr de esa única ejecución. La prueba exige que los workers tengan
@@ -116,12 +126,17 @@ con el trigger append-only de `audit_events` y dejó fixtures comprometidos all�
 No se deben borrar, truncar ni modificar esos datos desde este runner; la
 prueba corregida usa exclusivamente la base desechable nueva.
 
-La migración `20261026100000_add_appointment_payments.exs` no elimina ni cambia
-snapshots. Su `down/0` toma locks y se niega a retirar columnas, pagos o historia
-si existe cualquier dato poblado. No se debe ejecutar rollback sobre datos
-humanos: la única reversión segura es sobre una base vacía y aislada, después de
-exportar/verificar cualquier evidencia necesaria. No se ejecutan resets
-destructivos como parte de T1.
+La migración `20261026100000_add_appointment_payments.exs` no se modifica. La
+migración de seguimiento
+`20261026100100_preserve_appointment_payment_history_on_delete.exs` cambia sólo
+la FK de `appointment_payments` a `ON DELETE CASCADE`, para que una fila
+`pending` sin historia no rompa la limpieza interna. La FK de `payment_actions`
+permanece en `ON DELETE RESTRICT` y su trigger append-only no cambia; por eso una
+acción `paid` o `reverted` conserva el bloqueo y la historia observable.
+Su `down/0` restaura `ON DELETE RESTRICT` sin eliminar datos. No se debe ejecutar
+rollback sobre datos humanos: la única reversión segura es sobre una base vacía
+y aislada, después de exportar/verificar cualquier evidencia necesaria. No se
+ejecutan resets destructivos como parte de T1.
 
 ## Fuera de T1 y continuación
 
