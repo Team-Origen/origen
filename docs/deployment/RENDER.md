@@ -47,9 +47,47 @@ Upgrading the existing free database in place keeps its data; letting it expire 
 4. In GitHub: **Settings > Environments > New environment** named `production`, and add the secret `RENDER_DEPLOY_HOOK_URL` with that URL.
 5. Optional: under that environment, add required reviewers if the team wants a manual approval before each deploy.
 
+## Create the first Administrator
+
+The original first-admin bootstrap stays disabled in `:prod` (`FIRST_ADMIN_BOOTSTRAP.md`). The team chose a simpler operator command instead of the two-person approval designed in #452: `bin/issue_admin_invitation` creates the first Administrator as `pending_activation` and prints a single-use activation link (valid 24 hours). The account holder opens it, sets a password and enrolls TOTP. There is no email provider, so the operator hands the link over.
+
+The free Render plan has no shell, so the command runs from the operator's machine with the same release image, against the database's external URL.
+
+1. **Build the image of the deployed commit** (the one on `main`):
+   ```bash
+   git switch --detach origin/main && docker build -t origen:ops .
+   ```
+2. **Open the database to your IP, temporarily.** Render > `origen-db` > **Access Control**: add your public IP. `render.yaml` keeps `ipAllowList: []`, so this is a manual, temporary exception.
+3. **Write the environment to a file only you can read**, never on the command line (it would stay in the shell history):
+   ```bash
+   umask 077 && touch ~/origen-ops.env
+   ```
+   Keep it outside the repository. Fill it with, copied from the Render dashboard:
+   - `DATABASE_URL`: `origen-db` > **External Database URL**.
+   - `SECRET_KEY_BASE`, `ORIGEN_TOTP_KEY`, `ORIGEN_VERIFIER_KEY`: the same values as the `origen` service. `ORIGEN_VERIFIER_KEY` must match, or the link will not activate.
+   - `DATABASE_SSL=true` (the external URL requires TLS) and `ORIGEN_OPERATOR_INVITATION_ENABLED=true`.
+4. **Run the command** with the service's public host:
+   ```bash
+   docker run --rm --env-file ~/origen-ops.env origen:ops /app/bin/issue_admin_invitation --host origen-4kju.onrender.com
+   ```
+   It prints the **login identifier** (the account id; this account has no email), the expiry and the activation link. It refuses with `administrator_exists` if an Administrator already exists.
+5. **Hand the link only to the account holder**, through a private channel. Whoever has the link can activate the account until it is used or expires.
+6. **Clean up:** delete `~/origen-ops.env`, remove your IP from `origen-db`, and clear the terminal scrollback (the link was printed there).
+7. **Account holder:** open the link, set a password (at least 12 characters), scan the QR code with an authenticator app and enter the code. Then sign in at `/login` with the account id, the password and a TOTP code.
+
+If the link expires or is lost before activation, issue a new one for the same pending account; the previous link stops working:
+
+```bash
+docker run --rm --env-file ~/origen-ops.env origen:ops /app/bin/issue_admin_invitation --host origen-4kju.onrender.com --account-id <id>
+```
+
+Once the account is `active`, the command refuses (`administrator_active`); further staff accounts are created by the Administrator from the app.
+
+If it fails with `audit_unavailable`, the account was created but the link was not printed and was revoked, because the handoff could not be audited. The error names the pending account id: run the command again with `--account-id <id>`.
+
 ## Known limits
 
-- **No first Administrator yet.** `config/runtime.exs` disables the first-admin bootstrap in `:prod` on purpose (see `FIRST_ADMIN_BOOTSTRAP.md`). After the first deploy the app runs, but there is no supported way to create the first internal account until the team decides how to do it under the controls of that runbook.
+- **First Administrator by operator command.** The first Administrator is created with the procedure above, not with the two-person approval of #452: one operator issues it, and the activation link is printed in the operator's terminal. Issuance and activation are audited.
 - **Single database user.** The app connects with the user Render creates. The hardened role model of `priv/repo/security/provision_roles.sql` (owner, migrator, runtime, verifier) is not applied; the migrations already skip their role grants when those roles do not exist.
 - **No outgoing email provider.** `config/runtime.exs` keeps the production mailer block commented out, so no email provider is configured.
 - **CI does not gate the deploy.** CI runs on pull requests, so the code reaching `main` already passed it. A direct push to `main` would deploy without CI.

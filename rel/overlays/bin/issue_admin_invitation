@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+# Creates the first pending Administrator and prints its activation link.
+# Refuses unless ORIGEN_OPERATOR_INVITATION_ENABLED=true. See docs/deployment/RENDER.md.
+RELEASE_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+exec "$RELEASE_ROOT/origen" eval 'Origen.Release.issue_admin_invitation(System.argv())' -- "$@"
