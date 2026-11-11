@@ -1,109 +1,71 @@
-# Economic summary periods
+# Resumen económico por fecha de turno
 
-`Origen.Booking.EconomicSummaryPeriod` is the T1 period boundary API for the
-future read-only economic summary. It validates the two contract modalities and
-returns UTC bounds that T2 can use for appointment-date filtering.
+`Origen.Booking.economic_summary/3` devuelve un resumen financiero de sólo lectura para un único Profesional y un período válido. La operación es backend-only; la integración de LiveView y rutas pertenece a #391.
 
-## Quick path for T2
+## API pública
 
 ```elixir
-case Origen.Booking.EconomicSummaryPeriod.validate(params) do
-  {:ok, period} ->
-    # Query start_time >= period.start_at and start_time < period.end_at.
-    # Apply the professional scope and payment rules separately in T2.
-
-  {:error, reason} ->
-    # Reject the summary request without querying financial data.
-end
+Origen.Booking.economic_summary(principal, professional_id, period_params)
 ```
 
-The operation is pure: it does not read or write appointments, payments,
-prices, sessions, authorization records, or audit events.
+- `principal`: mapa de sesión (`%{session_id: integer(), account_id: integer()}`), `%Origen.Sessions.InternalSession{}` o el mapa producido por `Origen.Sessions.create_session/1`.
+- `professional_id`: entero positivo de una cuenta activa con rol `professional`. No acepta listas, mapas, cadenas ni un identificador global.
+- `period_params`: la entrada exacta de `Origen.Booking.EconomicSummaryPeriod.validate/1`.
 
-## Input
-
-`validate/1` accepts exactly one of these maps. Values are strings because this
-is the shape emitted by the existing period controls.
-
-| Modality | Exact input | Meaning |
-| --- | --- | --- |
-| Calendar month | `%{"mode" => "month", "month" => "YYYY-MM"}` | The first through last day of that calendar month, inclusive. |
-| Inclusive range | `%{"mode" => "range", "from" => "YYYY-MM-DD", "to" => "YYYY-MM-DD"}` | Both dates and every local day between them, inclusive. |
-
-Keys must be complete and unambiguous: extra keys, atom-key maps, unsupported
-modes, empty values, malformed ISO strings, and impossible dates are rejected.
-`from` equal to `to` is valid and represents one complete local day. There is no
-maximum range and no restriction against future dates.
-
-The organization timezone is read from
-`Application.fetch_env!(:origen, :organization_timezone)`, matching the
-existing `ProfessionalBooking` calendar convention. T2 must not derive the
-appointment date from UTC without using these bounds.
-
-## Output
-
-A valid request returns:
+Una consulta válida devuelve:
 
 ```elixir
 {:ok,
- %Origen.Booking.EconomicSummaryPeriod{
-   mode: :month | :range,
-   from: %Date{},
-   to: %Date{},
-   start_at: %DateTime{},
-   end_at: %DateTime{},
-   timezone: "configured organization timezone"
+ %{
+   professional: %{id: professional_id},
+   period: %Origen.Booking.EconomicSummaryPeriod{},
+   paid: %Decimal{},
+   pending: %Decimal{},
+   total: %Decimal{}
  }}
 ```
 
-`from` and `to` are the validated local dates. `start_at` is the UTC instant at
-the start of `from`, included. `end_at` is the UTC instant at the start of the
-day after `to`, excluded. This half-open interval includes the final local day
-without relying on an artificial `23:59:59` value.
+`paid`, `pending` y `total` son importes ARS exactos. `total` es siempre `paid + pending`; no representa deuda, caja, ingreso neto ni saldo disponible.
 
-For example, with `organization_timezone: "America/Argentina/Buenos_Aires"`:
+## Períodos
 
-```elixir
-EconomicSummaryPeriod.validate(%{
-  "mode" => "range",
-  "from" => "2026-11-30",
-  "to" => "2026-11-30"
-})
-# {:ok, %{from: ~D[2026-11-30], to: ~D[2026-11-30],
-#         start_at: ~U[2026-11-30 03:00:00Z],
-#         end_at: ~U[2026-12-01 03:00:00Z], ...}}
-```
+La operación reutiliza `EconomicSummaryPeriod.validate/1` sin reinterpretar sus entradas:
 
-A calendar month and its equivalent range return the same `from`, `to`,
-`start_at`, and `end_at` values. Their `mode` records which input modality was
-used.
+- `%{"mode" => "month", "month" => "YYYY-MM"}`: mes calendario completo.
+- `%{"mode" => "range", "from" => "YYYY-MM-DD", "to" => "YYYY-MM-DD"}`: rango inclusivo; fechas iguales representan un día completo.
+- Los límites son `[period.start_at, period.end_at)` en UTC y se derivan con `:organization_timezone`.
+- Los errores de período son `:invalid_period`, `:range_reversed`, `:invalid_timezone`, `:ambiguous_period_boundary` y `:nonexistent_period_boundary`.
 
-## Errors
+## Cálculo
 
-The public errors are exact atoms:
+La agregación filtra exclusivamente `appointments.start_time` dentro de los límites validados y usa una sola consulta agregada sobre el turno y su marca de pago vigente:
 
-| Error | Rejected condition |
+| Estado del turno | Marca vigente | Resultado |
+| --- | --- | --- |
+| `confirmed`, `attended` | `paid` | `paid += final_price_ars` |
+| `confirmed`, `attended` | `pending` | `pending += final_price_ars` |
+| `cancelled`, `no_show`, `requested`, `reserved`, `expired` | `pending` | Excluido |
+| cualquier estado | `paid` | `paid += final_price_ars` |
+
+La fecha del pago no participa. Un pago tardío cambia el resumen del período del turno, no el del mes de cobro. Una reversión elimina el importe de `paid`; sólo un turno que continúe `confirmed` o `attended` vuelve a `pending`. Las acciones históricas revertidas no se suman.
+
+El precio es `appointments.final_price_ars`: refleja las ediciones autorizadas antes del pago y no usa el catálogo ni `snapshot_exact_price_ars`. El precio cero sigue las mismas reglas y aporta `Decimal.new("0")`.
+
+## Autorización y errores
+
+La identidad se revalida en cada llamada mediante `Origen.Sessions.revalidate_principal/2`; no se confían los campos `role` ni una cuenta reclamada por el cliente.
+
+| Situación | Resultado |
 | --- | --- |
-| `:invalid_period` | Missing or extra fields, unsupported modality, malformed or incomplete input, invalid month/date, or a nonexistent date such as `2026-02-30`. |
-| `:range_reversed` | A valid range whose `to` date is before `from`; endpoints are never swapped. |
-| `:invalid_timezone` | The configured organization timezone is not known to the timezone database. |
-| `:ambiguous_period_boundary` | A local midnight used as a period boundary is ambiguous in the configured timezone. |
-| `:nonexistent_period_boundary` | A local midnight used as a period boundary does not exist in the configured timezone. |
+| Profesional activo y selección propia | Permitido |
+| Profesional activo y selección ajena | `{:error, :unauthorized}` |
+| Secretaría activa y un Profesional activo existente | Permitido |
+| Secretaría con múltiples/todo el centro o selección no entera | `{:error, :invalid_professional_selection}` |
+| Selección inexistente, inactiva o que no es Profesional | `{:error, :invalid_professional_selection}` |
+| Administrador, Paciente, anónimo, sesión inválida/revocada o cuenta inactiva | `{:error, :unauthorized}` |
 
-T2 should reject every error before aggregation. Error handling must not turn
-an invalid period into an empty zero-valued summary.
+La autorización también está declarada en `Origen.Authorization.Rules` como `:read_economic_summary` y se aplica antes de la agregación. Las denegaciones no devuelven importes ni detalles de otros Profesionales.
 
-## Contract coverage in T1
+## Sólo lectura
 
-- **R1:** month and equivalent range share identical UTC bounds.
-- **R2:** equal range endpoints cover one full local day.
-- **R3:** reversed ranges are rejected without correction.
-- **R4:** invalid, incomplete, unsupported, and ambiguous input is rejected.
-- **R5:** leap February and the December-to-January boundary use the next local
-day as the exclusive end.
-- **R6:** organization-local dates are converted to UTC; the Buenos Aires
-example maps local November 30 to `03:00Z` boundaries.
-
-Authorization, professional selection, appointment eligibility, payment
-aggregation, ARS arithmetic, and API transport remain outside T1 and belong to
-T2 or later slices.
+La operación no escribe turnos, precios, pagos, catálogo ni historial de acciones. Los cambios de estado usados para preparar datos de prueba deben pasar por las operaciones públicas existentes (`record_payment/4`, `revert_payment/4`, `update_final_price/3`, `cancel_appointment/3` y `record_attendance/4`), no por el resumen.
