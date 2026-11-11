@@ -7,7 +7,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Never run two deploys at once; a newer merge waits for the running one.
+# Serializes only the hook requests, which return in seconds. Render queues
+# and runs the actual deploys; this group does not wait for them to finish.
 concurrency:
   group: render-deploy
   cancel-in-progress: false
@@ -27,7 +28,14 @@ jobs:
             echo "::error::Missing secret RENDER_DEPLOY_HOOK_URL (Render > origen > Settings > Deploy Hook)."
             exit 1
           fi
-          # ref pins the deploy to the exact merged commit.
+          # ref pins the deploy to the exact merged commit. Render hook URLs
+          # already carry ?key=..., but pick the separator so any URL works.
+          case "$RENDER_DEPLOY_HOOK_URL" in
+            *\?*) SEP="&" ;;
+            *) SEP="?" ;;
+          esac
           curl --fail --silent --show-error --max-time 60 -X POST \
-            "${RENDER_DEPLOY_HOOK_URL}&ref=${COMMIT_SHA}" > /dev/null
-          echo "Deploy requested for ${COMMIT_SHA}."
+            "${RENDER_DEPLOY_HOOK_URL}${SEP}ref=${COMMIT_SHA}" > /dev/null
+          # The hook only queues the deploy: build, migrations and health check
+          # results are visible in the Render dashboard, not in this run.
+          echo "Deploy queued in Render for ${COMMIT_SHA}."
