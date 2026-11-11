@@ -352,6 +352,14 @@ defmodule Origen.Booking.AuthorizationTest do
         {:edit_appointment_price, {:role, :professional}, {:known, :active},
          %{owner_matches_actor: true}, %{authenticated: true}},
         {:edit_appointment_price, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:register_payment, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}},
+        {:register_payment, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:read_payment_history, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}},
+        {:read_payment_history, {:role, :secretary}, {:known, :active}, %{center_scope: true},
          %{authenticated: true}}
       ]
 
@@ -365,7 +373,12 @@ defmodule Origen.Booking.AuthorizationTest do
             scope: Fact.known(scope)
           )
 
-        assert Origen.Authorization.decide(request) in [{:allow, :pay_01}, {:allow, :pay_02}]
+        assert Origen.Authorization.decide(request) in [
+                 {:allow, :pay_01},
+                 {:allow, :pay_02},
+                 {:allow, :pay_03},
+                 {:allow, :pay_04}
+               ]
       end
 
       for {operation, subject, state, target, scope} <- allowed do

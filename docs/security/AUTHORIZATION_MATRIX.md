@@ -61,6 +61,8 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | S4-08 | Registrar asistencia o ausencia en un turno confirmado de cualquier agenda | Denegar | Denegar | Condicional/alcance — `LIFE-08` | Denegar | No aplica | #377 / E11–E12 |
 | S4-09 | Consultar precio final y estado de pago de un turno propio | Denegar | Condicional/alcance — `PAY-01` | Condicional/alcance — `PAY-01` | Condicional/alcance — `PAY-01` | No aplica | #384 / P3–P4 |
 | S4-10 | Editar el precio final impago de un turno | Denegar | Condicional/alcance — `PAY-02` | Condicional/alcance — `PAY-02` | Denegar | No aplica | #384 / P3, P5–P6 |
+| S4-11 | Registrar un pago total en efectivo o transferencia | Denegar | Condicional/alcance — `PAY-03` | Condicional/alcance — `PAY-03` | Denegar | No aplica | #384 / P1–P3, P6–P7 |
+| S4-12 | Consultar historial interno de acciones de pago | Denegar | Condicional/alcance — `PAY-04` | Condicional/alcance — `PAY-04` | Denegar | No aplica | #384 / P1, P3–P4, P7 |
 
 ### Condiciones y alcances
 
@@ -97,6 +99,8 @@ La columna «Canal o control no basado en rol» separa operaciones de despliegue
 | `LIFE-08` | Secretaría autenticada mediante `Origen.Sessions.revalidate_principal/2`; puede transformar un turno `confirmed` de cualquier agenda en `attended` o `no_show`. No concede acceso a otras operaciones de #284 ni permisos implícitos al Administrador. |
 | `PAY-01` | Profesional o Secretaría con cuenta `Activa` y sesión revalidada consulta sólo su agenda o todas las agendas, respectivamente. Paciente con sesión passwordless revalidada consulta únicamente sus propios turnos. La proyección del Paciente contiene sólo `final_price_ars` y `payment_status` junto al identificador del turno; nunca método, actor, fecha o historial. Administrador, anónimo, sesión inválida y cuentas inactivas quedan denegados. |
 | `PAY-02` | Profesional con sesión revalidada sólo sobre su agenda y Secretaría con sesión revalidada sobre cualquier agenda pueden editar el precio final mientras el pago esté `pending`. El backend deriva actor y alcance, valida un Decimal finito no negativo —incluido cero— y bloquea la fila antes de mutar. Paciente, Administrador, cuentas inactivas, sesiones inválidas y agendas ajenas quedan denegados. |
+| `PAY-03` | Profesional con sesión revalidada sólo sobre su agenda y Secretaría con sesión revalidada sobre cualquier agenda pueden registrar una única marca total para un turno `confirmed` o `attended`, usando sólo `cash` o `transfer`. El servidor deriva importe desde el precio final, actor y fecha; el cliente no puede suministrar o sustituir esos valores. Paciente, Administrador, cuentas inactivas, sesiones inválidas, agendas ajenas, estados `requested`, `reserved`, `expired`, `cancelled` y `no_show`, pagos ya marcados y métodos no admitidos quedan denegados sin mutación. La fila de pago, acción append-only y auditoría se confirman atómicamente. |
+| `PAY-04` | Sólo Profesional sobre su agenda y Secretaría sobre el centro pueden consultar acciones internas de pago. La proyección nunca se entrega a Paciente, Administrador, sesiones inválidas ni actores fuera de alcance; conserva método, importe, actor y fecha de cada acción sin permitir edición o borrado. |
 
 ## Pruebas mínimas de autorización
 
@@ -161,6 +165,7 @@ La versión actual `0.8-draft`, incluidas las condiciones agregadas para acceso,
 
 | Versión | Fecha | Estado | Cambio |
 | --- | --- | --- | --- |
+| `1.0-draft` | 2026-11-11 | Draft — pending independent review | Agrega el registro de un pago total y la consulta de acciones internas de pago de #385: Profesional sobre su agenda, Secretaría sobre todas, con método, importe, actor y fecha derivados por el servidor; conserva default deny, estados elegibles exactos y atomicidad de pago, acción y auditoría. No acredita implementación ni ejecución de pruebas. |
 | `0.9-draft` | 2026-11-08 | Draft — pending independent review | Agrega la consulta financiera mínima y la edición del precio final impago de #384: Profesional sobre su agenda, Secretaría sobre todas y Paciente sólo sobre sus turnos con proyección reducida; conserva default deny para Administrador y las sesiones inválidas. No acredita implementación ni ejecución de pruebas. |
 | `0.8-draft` | 2026-11-08 | Draft — pending independent review | Agrega el registro autenticado de asistencia/ausencia de #377: Profesional sólo en su agenda y Secretaría en todas, únicamente sobre turnos `confirmed`; conserva default deny para Paciente y Administrador y explicita que no fija ventana temporal ni corrección terminal. No acredita implementación ni ejecución de pruebas. |
 | `0.7-draft` | 2026-10-24 | Draft — pending independent review | Agrega cancelación autenticada e historial operativo SQL-acotado de #377 para Paciente, Profesional y Secretaría; exige motivo no blanco al personal, conserva default deny para Administrador y registra pruebas de alcance. No acredita implementación ni ejecución de pruebas. |

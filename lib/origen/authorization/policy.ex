@@ -7,7 +7,12 @@ defmodule Origen.Authorization.Policy do
   """
 
   @lifecycle_operations [:cancel_appointment, :read_appointment_history, :record_attendance]
-  @payment_operations [:read_payment, :edit_appointment_price]
+  @payment_operations [
+    :read_payment,
+    :edit_appointment_price,
+    :register_payment,
+    :read_payment_history
+  ]
 
   @spec lifecycle_allowed?(atom(), atom()) :: boolean()
   def lifecycle_allowed?(role, operation) when operation in @lifecycle_operations do
@@ -34,6 +39,10 @@ defmodule Origen.Authorization.Policy do
       {:secretary, :read_payment} -> true
       {:professional, :edit_appointment_price} -> true
       {:secretary, :edit_appointment_price} -> true
+      {:professional, :register_payment} -> true
+      {:secretary, :register_payment} -> true
+      {:professional, :read_payment_history} -> true
+      {:secretary, :read_payment_history} -> true
       _ -> false
     end
   end

@@ -94,6 +94,14 @@ defmodule Origen.Authorization.Rules do
            {:pay_02, :edit_appointment_price, {:role, :professional}, :active,
             %{owner_matches_actor: true}, %{authenticated: true}},
            {:pay_02, :edit_appointment_price, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_03, :register_payment, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_03, :register_payment, {:role, :secretary}, :active, %{center_scope: true},
+            %{authenticated: true}},
+           {:pay_04, :read_payment_history, {:role, :professional}, :active,
+            %{owner_matches_actor: true}, %{authenticated: true}},
+           {:pay_04, :read_payment_history, {:role, :secretary}, :active, %{center_scope: true},
             %{authenticated: true}}
          ] ++
            for(

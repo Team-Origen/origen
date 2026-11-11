@@ -200,6 +200,12 @@ defmodule Origen.Booking do
     to: Payments,
     as: :update_price
 
+  @doc "Registers one total cash or transfer payment through the authorized public facade."
+  defdelegate record_payment(principal, appointment_id, method, opts \\ []), to: Payments
+
+  @doc "Lists internal payment actions for authorized staff within their appointment scope."
+  defdelegate list_payment_actions(principal, appointment_id), to: Payments, as: :list_actions
+
   @doc """
   Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).
   """

@@ -50,6 +50,20 @@ defmodule Origen.Booking.PaymentPricingTest do
     end
   end
 
+  test "paid price is immutable through the public pricing operation", %{fixture: f} do
+    appointment = persist_appointment!(f, Decimal.new("100.00"))
+    principal = Fixtures.professional_principal(f)
+
+    assert {:ok, _payment} = Booking.record_payment(principal, appointment.id, "cash")
+
+    assert {:error, :payment_already_paid} =
+             Booking.update_final_price(principal, appointment.id, "80.00")
+
+    assert {:ok, projection} = Booking.get_payment(principal, appointment.id)
+    assert Decimal.equal?(projection.final_price_ars, Decimal.new("100.00"))
+    assert projection.payment_status == "paid"
+  end
+
   defp persist_appointment!(fixture, price) do
     assert {:ok, appointment} =
              Booking.persist_appointment(
