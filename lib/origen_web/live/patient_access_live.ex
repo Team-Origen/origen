@@ -165,6 +165,16 @@ defmodule OrigenWeb.PatientAccessLive do
             Ingresar otro correo
           </.button>
         </div>
+
+        <div class="mt-6 text-center">
+          <.link
+            id="staff-access-link"
+            href={~p"/login"}
+            class="inline-block rounded-md px-2 py-2 text-sm font-medium text-[#35545A] underline underline-offset-4 hover:text-[#0A3847] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0A3847]"
+          >
+            Acceso del personal
+          </.link>
+        </div>
       </div>
     </div>
     """

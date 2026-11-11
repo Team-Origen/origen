@@ -368,7 +368,15 @@ defmodule OrigenWeb.AdminInternalLive do
              email: email,
              role: role,
              invitation_id: invitation.invitation_id,
-             token: invitation.token
+             token: invitation.token,
+             invitation_url:
+               OrigenWeb.Endpoint.url() <>
+                 ~p"/activar" <>
+                 "#" <>
+                 URI.encode_query(%{
+                   "invitation_id" => invitation.invitation_id,
+                   "token" => invitation.token
+                 })
            }}
 
         {:error, :invalid_request} ->
@@ -637,8 +645,85 @@ defmodule OrigenWeb.AdminInternalLive do
           <p :if={match?({:ok, _}, @result)} class="text-sm text-green-700 font-inter">
             Invitación creada para {elem(@result, 1).email} como {role_label_text(
               elem(@result, 1).role
-            )}. ID: {elem(@result, 1).invitation_id}, Token: {elem(@result, 1).token}
+            )}. ID: {elem(@result, 1).invitation_id}
           </p>
+
+          <div
+            :if={match?({:ok, _}, @result)}
+            id="created-invitation"
+            phx-hook=".InvitationCopy"
+            class="mt-3 space-y-3"
+          >
+            <label for="created-invitation-url" class="block text-sm font-medium text-gray-700">
+              Enlace de invitación
+            </label>
+            <input
+              id="created-invitation-url"
+              type="text"
+              value={elem(@result, 1).invitation_url}
+              readonly
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="created-invitation-help"
+              class="w-full min-w-0 rounded-md border border-gray-300 p-2 text-sm text-black focus:ring-2 focus:ring-[#174B63]"
+            />
+            <p id="created-invitation-help" class="text-sm text-gray-600">
+              Compartí este enlace solo con la persona invitada. Conserva su vencimiento y uso único.
+              Por seguridad, no se mostrará al recargar esta página.
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+              <.button id="copy-created-invitation" type="button">
+                Copiar enlace
+              </.button>
+              <.link
+                id="created-invitation-link"
+                href={elem(@result, 1).invitation_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="rounded-md px-2 py-2 text-sm text-[#174B63] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#174B63]"
+              >
+                Abrir invitación
+              </.link>
+            </div>
+            <p
+              id="invitation-copy-status"
+              role="status"
+              aria-live="polite"
+              class="text-sm text-gray-700"
+            >
+            </p>
+          </div>
+
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".InvitationCopy">
+            export default {
+              mounted() {
+                this.copy = async () => {
+                  const input = this.el.querySelector("#created-invitation-url");
+                  const status = this.el.querySelector("#invitation-copy-status");
+                  const value = input.value;
+                  try {
+                    await navigator.clipboard.writeText(value);
+                    if (input.isConnected && input.value === value) {
+                      status.textContent = "Enlace copiado.";
+                    }
+                  } catch (_) {
+                    if (input.isConnected && input.value === value) {
+                      input.focus();
+                      input.select();
+                      status.textContent = "No se pudo copiar automáticamente. Copiá el enlace seleccionado.";
+                    }
+                  }
+                };
+                this.el.querySelector("#copy-created-invitation").addEventListener("click", this.copy);
+              },
+              updated() {
+                this.el.querySelector("#invitation-copy-status").textContent = "";
+              },
+              destroyed() {
+                this.el.querySelector("#copy-created-invitation")?.removeEventListener("click", this.copy);
+              }
+            }
+          </script>
 
           <p :if={match?({:error, _}, @result)} class="text-sm text-red-600 font-inter" role="alert">
             {error_message(elem(@result, 1))}
