@@ -297,6 +297,9 @@ defmodule Origen.Booking.EconomicSummaryTest do
                [f.professional_id, f.other_professional_id],
                @month
              )
+
+    assert {:error, :invalid_professional_selection} =
+             Booking.economic_summary(secretary, 9_223_372_036_854_775_808, @month)
   end
 
   test "denies invalid actors, stale sessions, inactive accounts and invalid selections without leakage",

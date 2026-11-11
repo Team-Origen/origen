@@ -52,7 +52,12 @@ defmodule Origen.Booking.EconomicSummary do
     end
   end
 
-  defp validate_selection(id) when is_integer(id) and id > 0, do: {:ok, id}
+  # Account ids are PostgreSQL bigint; larger integers must be rejected before any SQL cast.
+  @max_bigint 9_223_372_036_854_775_807
+
+  defp validate_selection(id) when is_integer(id) and id > 0 and id <= @max_bigint,
+    do: {:ok, id}
+
   defp validate_selection(_invalid), do: {:error, :invalid_professional_selection}
 
   defp ensure_existing_professional(professional_id) do
