@@ -27,6 +27,52 @@ defmodule OrigenWeb.PatientAppointmentsLiveTest do
     }
   end
 
+  test "shows only the real final price and payment state, including after correction", context do
+    fixture = context.fixture
+    staff = Fixtures.professional_principal(fixture)
+
+    appointment =
+      Fixtures.appointment!(fixture,
+        start_time: DateTime.add(DateTime.utc_now(), 3600, :second),
+        status: "confirmed"
+      )
+
+    id = appointment.id
+    assert {:ok, _} = Booking.update_final_price(staff, id, "80.00")
+    assert {:ok, _} = Booking.record_payment(staff, id, "transfer")
+    {:ok, view, html} = live(context.conn, ~p"/paciente/turnos")
+    assert has_element?(view, "#patient-final-price-#{id}", "$80.00")
+    assert has_element?(view, "#patient-payment-state-#{id}", "Pagado")
+
+    for private <- [
+          "internal_account:",
+          "Transferencia",
+          "Historial de pago",
+          "Corregir marca",
+          "Registrar pago"
+        ] do
+      refute html =~ private
+    end
+
+    refute has_element?(view, "[phx-target]")
+    {:ok, before} = Booking.get_payment(staff, id)
+    {:ok, actions} = Booking.list_payment_actions(staff, id)
+
+    render_click(view, "register_payment", %{
+      "appointment_id" => to_string(id),
+      "method" => "cash"
+    })
+
+    assert {:ok, ^before} = Booking.get_payment(staff, id)
+    assert {:ok, ^actions} = Booking.list_payment_actions(staff, id)
+    assert {:error, :unauthorized} = Booking.record_payment(context.principal, id, "cash")
+    assert {:ok, _} = Booking.revert_payment(staff, id, true)
+    assert {:ok, _} = Booking.update_final_price(staff, id, "75.00")
+    {:ok, reloaded, _} = live(context.conn, ~p"/paciente/turnos")
+    assert has_element?(reloaded, "#patient-final-price-#{id}", "$75.00")
+    assert has_element?(reloaded, "#patient-payment-state-#{id}", "Pendiente")
+  end
+
   test "loads the patient's persisted history on re-entry and hides foreign appointments", %{
     fixture: fixture,
     conn: conn,
