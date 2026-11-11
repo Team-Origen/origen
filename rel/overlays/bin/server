@@ -1,8 +1,9 @@
 #!/bin/sh
 set -eu
 
-# Starts the web server. Migrations run separately through bin/migrate
-# (Render preDeployCommand), so a failed migration stops the deploy
-# before the new version replaces the running one.
+# Runs pending migrations, then starts the web server. If a migration fails,
+# the script exits before the server starts, so the new version never
+# answers the health check and Render does not switch traffic to it.
 RELEASE_ROOT="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+"$RELEASE_ROOT/migrate"
 PHX_SERVER=true exec "$RELEASE_ROOT/origen" start

@@ -9,8 +9,7 @@ How Origen is deployed to Render for the academic delivery (#292), and how a mer
 1. A pull request is merged into `main`.
 2. `.github/workflows/cd.yml` runs on the push to `main` and calls the Render deploy hook with the merged commit (`ref=<sha>`).
 3. Render builds the `Dockerfile` (an Elixir release).
-4. Render runs `preDeployCommand` (`/app/bin/migrate`). If a migration fails, the deploy stops and the previous version keeps running.
-5. Render starts `/app/bin/server` and switches traffic once `/` answers.
+4. Render starts `/app/bin/server`, which runs `/app/bin/migrate` first and then the web server. If a migration fails, the server never starts, the new version never answers the health check on `/`, and Render does not switch traffic to it.
 
 Render's own Git auto-deploy is off (`autoDeployTrigger: "off"` in `render.yaml`), so the workflow is the only automatic trigger. It can also be run by hand from the Actions tab (`workflow_dispatch`).
 
@@ -18,10 +17,22 @@ Render's own Git auto-deploy is off (`autoDeployTrigger: "off"` in `render.yaml`
 
 | Resource | Name | Plan | Notes |
 | --- | --- | --- | --- |
-| Web service | `origen` | `0.5c-512mb` (paid) | Docker runtime, region `virginia`, does not sleep. |
-| Postgres | `origen-db` | `0.1c-256mb` (paid) | Postgres 17, 1 GB disk, internal connections only. |
+| Web service | `origen` | `free` | Docker runtime, region `virginia`. Sleeps after 15 minutes without traffic; the next request takes about a minute to wake it. |
+| Postgres | `origen-db` | `free` | Postgres 17, 1 GB, internal connections only. **Expires 30 days after creation** (14-day grace period), then Render deletes it with its data. |
 
 Both are in the same region so the app reaches the database over Render's private network.
+
+Free plans need no payment method (checked with `render blueprints validate`).
+
+## Moving to paid plans
+
+Before the free database expires, or when the app must not sleep:
+
+1. Add a payment method to the Render workspace.
+2. In `render.yaml`, set the web service `plan` to `0.5c-512mb` and the database `plan` to `0.1c-256mb`, and add `diskSizeGB: 1` to the database (otherwise it defaults to 15 GB).
+3. Optionally add `preDeployCommand: /app/bin/migrate` to the web service and remove the migrate call from `rel/overlays/bin/server`, so a failed migration stops the deploy before the new version starts.
+
+Upgrading the existing free database in place keeps its data; letting it expire does not.
 
 ## One-time setup
 

@@ -66,5 +66,5 @@ COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/origen ./
 
 USER nobody
 
-# Starts the web server. Render runs /app/bin/migrate first (preDeployCommand).
+# Runs pending migrations, then starts the web server (rel/overlays/bin/server).
 CMD ["/app/bin/server"]

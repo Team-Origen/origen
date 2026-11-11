@@ -10,13 +10,12 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     region: virginia
-    # Paid plan: does not sleep and supports preDeployCommand.
-    plan: 0.5c-512mb
+    # Free plan: sleeps after 15 minutes without traffic and has no
+    # preDeployCommand, so bin/server runs the migrations before starting.
+    # To move to a paid plan (no sleep), see docs/deployment/RENDER.md.
+    plan: free
     branch: main
     autoDeployTrigger: "off"
-    # Runs inside the built image before the new version goes live.
-    # If a migration fails, the deploy stops and the previous version keeps running.
-    preDeployCommand: /app/bin/migrate
     healthCheckPath: /
     envVars:
       - key: DATABASE_URL
@@ -42,8 +41,8 @@ databases:
     user: origen
     region: virginia
     postgresMajorVersion: "17"
-    plan: 0.1c-256mb
-    # Smallest disk (default would be 15 GB, billed per GB).
-    diskSizeGB: 1
+    # Free plan: 1 GB, and Render deletes it 30 days after creation
+    # (plus a 14-day grace period) unless it is upgraded to a paid plan.
+    plan: free
     # Only the web service connects; no access from the internet.
     ipAllowList: []

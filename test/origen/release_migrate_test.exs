@@ -21,6 +21,11 @@ defmodule Origen.ReleaseMigrateTest do
     assert :ok = Release.migrate()
   end
 
+  # Minimal stand-ins for what Ecto.Migrator.with_repo/3 calls before running
+  # migrations: repo config/0 and __adapter__/0, the adapter's
+  # ensure_all_started/2, and repo start_link/1. start_link/1 fails as an
+  # unreachable database would. If an Ecto upgrade changes with_repo/3, update
+  # these stubs to match it.
   defmodule UnreachableAdapter do
     def ensure_all_started(_config, _mode), do: {:ok, []}
   end
