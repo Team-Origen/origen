@@ -10,8 +10,8 @@ Draft tracker only: no production behavior in this commit; no merge authorized.
 
 ## Tasks
 - D1 [S1-S4] done — inline: prepare tracker and six existing work-unit boundaries; original source commits listed below. This tracker commit is its own work unit.
-- D2 [S1-S3] pending — inline: apply issue approval and publish draft tracker, ordered children and independent economic-summary PR; final tracker uses Closes #472, children Refs #472.
-- D3 [S4] pending — inline: observe required CI per PR and report pending/failing checks without merging.
+- D2 [S1-S3] done — inline: #472 approved and all eight branches/PRs published. Draft tracker #479 uses Closes #472; children #480–#485 use Refs #472. Independent economic-summary PR #486 uses Closes #390 (already approved/closed, not reopened). Publication job exited 0. This evidence update is committed in the final documentation child.
+- D3 [S4] in_progress — inline: contrast actual remote PR bases, type labels, draft flags and exact-head CI results; report pending/failing checks without merging.
 
 ## Chain boundaries
 | Slice | Branch | Original work-unit commit | Scope |
@@ -30,7 +30,21 @@ retaining original implementation commits. This is local branch preparation, not
 GitHub PR integration. Merge child PRs in order only after human authorization;
 keep the tracker draft until final integration/review is complete.
 
+## Published review order
+
+| Order | PR | Review surface |
+| --- | --- | --- |
+| Integrator | [#479](https://github.com/Team-Origen/origen/pull/479) | Draft/no-merge, targets develop |
+| 1 | [#480](https://github.com/Team-Origen/origen/pull/480) | Requests/navigation, targets tracker |
+| 2 | [#481](https://github.com/Team-Origen/origen/pull/481) | Settings, targets #480 branch |
+| 3 | [#482](https://github.com/Team-Origen/origen/pull/482) | Professional Agenda cards, targets #481 branch |
+| 4 | [#483](https://github.com/Team-Origen/origen/pull/483) | Secretary, targets #482 branch |
+| 5 | [#484](https://github.com/Team-Origen/origen/pull/484) | Patient history, targets #483 branch |
+| 6 | [#485](https://github.com/Team-Origen/origen/pull/485) | Feature evidence, targets #484 branch |
+| Independent | [#486](https://github.com/Team-Origen/origen/pull/486) | Economic-summary examples, targets develop |
+
 ## Log
+- #390 independent branch suite completed: 1109 passed,32 skipped,8 excluded,exit0;18 focused tests passed. Sandbox ownership text remains in the log without established cause. This does not replace CI for each published head.
 - User publication request and both decisions quoted in S1-S3 authorize GitHub reads, issue approval, pushes and PR creation in Team-Origen/origen using the configured gh session. No PR merge is authorized.
 - Repository default branch and actual target verified. #390 is already approved and closed by merged PR #464; it is not reopened. Its new visual-only adjustment is independent from this chain and uses `fix/390-economic-summary-examples` from develop, commit `39afbc8`.
 - #472 integrated implementation: 1115 tests passed,32 skipped,8 excluded. Combined candidate with summary adjustment:1116 passed,32 skipped,8 excluded. Assets/format/diff passed. Logs include Sandbox ownership errors without established cause. Independent #390 branch also passes18 focused tests; separate full-suite result is recorded in its PR.
