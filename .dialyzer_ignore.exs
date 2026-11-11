@@ -11,6 +11,7 @@
   {"lib/origen/bootstrap_admin/invitation.ex", :call_without_opaque},
   {"lib/origen/bootstrap_admin/local/command.ex", :call_without_opaque},
   {"lib/origen/bootstrap_admin/local/readiness.ex", :unknown_type},
+  {"lib/origen/bootstrap_admin/operator_invitation.ex", :call_without_opaque},
   {"lib/origen/consultation_types.ex", :pattern_match},
   {"lib/origen/consultation_types/mock_catalog.ex", :pattern_match},
   {"lib/origen/patient_access.ex", :call_without_opaque},

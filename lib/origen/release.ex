@@ -1,7 +1,7 @@
 defmodule Origen.Release do
   @moduledoc "Packaged-release entry points for bounded operational commands."
 
-  alias Origen.BootstrapAdmin.Gate
+  alias Origen.BootstrapAdmin.{Gate, OperatorInvitation}
 
   @app :origen
 
@@ -47,6 +47,56 @@ defmodule Origen.Release do
     Application.ensure_all_started(:ssl)
     Application.ensure_loaded(@app)
   end
+
+  @doc """
+  Creates the first pending Administrator and prints its activation link.
+
+  Invoked by `rel/overlays/bin/issue_admin_invitation`. Refuses unless
+  `ORIGEN_OPERATOR_INVITATION_ENABLED=true`; see
+  `Origen.BootstrapAdmin.OperatorInvitation` and `docs/deployment/RENDER.md`.
+  Errors raise with a safe reason only, never the token or the key.
+  """
+  @spec issue_admin_invitation([String.t()]) :: :ok | no_return()
+  def issue_admin_invitation(args) when is_list(args) do
+    load_app()
+    # `bin/origen eval '...' -- args` keeps the separator in System.argv().
+    args = with ["--" | rest] <- args, do: rest
+
+    case Ecto.Migrator.with_repo(Origen.Repo, fn _repo -> OperatorInvitation.run(args) end) do
+      {:ok, {:ok, result}, _apps} ->
+        IO.puts("""
+        Pending Administrator created.
+        Login identifier (account id): #{result.account_id}
+        Expires at: #{DateTime.to_iso8601(result.expires_at)}
+        Activation link (single use, give it only to the account holder):
+        #{result.link}
+        """)
+
+        :ok
+
+      {:ok, refusal, _apps} ->
+        raise_refusal(refusal)
+
+      {:error, reason} ->
+        raise "Admin invitation refused: database unavailable (#{inspect(reason)})"
+    end
+  end
+
+  @doc false
+  # Turns an OperatorInvitation refusal into the operator-facing error.
+  @spec raise_refusal(tuple()) :: no_return()
+  def raise_refusal({:error, :audit_unavailable, %{account_id: id, revoked: revoked}}) do
+    link_state =
+      if revoked,
+        do: "its link was revoked",
+        else: "revoking its link also failed; check the audit log before retrying"
+
+    raise "Admin invitation refused: audit_unavailable. Pending account #{id} was kept and " <>
+            "#{link_state}. Retry with --account-id #{id}"
+  end
+
+  def raise_refusal({:error, reason}) when is_atom(reason),
+    do: raise("Admin invitation refused: #{reason}")
 
   @spec bootstrap_admin([String.t()]) :: :ok | no_return()
   def bootstrap_admin(args \\ System.argv()) do
