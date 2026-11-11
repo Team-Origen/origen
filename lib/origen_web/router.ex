@@ -119,6 +119,7 @@ defmodule OrigenWeb.Router do
       pipe_through :browser
 
       live "/professional-availability", OrigenWeb.ProfessionalAvailabilityPreviewLive
+      live "/pagos-turnos", OrigenWeb.AppointmentPaymentPreviewLive
       live_dashboard "/dashboard", metrics: OrigenWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
