@@ -276,13 +276,15 @@ defmodule OrigenWeb.SecretaryPatientLive do
        )}
     else
       case Time.from_iso8601(slot_time <> ":00") do
-        {:ok, time} ->
-          start_datetime = DateTime.new!(date, time, "Etc/UTC")
-
+        {:ok, _time} ->
+          # The slot label is a local time in the organization timezone; the
+          # context builds the UTC start from date + slot so that booking and
+          # availability validation use the same clock as the offered grid.
           reserve_params = %{
             professional_id: prof_id,
             consultation_type_id: type_id,
-            start_time: start_datetime
+            date: date,
+            slot: %{start_time: slot_time}
           }
 
           case AssistedBooking.reserve(secretary_id, profile_id, reserve_params) do
