@@ -364,6 +364,10 @@ defmodule Origen.Booking.AuthorizationTest do
         {:read_payment_history, {:role, :professional}, {:known, :active},
          %{owner_matches_actor: true}, %{authenticated: true}},
         {:read_payment_history, {:role, :secretary}, {:known, :active}, %{center_scope: true},
+         %{authenticated: true}},
+        {:read_economic_summary, {:role, :professional}, {:known, :active},
+         %{owner_matches_actor: true}, %{authenticated: true}},
+        {:read_economic_summary, {:role, :secretary}, {:known, :active}, %{center_scope: true},
          %{authenticated: true}}
       ]
 
@@ -382,7 +386,8 @@ defmodule Origen.Booking.AuthorizationTest do
                  {:allow, :pay_02},
                  {:allow, :pay_03},
                  {:allow, :pay_04},
-                 {:allow, :pay_05}
+                 {:allow, :pay_05},
+                 {:allow, :sum_01}
                ]
       end
 

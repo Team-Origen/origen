@@ -26,6 +26,7 @@ defmodule Origen.Booking do
   alias Origen.Booking.RequestResolution
   alias Origen.Booking.ReservationRequest
   alias Origen.Booking.Payments
+  alias Origen.Booking.EconomicSummary
   alias Origen.Booking.ReservationResponse
   alias Origen.Repo
 
@@ -208,6 +209,11 @@ defmodule Origen.Booking do
 
   @doc "Lists internal payment actions for authorized staff within their appointment scope."
   defdelegate list_payment_actions(principal, appointment_id), to: Payments, as: :list_actions
+
+  @doc "Returns one authorized Professional's read-only economic summary for a period."
+  defdelegate economic_summary(principal, professional_id, period_params),
+    to: EconomicSummary,
+    as: :read
 
   @doc """
   Consulta la configuración de modalidad de aprobación del profesional (Issue #284 / #322).
