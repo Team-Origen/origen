@@ -111,6 +111,44 @@ defmodule Origen.BootstrapAdmin.OperatorInvitationTest do
     end
   end
 
+  describe "handoff audit failure" do
+    test "revokes the link and reports the kept pending account so it can be reissued" do
+      failing_audit = fn _invitation_id -> {:error, :audit_unavailable} end
+
+      assert {:error, :audit_unavailable, %{account_id: account_id, revoked: true}} =
+               run(["--host", @host], audit_handoff: failing_audit)
+
+      assert %{rows: [["pending_activation"]]} =
+               Repo.query!("SELECT state FROM internal_accounts WHERE id = $1", [account_id])
+
+      assert %{rows: [[revoked_at]]} =
+               Repo.query!(
+                 "SELECT revoked_at FROM internal_account_invitations WHERE account_id = $1",
+                 [account_id]
+               )
+
+      refute is_nil(revoked_at)
+
+      assert {:error, :administrator_exists} = run(["--host", @host])
+
+      assert {:ok, reissued} =
+               run(["--host", @host, "--account-id", Integer.to_string(account_id)])
+
+      {invitation_id, token} = fragment(reissued.link)
+      assert {:ok, _binding} = BootstrapAdmin.exchange(invitation_id, token, @key)
+    end
+
+    test "the release entry point names the account id to reissue with" do
+      error =
+        assert_raise RuntimeError, fn ->
+          Release.raise_refusal({:error, :audit_unavailable, %{account_id: 42, revoked: true}})
+        end
+
+      assert error.message =~ "audit_unavailable"
+      assert error.message =~ "--account-id 42"
+    end
+  end
+
   describe "reissue" do
     test "revokes the previous invitation of a pending account and issues a working new one" do
       assert {:ok, first} = run(["--host", @host])

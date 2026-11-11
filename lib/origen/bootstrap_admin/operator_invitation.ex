@@ -36,18 +36,27 @@ defmodule Origen.BootstrapAdmin.OperatorInvitation do
 
   @doc """
   Runs the command. `opts` exists for tests: `:env` (defaults to the process
-  environment) and `:verifier_key` (defaults to the configured activation key).
+  environment), `:verifier_key` (defaults to the configured activation key) and
+  `:audit_handoff` (defaults to writing the handoff audit event).
+
+  When the handoff cannot be audited after the account was created, it returns
+  `{:error, :audit_unavailable, %{account_id: id, revoked: boolean}}`: the
+  pending account is kept, so the operator retries with `--account-id id`.
   """
-  @spec run([String.t()], keyword()) :: {:ok, result()} | {:error, atom()}
+  @spec run([String.t()], keyword()) ::
+          {:ok, result()}
+          | {:error, atom()}
+          | {:error, :audit_unavailable, %{account_id: pos_integer(), revoked: boolean()}}
   def run(args, opts \\ []) when is_list(args) do
     env = Keyword.get_lazy(opts, :env, &System.get_env/0)
     key = Keyword.get_lazy(opts, :verifier_key, &configured_verifier_key/0)
+    audit = Keyword.get(opts, :audit_handoff, &audit_handoff/1)
 
     with :ok <- enabled(env),
          {:ok, parsed} <- parse(args),
          :ok <- valid_key(key),
          {:ok, invitation} <- issue(parsed[:account_id], key) do
-      hand_off(invitation, parsed.host)
+      hand_off(invitation, parsed.host, audit)
     end
   end
 
@@ -85,8 +94,8 @@ defmodule Origen.BootstrapAdmin.OperatorInvitation do
   defp issue(account_id, key),
     do: Account.reissue_first(account_id, %{verifier_key: key, issued_by_ref: @issued_by_ref})
 
-  defp hand_off(invitation, host) do
-    case audit_handoff(invitation.invitation_id) do
+  defp hand_off(invitation, host, audit) do
+    case audit.(invitation.invitation_id) do
       :ok ->
         {:ok,
          %{
@@ -97,11 +106,17 @@ defmodule Origen.BootstrapAdmin.OperatorInvitation do
          }}
 
       {:error, _reason} ->
-        Delivery.revoke_delivery_failure(invitation.invitation_id, %{
-          account_id: invitation.account_id
-        })
+        # An unaudited handoff is treated like a failed delivery: the link is
+        # never printed and its invitation is revoked; the account stays pending.
+        revoked =
+          match?(
+            {:ok, _outcome},
+            Delivery.revoke_delivery_failure(invitation.invitation_id, %{
+              account_id: invitation.account_id
+            })
+          )
 
-        {:error, :audit_unavailable}
+        {:error, :audit_unavailable, %{account_id: invitation.account_id, revoked: revoked}}
     end
   end
 

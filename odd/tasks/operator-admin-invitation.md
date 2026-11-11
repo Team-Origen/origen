@@ -18,7 +18,7 @@ Branch: `feat/admin-invitation-cli` (base `develop`). Delivery: single PR. Test 
 | ID | Specs | Route | Status | Commit |
 | --- | --- | --- | --- | --- |
 | T1 | S1–S5 | inline | done | 6c089ab, 39cd7ea |
-| T2 | S6 | inline | done | 6c089ab (script, DATABASE_SSL), docs commit |
+| T2 | S6 | inline | done | 6c089ab (script, DATABASE_SSL), 288faf3 (docs) |
 | T3 | S1 (activation in prod) | inline | done | ed4c24d |
 
 ## Log
@@ -28,3 +28,4 @@ Branch: `feat/admin-invitation-cli` (base `develop`). Delivery: single PR. Test 
 - L3: HTTP end-to-end against the release image (prod config, postgres:17): link exchange 302, TOTP enrollment shown, password+TOTP 302, account active, login with account id 302 to /administrador/cuentas, replayed link 404; audit bootstrap_admin, invitation_delivery_handoff, account_activation, internal_login.
 - L4: Found pre-existing bug: in :prod AdminActivationController read only :bootstrap_admin_totp_keyring while runtime.exs sets :totp_keyring, so activation always returned 422. Fixed to resolve like Origen.Accounts (T3, RED observed first).
 - L5: Checks: mix test 1206 passed (one unrelated flaky failure in a first run, not reproduced in two reruns); format and compile --warnings-as-errors clean.
+- L6: RDD review approved and acknowledged (lineage review-41d05e60a331eed1); independent verifier: S1–S6 met, no blockers. User asked to fix the audit-failure advisory: run/2 now returns {:error, :audit_unavailable, %{account_id, revoked}} and the release error names the --account-id to retry with (RED observed first).

@@ -74,13 +74,29 @@ defmodule Origen.Release do
 
         :ok
 
-      {:ok, {:error, reason}, _apps} ->
-        raise "Admin invitation refused: #{reason}"
+      {:ok, refusal, _apps} ->
+        raise_refusal(refusal)
 
       {:error, reason} ->
         raise "Admin invitation refused: database unavailable (#{inspect(reason)})"
     end
   end
+
+  @doc false
+  # Turns an OperatorInvitation refusal into the operator-facing error.
+  @spec raise_refusal(tuple()) :: no_return()
+  def raise_refusal({:error, :audit_unavailable, %{account_id: id, revoked: revoked}}) do
+    link_state =
+      if revoked,
+        do: "its link was revoked",
+        else: "revoking its link also failed; check the audit log before retrying"
+
+    raise "Admin invitation refused: audit_unavailable. Pending account #{id} was kept and " <>
+            "#{link_state}. Retry with --account-id #{id}"
+  end
+
+  def raise_refusal({:error, reason}) when is_atom(reason),
+    do: raise("Admin invitation refused: #{reason}")
 
   @spec bootstrap_admin([String.t()]) :: :ok | no_return()
   def bootstrap_admin(args \\ System.argv()) do

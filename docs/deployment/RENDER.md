@@ -81,6 +81,8 @@ docker run --rm --env-file ~/origen-ops.env origen:ops /app/bin/issue_admin_invi
 
 Once the account is `active`, the command refuses (`administrator_active`); further staff accounts are created by the Administrator from the app.
 
+If it fails with `audit_unavailable`, the account was created but the link was not printed and was revoked, because the handoff could not be audited. The error names the pending account id: run the command again with `--account-id <id>`.
+
 ## Known limits
 
 - **First Administrator by operator command.** The first Administrator is created with the procedure above, not with the two-person approval of #452: one operator issues it, and the activation link is printed in the operator's terminal. Issuance and activation are audited.
