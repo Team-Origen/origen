@@ -128,7 +128,12 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
                "Agenda"
              )
 
-      assert has_element?(prof_agenda_view, "#approval-config-panel")
+      refute has_element?(prof_agenda_view, "#approval-config-panel")
+
+      {:ok, prof_settings_view, _} =
+        live(internal_conn(ctx.conn, ctx.prof_owner.token), ~p"/profesional/ajustes")
+
+      assert has_element?(prof_settings_view, "#approval-config-panel")
 
       assert has_element?(
                prof_agenda_view,
@@ -156,7 +161,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # =========================================================================
       # COMBINACIÓN 1: Modalidad AUTOMÁTICA (Paciente -> confirmed, Secretaría -> confirmed, Profesional -> confirmed)
       # =========================================================================
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "automatic",
         "secretary_approval_mode" => "confirmed"
@@ -205,7 +210,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
 
       # 1d. En modo automático, aunque secretary_approval_mode quede en requested,
       # Secretaría y Paciente siguen confirmando directamente.
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "automatic",
         "secretary_approval_mode" => "requested"
@@ -228,7 +233,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # COMBINACIÓN 2: Modalidad MANUAL + Secretaría CONFIRMED (C1, C9)
       # Paciente -> requested, Secretaría -> confirmed, Profesional -> confirmed
       # =========================================================================
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "manual",
         "secretary_approval_mode" => "confirmed"
@@ -284,7 +289,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       # COMBINACIÓN 3: Modalidad MANUAL + Secretaría REQUESTED (C1, C10)
       # Paciente -> requested, Secretaría -> requested, Profesional (existente e inexistente) -> confirmed
       # =========================================================================
-      prof_agenda_view
+      prof_settings_view
       |> form("#approval-config-form", %{
         "approval_mode" => "manual",
         "secretary_approval_mode" => "requested"
@@ -651,7 +656,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
         )
 
       {:ok, settings_view, _} =
-        live(internal_conn(ctx.conn, ctx.prof_owner.token), ~p"/profesional/agenda")
+        live(internal_conn(ctx.conn, ctx.prof_owner.token), ~p"/profesional/ajustes")
 
       # Revocar la sesión activa del profesional mientras la vista está abierta
       SQL.query!(
@@ -685,12 +690,11 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
     test "cambiar modalidad o regla de Secretaría afecta sólo reservas nuevas",
          ctx do
       date = ctx.future_date
-      date_iso = Date.to_iso8601(date)
 
       {:ok, prof_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/ajustes"
         )
 
       # 1. En modo manual + secretaría requested, crear solicitud de Paciente (15:00) y Secretaría (15:30)
@@ -727,7 +731,7 @@ defmodule OrigenWeb.ManualApprovalIntegrationTest do
       {:ok, prof_view, _} =
         live(
           internal_conn(ctx.conn, ctx.prof_owner.token),
-          ~p"/profesional/agenda?date=#{date_iso}"
+          ~p"/profesional/ajustes"
         )
 
       html_change =

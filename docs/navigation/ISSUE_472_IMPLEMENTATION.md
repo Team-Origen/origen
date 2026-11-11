@@ -24,3 +24,17 @@ candidate: 1115 passed,32 skipped,8 excluded (exit 0); assets/format/diff passed
 Sandbox ownership messages remain in test output without established cause.
 Browser screenshots and independent verification remain unavailable from the
 handoff; these results do not constitute visual or independent approval.
+
+## Professional settings
+
+The existing approval panel and both selectors move from Agenda to Settings,
+immediately after consultation types and before agenda interval. The form remains
+owned by the parent LiveView within the existing availability component slot;
+no form event targets or business rules change. Settings remain professional-only.
+Changing mode affects only new reservations, leaving existing pending requests
+and occupied slots unchanged. Existing profile and availability editors remain.
+
+RED: the new adjacency assertion failed before moving the panel (exit 2).
+GREEN: 44 Agenda/Requests/catalog/manual-approval tests passed, including saving
+both selectors and preservation of pending requests. DOM position is verified;
+real-browser desktop/mobile presentation remains unverified.

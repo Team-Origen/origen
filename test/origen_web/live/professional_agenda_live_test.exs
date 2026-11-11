@@ -808,7 +808,17 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
       )
 
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/ajustes")
+
+      assert has_element?(
+               view,
+               "section[aria-labelledby='consultation-types-heading'] + #approval-config-panel"
+             )
+
+      assert has_element?(
+               view,
+               "#approval-config-panel + section[aria-labelledby='agenda-interval-heading']"
+             )
 
       assert has_element?(view, "#approval-config-panel")
       assert has_element?(view, "#approval-config-form")
@@ -844,7 +854,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     test "C16: un valor inválido en la configuración de aprobación muestra un error claro sin romper la vista",
          ctx do
       conn = put_internal_session(ctx.conn, ctx.prof_token)
-      {:ok, view, _html} = live(conn, ~p"/profesional/agenda")
+      {:ok, view, _html} = live(conn, ~p"/profesional/ajustes")
 
       html =
         render_change(view, "update_approval_config", %{
@@ -873,6 +883,7 @@ defmodule OrigenWeb.ProfessionalAgendaLiveTest do
     assert has_element?(view, ".border-indigo-200", "Solicitado")
     assert has_element?(view, "[phx-click=open_cancellation]")
     assert has_element?(view, "#create-professional-appointment")
+    refute has_element?(view, "#approval-config-panel")
     refute has_element?(view, "[phx-click=accept_request]")
     refute has_element?(view, "[phx-click=reject_request]")
   end
