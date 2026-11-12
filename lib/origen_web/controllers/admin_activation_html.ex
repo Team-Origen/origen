@@ -74,6 +74,7 @@ defmodule OrigenWeb.AdminActivationHTML do
           autocomplete="new-password"
         />
         <.input
+          :if={!@password_only}
           name="totp_code"
           type="text"
           label="Authenticator code"

@@ -1,6 +1,7 @@
 defmodule OrigenWeb.InternalSessionController do
   use OrigenWeb, :controller
 
+  alias Origen.AcademicDemo
   alias Origen.Accounts
   alias Origen.Sessions
 
@@ -15,13 +16,15 @@ defmodule OrigenWeb.InternalSessionController do
   end
 
   def create(conn, params) do
+    password_only = AcademicDemo.password_only?()
+
     with :ok <- require_tls(conn),
          {:ok, %{token: token, session: %{role: role}}} <-
            Accounts.authenticate_internal_account(
              Map.get(params, "identifier"),
              Map.get(params, "password"),
-             Map.get(params, "totp_code"),
-             []
+             totp_code(params, password_only),
+             password_only: password_only
            ) do
       conn
       |> configure_session(renew: true)
@@ -51,6 +54,10 @@ defmodule OrigenWeb.InternalSessionController do
     end
   end
 
+  # In academic demo mode the form has no TOTP field; the domain ignores the code.
+  defp totp_code(params, true), do: Map.get(params, "totp_code", "")
+  defp totp_code(params, false), do: Map.get(params, "totp_code")
+
   defp landing_path(:professional), do: ~p"/profesional/agenda"
   defp landing_path(:secretary), do: ~p"/secretaria/pacientes"
   defp landing_path(:administrator), do: ~p"/administrador/cuentas"
@@ -58,7 +65,11 @@ defmodule OrigenWeb.InternalSessionController do
   defp render_login(conn, error) do
     conn
     |> secure_headers()
-    |> render(:new, error: error, csrf_token: get_csrf_token())
+    |> render(:new,
+      error: error,
+      csrf_token: get_csrf_token(),
+      password_only: AcademicDemo.password_only?()
+    )
   end
 
   defp invalid_credentials(conn) do

@@ -99,19 +99,21 @@ defmodule OrigenWeb.InternalActivationHTML do
           Repetí la misma contraseña para verificar que la escribiste bien.
         </p>
 
-        <.input
-          name="totp_code"
-          type="text"
-          label="Código del autenticador"
-          value=""
-          required
-          inputmode="numeric"
-          pattern="[0-9]{6}"
-          autocomplete="one-time-code"
-        />
-        <p class="text-xs text-gray-500 -mt-2">
-          Los 6 dígitos que te muestra la app después de escanear el QR de arriba.
-        </p>
+        <div :if={!@password_only} class="space-y-4">
+          <.input
+            name="totp_code"
+            type="text"
+            label="Código del autenticador"
+            value=""
+            required
+            inputmode="numeric"
+            pattern="[0-9]{6}"
+            autocomplete="one-time-code"
+          />
+          <p class="text-xs text-gray-500 -mt-2">
+            Los 6 dígitos que te muestra la app después de escanear el QR de arriba.
+          </p>
+        </div>
         <button type="submit" class="btn btn-primary">Activate account</button>
       </form>
     </main>

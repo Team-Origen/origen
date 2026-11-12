@@ -73,7 +73,7 @@ The free Render plan has no shell, so the command runs from the operator's machi
    It prints the **login identifier** (the account id; this account has no email), the expiry and the activation link. It refuses with `administrator_exists` if an Administrator already exists.
 5. **Hand the link only to the account holder**, through a private channel. Whoever has the link can activate the account until it is used or expires.
 6. **Clean up:** delete `~/origen-ops.env`, remove your IP from `origen-db`, and clear the terminal scrollback (the link was printed there).
-7. **Account holder:** open the link, set a password (at least 12 characters), scan the QR code with an authenticator app and enter the code. Then sign in at `/login` with the account id, the password and a TOTP code.
+7. **Account holder:** open the link, set a password (at least 12 characters), scan the QR code with an authenticator app and enter the code. Then sign in at `/login` with the account id, the password and a TOTP code. With the [academic demo mode](#academic-demo-mode-password-only) on, there is no QR code or TOTP code: only the password.
 
 If the link expires or is lost before activation, issue a new one for the same pending account; the previous link stops working:
 
@@ -85,9 +85,32 @@ Once the account is `active`, the command refuses (`administrator_active`); furt
 
 If it fails with `audit_unavailable`, the account was created but the link was not printed and was revoked, because the handoff could not be audited. The error names the pending account id: run the command again with `--account-id <id>`.
 
+## Academic demo mode (password only)
+
+`render.yaml` sets `ORIGEN_ACADEMIC_DEMO_PASSWORD_ONLY=true` so professors can try the app as internal staff (Administrator, Professional, Secretary) with only a login identifier and a password. `config/runtime.exs` turns the mode on only when the variable is exactly `true`; it is off everywhere else, including local development and tests, unless set.
+
+**This is a deliberate security gap.** It removes the second factor from every internal account on this instance. Use it only with fictitious data. Before any real patient or clinic data reaches the instance, remove the variable (or set it to `false`) and redeploy.
+
+With the mode on:
+
+- `/login` asks only for the identifier and the password. Wrong passwords, deactivated accounts and roles without access are still rejected, and every attempt is still audited (`internal_login`).
+- Activating an account (`/activar` for staff, `/administrador/activar` for the first Administrator) asks only for the password and its confirmation (at least 12 characters). The app still generates and stores an encrypted TOTP secret, because the database requires one for every active account, but it does not show the QR code or ask for a code.
+- Patients and the patient magic link are not affected.
+
+Turning the mode off later restores TOTP on the next sign-in, but accounts activated in demo mode never saw their QR code, so those holders cannot produce a code. Recreate those accounts (or reissue their invitations) after turning the mode off.
+
+### Accounts for the professors
+
+There is no email provider, so every link is handed over by hand, through a private channel.
+
+1. **First Administrator:** follow [Create the first Administrator](#create-the-first-administrator). The holder opens the link and sets a password. This account has no email: its login identifier is the account id that `bin/issue_admin_invitation` prints.
+2. **Professionals and secretaries:** the Administrator signs in, opens `/administrador/cuentas`, enters the person's email and role, and issues the invitation. The screen shows the activation link (**Enlace de invitación**) to copy; the app does not send it. If the link expires or is lost, use **Reemitir** on the same screen; the previous link stops working.
+3. Each person opens their link, chooses a password, and signs in at `/login` with their email and that password.
+
 ## Known limits
 
 - **First Administrator by operator command.** The first Administrator is created with the procedure above, not with the two-person approval of #452: one operator issues it, and the activation link is printed in the operator's terminal. Issuance and activation are audited.
 - **Single database user.** The app connects with the user Render creates. The hardened role model of `priv/repo/security/provision_roles.sql` (owner, migrator, runtime, verifier) is not applied; the migrations already skip their role grants when those roles do not exist.
+- **Academic demo mode is on.** Internal staff sign in without TOTP; see [Academic demo mode](#academic-demo-mode-password-only). Fictitious data only.
 - **No outgoing email provider.** `config/runtime.exs` keeps the production mailer block commented out, so no email provider is configured.
 - **CI does not gate the deploy.** CI runs on pull requests, so the code reaching `main` already passed it. A direct push to `main` would deploy without CI.
