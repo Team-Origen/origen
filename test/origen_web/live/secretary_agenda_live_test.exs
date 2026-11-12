@@ -117,7 +117,15 @@ defmodule OrigenWeb.SecretaryAgendaLiveTest do
       )
     end
 
-    now = DateTime.utc_now()
+    # Both fixtures must stay on the agenda's current organization day, even near midnight.
+    timezone = Application.fetch_env!(:origen, :organization_timezone)
+
+    now =
+      timezone
+      |> DateTime.now!()
+      |> DateTime.to_date()
+      |> DateTime.new!(~T[09:00:00], timezone)
+      |> DateTime.shift_zone!("Etc/UTC")
 
     for {professional_id, name, offset} <- [
           {fixture.professional_id, "Ana", 0},
