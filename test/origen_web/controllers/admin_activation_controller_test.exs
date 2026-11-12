@@ -18,6 +18,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
     previous_keyring = Application.get_env(:origen, :bootstrap_admin_totp_keyring)
     previous_shared_keyring = Application.get_env(:origen, :totp_keyring)
     previous_ttl = Application.get_env(:origen, :bootstrap_admin_session_ttl_seconds)
+    previous_academic_demo = Application.get_env(:origen, :academic_demo_password_only)
 
     Application.put_env(:origen, :bootstrap_admin_verifier_key, @verifier_key)
 
@@ -34,6 +35,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       restore_env(:bootstrap_admin_totp_keyring, previous_keyring)
       restore_env(:totp_keyring, previous_shared_keyring)
       restore_env(:bootstrap_admin_session_ttl_seconds, previous_ttl)
+      restore_env(:academic_demo_password_only, previous_academic_demo)
       AdminActivationSessionStore.clear()
     end)
 
@@ -280,6 +282,87 @@ defmodule OrigenWeb.AdminActivationControllerTest do
     assert redirected_to(success_conn) == ~p"/"
     [["active", _password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
     assert {:ok, ^seed} = Credentials.decrypt_seed(encrypted_seed, keyring())
+  end
+
+  describe "with the academic demo flag on" do
+    setup do
+      Application.put_env(:origen, :academic_demo_password_only, true)
+      :ok
+    end
+
+    test "activates the first administrator with password only, storing an encrypted TOTP secret",
+         %{conn: conn} do
+      invitation = issue_invitation()
+
+      page_conn =
+        conn |> exchange(invitation) |> recycle() |> get(https(~p"/administrador/activar"))
+
+      body = html_response(page_conn, 200)
+      assert body =~ ~s(type="password")
+      refute body =~ "otpauth://"
+      refute body =~ ~s(name="totp_code")
+
+      success_conn =
+        page_conn
+        |> recycle()
+        |> post(https(~p"/administrador/activar"), %{
+          "password" => "a-secure-password",
+          "password_confirmation" => "a-secure-password"
+        })
+
+      assert redirected_to(success_conn) == ~p"/"
+      [["active", password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
+      assert Credentials.verify_password("a-secure-password", password_hash)
+      assert {:ok, seed} = Credentials.decrypt_seed(encrypted_seed, keyring())
+      assert byte_size(seed) > 0
+      assert [[consumed_at, nil]] = invitation_state(invitation.invitation_id)
+      assert not is_nil(consumed_at)
+    end
+
+    test "still rejects a password shorter than 12 bytes without persisting factors", %{
+      conn: conn
+    } do
+      invitation = issue_invitation()
+
+      page_conn =
+        conn |> exchange(invitation) |> recycle() |> get(https(~p"/administrador/activar"))
+
+      conn =
+        page_conn
+        |> recycle()
+        |> post(https(~p"/administrador/activar"), %{
+          "password" => "short",
+          "password_confirmation" => "short"
+        })
+
+      body = html_response(conn, 422)
+      assert body =~ "Activation details are invalid"
+      refute body =~ ~s(name="totp_code")
+      assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
+    end
+  end
+
+  test "without the academic demo flag, activation without a TOTP code stays rejected", %{
+    conn: conn
+  } do
+    Application.put_env(:origen, :academic_demo_password_only, false)
+    invitation = issue_invitation()
+
+    page_conn =
+      conn |> exchange(invitation) |> recycle() |> get(https(~p"/administrador/activar"))
+
+    assert html_response(page_conn, 200) =~ "otpauth://"
+
+    conn =
+      page_conn
+      |> recycle()
+      |> post(https(~p"/administrador/activar"), %{
+        "password" => "a-secure-password",
+        "password_confirmation" => "a-secure-password"
+      })
+
+    assert html_response(conn, 422) =~ "Activation details are invalid"
+    assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
   end
 
   defp issue_invitation do

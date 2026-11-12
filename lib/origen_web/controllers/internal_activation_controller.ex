@@ -1,6 +1,7 @@
 defmodule OrigenWeb.InternalActivationController do
   use OrigenWeb, :controller
 
+  alias Origen.AcademicDemo
   alias Origen.Accounts
   alias Origen.BootstrapAdmin.Credentials
   alias OrigenWeb.InternalActivationSessionStore
@@ -47,13 +48,14 @@ defmodule OrigenWeb.InternalActivationController do
 
   def create(conn, params) do
     nonce = get_session(conn, @session_key)
+    password_only = AcademicDemo.password_only?()
 
     with :ok <- require_tls(conn),
          true <- is_binary(nonce),
          {:ok, session} <- InternalActivationSessionStore.fetch(nonce),
          {:ok, verifier_key} <- verifier_key(),
          {:ok, totp_keyring} <- totp_keyring(),
-         {:ok, activation_params} <- normalize_params(params),
+         {:ok, activation_params} <- normalize_params(params, password_only),
          {:ok, _result} <-
            Accounts.activate_internal_account(
              %{
@@ -64,7 +66,8 @@ defmodule OrigenWeb.InternalActivationController do
              },
              activation_params,
              verifier_key: verifier_key,
-             totp_keyring: totp_keyring
+             totp_keyring: totp_keyring,
+             password_only: password_only
            ) do
       InternalActivationSessionStore.delete(nonce)
 
@@ -79,17 +82,26 @@ defmodule OrigenWeb.InternalActivationController do
     end
   end
 
-  defp normalize_params(%{"password" => p, "password_confirmation" => c, "totp_code" => t})
+  # In academic demo mode the form has no TOTP field; the domain skips the code check.
+  defp normalize_params(%{"password" => p, "password_confirmation" => c}, true)
+       when is_binary(p) and is_binary(c) do
+    {:ok, %{password: p, password_confirmation: c, totp_code: ""}}
+  end
+
+  defp normalize_params(
+         %{"password" => p, "password_confirmation" => c, "totp_code" => t},
+         _password_only
+       )
        when is_binary(p) and is_binary(c) and is_binary(t) do
     {:ok, %{password: p, password_confirmation: c, totp_code: t}}
   end
 
-  defp normalize_params(%{password: p, password_confirmation: c, totp_code: t})
+  defp normalize_params(%{password: p, password_confirmation: c, totp_code: t}, _password_only)
        when is_binary(p) and is_binary(c) and is_binary(t) do
     {:ok, %{password: p, password_confirmation: c, totp_code: t}}
   end
 
-  defp normalize_params(_other), do: {:error, :activation_failed}
+  defp normalize_params(_other, _password_only), do: {:error, :activation_failed}
 
   defp render_exchange(conn) do
     conn
@@ -100,16 +112,25 @@ defmodule OrigenWeb.InternalActivationController do
   defp render_enrollment(conn, nonce) do
     case InternalActivationSessionStore.take_for_render(nonce) do
       {:ok, session} ->
+        password_only = AcademicDemo.password_only?()
+
         totp_uri =
-          NimbleTOTP.otpauth_uri(
-            "Origen:internal-#{session.account_id}",
-            session.seed,
-            issuer: "Origen"
-          )
+          unless password_only do
+            NimbleTOTP.otpauth_uri(
+              "Origen:internal-#{session.account_id}",
+              session.seed,
+              issuer: "Origen"
+            )
+          end
 
         conn
         |> secure_headers()
-        |> render(:enrollment, totp_uri: totp_uri, error: nil, csrf_token: get_csrf_token())
+        |> render(:enrollment,
+          totp_uri: totp_uri,
+          error: nil,
+          csrf_token: get_csrf_token(),
+          password_only: password_only
+        )
 
       {:error, :invalid_session} ->
         unavailable(conn)
@@ -123,7 +144,8 @@ defmodule OrigenWeb.InternalActivationController do
     |> render(:enrollment,
       totp_uri: nil,
       error: "Activation details are invalid",
-      csrf_token: get_csrf_token()
+      csrf_token: get_csrf_token(),
+      password_only: AcademicDemo.password_only?()
     )
   end
 

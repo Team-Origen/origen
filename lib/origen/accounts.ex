@@ -419,6 +419,8 @@ defmodule Origen.Accounts do
     * `:verifier_key` - shared invitation verifier key.
     * `:totp_keyring` - explicit keyring used to encrypt the TOTP seed.
     * `:time` - optional unix timestamp in seconds used for TOTP validation.
+    * `:password_only` - academic demo mode (see `Origen.AcademicDemo`). When true the TOTP
+      code is not checked, but the TOTP seed is still encrypted and stored. Defaults to false.
   """
   @spec activate_internal_account(map(), map(), keyword()) ::
           {:ok, %{account_id: integer(), invitation_id: integer()}}
@@ -450,7 +452,15 @@ defmodule Origen.Accounts do
 
         lock_and_validate_activation_invitation!(invitation_id, account_id, token, key)
         authorize_staff_activation!(account.role)
-        ensure_activation_factors!(password, password_confirmation, totp_seed, totp_code, time)
+
+        ensure_activation_factors!(
+          password,
+          password_confirmation,
+          totp_seed,
+          totp_code,
+          time,
+          Keyword.get(opts, :password_only, false)
+        )
 
         password_hash = Credentials.hash_password(password)
         encrypted_seed = encrypt_activation_seed!(totp_seed, keyring)
@@ -489,6 +499,9 @@ defmodule Origen.Accounts do
     * `:time` - optional unix timestamp in seconds used for TOTP validation.
     * `:keyring` - optional explicit keyring map for decrypting TOTP secrets.
     * `:session_opts` - keyword options passed to `Origen.Sessions.create_session/2`.
+    * `:password_only` - academic demo mode (see `Origen.AcademicDemo`). When true the TOTP
+      code is ignored; password, account state, role, and audit checks still apply.
+      Defaults to false.
 
   ## Security properties
     * Fail-closed with `{:error, :unauthenticated}` on any failure.
@@ -557,15 +570,24 @@ defmodule Origen.Accounts do
       is_binary(account.password_hash) and
         Credentials.verify_password(password, account.password_hash)
 
-    if is_active and role_allowed and pwd_valid do
-      validate_totp_and_complete(account, totp_code, opts)
-    else
-      unless pwd_valid do
-        if is_nil(account.password_hash), do: Argon2.no_user_verify()
-      end
+    cond do
+      not (is_active and role_allowed and pwd_valid) ->
+        reject_authentication(account, pwd_valid)
 
-      Repo.rollback({:unauthenticated, account.id})
+      Keyword.get(opts, :password_only, false) ->
+        complete_authentication(account)
+
+      true ->
+        validate_totp_and_complete(account, totp_code, opts)
     end
+  end
+
+  defp reject_authentication(account, pwd_valid) do
+    unless pwd_valid do
+      if is_nil(account.password_hash), do: Argon2.no_user_verify()
+    end
+
+    Repo.rollback({:unauthenticated, account.id})
   end
 
   defp validate_totp_and_complete(account, totp_code, opts) do
@@ -580,18 +602,22 @@ defmodule Origen.Accounts do
         [period_index, account.id]
       )
 
-      record_audit_success(account)
-
-      %{
-        id: account.id,
-        email: account.email,
-        role: account.role,
-        state: account.state
-      }
+      complete_authentication(account)
     else
       _ ->
         Repo.rollback({:unauthenticated, account.id})
     end
+  end
+
+  defp complete_authentication(account) do
+    record_audit_success(account)
+
+    %{
+      id: account.id,
+      email: account.email,
+      role: account.role,
+      state: account.state
+    }
   end
 
   defp lock_and_fetch_account(identifier) when is_integer(identifier) do
@@ -1025,12 +1051,22 @@ defmodule Origen.Accounts do
     end
   end
 
-  defp ensure_activation_factors!(password, password_confirmation, seed, code, time) do
+  defp ensure_activation_factors!(
+         password,
+         password_confirmation,
+         seed,
+         code,
+         time,
+         password_only
+       ) do
     clean_code = String.trim(code)
 
+    totp_valid =
+      password_only or
+        (Regex.match?(~r/^\d{6}$/, clean_code) and NimbleTOTP.valid?(seed, clean_code, time: time))
+
     factors_valid =
-      password == password_confirmation and byte_size(password) in 12..1024 and
-        Regex.match?(~r/^\d{6}$/, clean_code) and NimbleTOTP.valid?(seed, clean_code, time: time)
+      password == password_confirmation and byte_size(password) in 12..1024 and totp_valid
 
     if factors_valid, do: :ok, else: Repo.rollback(:activation_failed)
   end

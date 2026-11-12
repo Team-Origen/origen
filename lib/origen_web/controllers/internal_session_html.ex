@@ -18,8 +18,11 @@ defmodule OrigenWeb.InternalSessionHTML do
               <.text_small class="text-text-muted">Origen - Gestión de turnos</.text_small>
               <h1 class="pc-h2 text-text">Iniciar sesión</h1>
             </div>
-            <.text_muted class="text-text-muted">
+            <.text_muted :if={!@password_only} class="text-text-muted">
               Ingresá con tu cuenta interna y el código actual de tu aplicación autenticadora.
+            </.text_muted>
+            <.text_muted :if={@password_only} class="text-text-muted">
+              Ingresá con el email y la contraseña de tu cuenta interna.
             </.text_muted>
           </header>
 
@@ -79,7 +82,7 @@ defmodule OrigenWeb.InternalSessionHTML do
                   </.field_help_text>
                 </div>
 
-                <div class="flex flex-col gap-2">
+                <div :if={!@password_only} class="flex flex-col gap-2">
                   <.field
                     id="totp_code"
                     name="totp_code"
