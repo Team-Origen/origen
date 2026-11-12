@@ -51,6 +51,8 @@ config :phoenix_live_view,
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
 config :origen, Origen.Mailer, adapter: Swoosh.Adapters.Local
+config :origen, Origen.PatientAccess.Mailer, adapter: Swoosh.Adapters.Local
+config :origen, :patient_access_email, from: "noreply@example.test"
 
 # Configure esbuild (the version is required)
 config :esbuild,

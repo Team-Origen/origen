@@ -58,6 +58,7 @@ config :origen, OrigenWeb.Endpoint,
 
 # In test we don't send emails
 config :origen, Origen.Mailer, adapter: Swoosh.Adapters.Test
+config :origen, Origen.PatientAccess.Mailer, adapter: Swoosh.Adapters.Test
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

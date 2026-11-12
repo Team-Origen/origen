@@ -37,6 +37,39 @@ defmodule Origen.Patients.PatientAccessMaintenanceTest do
     }
   end
 
+  defmodule DeliveryProbe do
+    def deliver(email) do
+      send(self(), {:patient_delivery, email, Origen.Repo.in_transaction?()})
+      {:ok, %{id: "test-message"}}
+    end
+  end
+
+  test "staff linking and replacement deliver only after their outer transaction commits", %{
+    secretary_id: secretary_id
+  } do
+    {:ok, %{profile: profile}} = Patients.register_absent_patient(@assisted_attrs, secretary_id)
+
+    assert {:ok, %{outcome: :linked}} =
+             Patients.link_patient_access_email(profile.id, "first@example.test", secretary_id,
+               mailer: DeliveryProbe
+             )
+
+    assert_receive {:patient_delivery, first, false}
+    assert first.to == [{"", "first@example.test"}]
+
+    assert {:ok, %{outcome: :replaced}} =
+             Patients.replace_patient_access_email(
+               profile.id,
+               "second@example.test",
+               secretary_id,
+               "Patient requested replacement",
+               mailer: DeliveryProbe
+             )
+
+    assert_receive {:patient_delivery, second, false}
+    assert second.to == [{"", "second@example.test"}]
+  end
+
   describe "link_patient_access_email/3" do
     test "C1: successfully links access email to assisted patient and dispatches proof-of-possession magic link",
          %{secretary_id: secretary_id} do

@@ -31,6 +31,12 @@ services:
       # Phoenix needs at least 64 bytes. Set it by hand: `mix phx.gen.secret`.
       - key: SECRET_KEY_BASE
         sync: false
+      # Patient magic links only. Provision after provider/domain approval;
+      # see docs/deployment/PATIENT_EMAIL.md. Never put credentials in Git.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ORIGEN_PATIENT_EMAIL_FROM
+        sync: false
       # Encrypts TOTP seeds. Exactly 32 bytes: `openssl rand -hex 16`.
       # Never rotate it by hand: existing seeds would become unreadable.
       - key: ORIGEN_TOTP_KEY

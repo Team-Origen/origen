@@ -292,8 +292,6 @@ defmodule Origen.Patients do
                  |> PatientProfile.changeset(%{email: clean_email})
                  |> Repo.update() do
               {:ok, updated_profile} ->
-                Origen.PatientAccess.request_magic_link(clean_email, opts)
-
                 case audit_email_linked(role, actor_account_id, updated_profile.id) do
                   :ok -> %{patient_profile: updated_profile, outcome: :linked}
                   _ -> Repo.rollback(:audit_unavailable)
@@ -302,6 +300,10 @@ defmodule Origen.Patients do
               {:error, changeset} ->
                 Repo.rollback(changeset)
             end
+          end)
+          |> tap(fn
+            {:ok, _} -> Origen.PatientAccess.request_magic_link(clean_email, opts)
+            _ -> :ok
           end)
       end
     end
@@ -314,9 +316,9 @@ defmodule Origen.Patients do
   Atomically:
   1. Invalidates previous pending magic links for the previous email.
   2. Updates profile with the new email and `sessions_invalidated_at = now`.
-  3. Dispatches proof-of-possession magic link to the new email.
-  4. Preserves persona, appointments and history.
-  5. Audits the event with actor, patient ref and sanitized info.
+  3. Preserves persona, appointments and history.
+  4. Audits the event with actor, patient ref and sanitized info.
+  After commit, requests and dispatches a proof-of-possession magic link.
   """
   @spec replace_patient_access_email(
           PatientProfile.t() | integer(),
@@ -362,8 +364,6 @@ defmodule Origen.Patients do
                  })
                  |> Repo.update() do
               {:ok, updated_profile} ->
-                Origen.PatientAccess.request_magic_link(clean_new_email, opts)
-
                 case audit_email_replaced(role, actor_account_id, updated_profile.id) do
                   :ok -> %{patient_profile: updated_profile, outcome: :replaced}
                   _ -> Repo.rollback(:audit_unavailable)
@@ -372,6 +372,10 @@ defmodule Origen.Patients do
               {:error, changeset} ->
                 Repo.rollback(changeset)
             end
+          end)
+          |> tap(fn
+            {:ok, _} -> Origen.PatientAccess.request_magic_link(clean_new_email, opts)
+            _ -> :ok
           end)
       end
     end

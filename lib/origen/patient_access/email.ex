@@ -10,12 +10,13 @@ defmodule Origen.PatientAccess.Email do
   The token is embedded in the link and delivered only to the target mailbox.
   """
   def magic_link(email, raw_token, opts \\ []) do
-    origin = Keyword.get(opts, :origin, "http://localhost:4000")
+    config = Application.fetch_env!(:origen, :patient_access_email)
+    origin = Keyword.get_lazy(opts, :origin, &OrigenWeb.Endpoint.url/0)
     link = "#{origin}/paciente/acceso/verificar?token=#{URI.encode_www_form(raw_token)}"
 
     new()
     |> to(email)
-    |> from({"Origen", "noreply@example.test"})
+    |> from({"Origen", Keyword.fetch!(config, :from)})
     |> subject("Tu enlace de acceso a Origen")
     |> html_body("""
     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
@@ -31,6 +32,12 @@ defmodule Origen.PatientAccess.Email do
       </p>
     </div>
     """)
+    # One bounded attempt: a timeout does not prove the provider rejected mail.
+    |> put_private(:client_options,
+      retry: false,
+      receive_timeout: 5_000,
+      connect_options: [timeout: 5_000]
+    )
     |> text_body("""
     Acceso sin contraseña a Origen
 

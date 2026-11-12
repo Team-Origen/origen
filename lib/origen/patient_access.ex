@@ -11,6 +11,7 @@ defmodule Origen.PatientAccess do
   """
 
   import Ecto.Query
+  require Logger
   alias Origen.Audit.{Events, Writer}
   alias Origen.PatientAccess.{Email, MagicLink}
   alias Origen.Patients.PatientProfile
@@ -38,47 +39,65 @@ defmodule Origen.PatientAccess do
       raw_token = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
       token_digest = :crypto.hash(:sha256, raw_token)
 
-      Repo.transaction(fn ->
-        # 1. Invalidate previous unconsumed links for this email
-        from(m in MagicLink, where: m.email == ^clean_email and is_nil(m.consumed_at))
-        |> Repo.update_all(set: [consumed_at: now])
+      result =
+        Repo.transaction(fn ->
+          # 1. Invalidate previous unconsumed links for this email
+          from(m in MagicLink, where: m.email == ^clean_email and is_nil(m.consumed_at))
+          |> Repo.update_all(set: [consumed_at: now])
 
-        # 2. Insert new magic link
-        attrs = %{
-          email: clean_email,
-          token_digest: token_digest,
-          expires_at: expires_at,
-          created_at: now
-        }
+          # 2. Insert new magic link
+          attrs = %{
+            email: clean_email,
+            token_digest: token_digest,
+            expires_at: expires_at,
+            created_at: now
+          }
 
-        magic_link =
           %MagicLink{}
           |> MagicLink.changeset(attrs)
           |> Repo.insert!()
 
-        # 3. Deliver email via Swoosh
-        email_msg = Email.magic_link(clean_email, raw_token, opts)
-        mailer = Keyword.get(opts, :mailer, Origen.Mailer)
-        mailer.deliver(email_msg)
+          # Build transient email; never contact the provider before commit.
+          email_msg = Email.magic_link(clean_email, raw_token, opts)
 
-        # 4. Append audit event (reference only, never token or full URL)
-        with {:ok, event} <- Events.magic_link_issued({:anonymous, nil}, clean_email),
-             {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
-          :ok
-        else
-          _ -> Repo.rollback(:audit_unavailable)
-        end
+          # Append audit event (reference only, never token or full URL)
+          with {:ok, event} <- Events.magic_link_issued({:anonymous, nil}, clean_email),
+               {:ok, _} <- Writer.append(event, {:allow, :sys_01}) do
+            :ok
+          else
+            _ -> Repo.rollback(:audit_unavailable)
+          end
 
-        magic_link
-      end)
+          email_msg
+        end)
+
+      case result do
+        {:ok, email_msg} -> deliver_magic_link(email_msg, opts)
+        {:error, _} -> Logger.warning("patient_magic_link_issuance_failed")
+      end
     end
 
     {:ok, :delivered}
   rescue
-    _ -> {:ok, :delivered}
+    _ ->
+      Logger.warning("patient_magic_link_issuance_failed")
+      {:ok, :delivered}
   end
 
   def request_magic_link(_invalid, _opts), do: {:ok, :delivered}
+
+  # Public success is deliberately opaque, not evidence of provider acceptance.
+  # Never log provider errors: they can contain recipient, body or credentials.
+  defp deliver_magic_link(email, opts) do
+    mailer = Keyword.get(opts, :mailer, Origen.PatientAccess.Mailer)
+
+    case mailer.deliver(email) do
+      {:ok, _metadata} -> Logger.info("patient_magic_link_provider_accepted")
+      _ -> Logger.warning("patient_magic_link_delivery_failed")
+    end
+  rescue
+    _ -> Logger.warning("patient_magic_link_delivery_failed")
+  end
 
   defp linked_patient_email?(email) do
     Repo.exists?(from p in PatientProfile, where: p.email == ^email)

@@ -161,21 +161,53 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :origen, Origen.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://swoosh.hexdocs.pm/Swoosh.html#module-installation for details.
+  # Patient access uses Resend over HTTPS; other mailers remain unchanged.
+  # Missing credentials, sender or public hostname prevent a misconfigured boot.
+  # See docs/deployment/PATIENT_EMAIL.md before deploying this revision.
+  required = fn name ->
+    value = System.get_env(name)
+
+    if is_nil(value) or String.trim(value) == "" do
+      raise "#{name} is required for patient email delivery"
+    end
+
+    String.trim(value)
+  end
+
+  public_domain? = fn value ->
+    is_binary(value) and
+      Regex.match?(~r/\A(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\z/i, value) and
+      not Regex.match?(
+        ~r/(\A|\.)(localhost|local|test|invalid|example|example\.(com|org|net))\z/i,
+        value
+      )
+  end
+
+  host = System.get_env("PHX_HOST") || System.get_env("RENDER_EXTERNAL_HOSTNAME")
+
+  unless public_domain?.(host) do
+    raise "PHX_HOST or RENDER_EXTERNAL_HOSTNAME must be a public hostname for patient email delivery"
+  end
+
+  api_key = required.("RESEND_API_KEY")
+  sender = required.("ORIGEN_PATIENT_EMAIL_FROM")
+
+  valid_sender? =
+    case String.split(sender, "@") do
+      [local, domain] ->
+        Regex.match?(~r/\A[a-zA-Z0-9_.+-]+\z/, local) and public_domain?.(domain)
+
+      _ ->
+        false
+    end
+
+  unless valid_sender? do
+    raise "ORIGEN_PATIENT_EMAIL_FROM must be a valid non-placeholder sender"
+  end
+
+  config :origen, Origen.PatientAccess.Mailer,
+    adapter: Swoosh.Adapters.Resend,
+    api_key: api_key
+
+  config :origen, :patient_access_email, from: sender
 end
