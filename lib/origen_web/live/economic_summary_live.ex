@@ -1,69 +1,101 @@
 defmodule OrigenWeb.EconomicSummaryLive do
   @moduledoc """
-  Informational economic-summary prototype. Financial data is fictional and local
-  to this LiveView; it is not an implementation of the financial backend.
+  Read-only economic summary screen backed by `Origen.Booking.economic_summary/3`.
+
+  The Professional is always derived from the active session. Secretaries may
+  select one active Professional from the database-backed calendar listing.
   """
   use OrigenWeb, :live_view
 
-  @professionals [{"demo-a", "Lucía Méndez"}, {"demo-b", "Martín Salvatierra"}]
-  @specialties %{"demo-a" => "Psicología", "demo-b" => "Nutrición"}
+  alias Origen.Appointments.DatabaseCalendar
+  alias Origen.Booking
+
   @months ~w(Enero Febrero Marzo Abril Mayo Junio Julio Agosto Septiembre Octubre Noviembre Diciembre)
 
   @impl true
   def mount(_params, _session, socket) do
-    expected = if socket.assigns.live_action == :professional, do: :professional, else: :secretary
+    expected_role =
+      if socket.assigns.live_action == :professional, do: :professional, else: :secretary
 
-    if socket.assigns.current_role == expected do
-      today =
-        DateTime.now!(Application.fetch_env!(:origen, :organization_timezone))
-        |> DateTime.to_date()
+    if socket.assigns.current_role == expected_role do
+      month = organization_today() |> Date.beginning_of_month()
+      professionals = if expected_role == :secretary, do: list_professionals(), else: []
 
-      month = Date.beginning_of_month(today)
-      identity = socket.assigns[:current_professional_identity]
+      selected =
+        if expected_role == :professional,
+          do: to_string(socket.assigns.current_account_id),
+          else: ""
 
-      secretary_identity =
-        case Origen.Accounts.get_own_navigation_identity(socket.assigns.current_internal_session) do
-          {:ok, value} -> value
-          _ -> nil
-        end
+      socket =
+        socket
+        |> assign(
+          page_title: "Resumen económico",
+          current_professional_identity: socket.assigns[:current_professional_identity],
+          secretary_identity: secretary_identity(socket.assigns.current_internal_session),
+          professionals: professionals,
+          professionals_error:
+            if(expected_role == :secretary and professionals == [], do: :unavailable, else: nil),
+          professional_options_open: false,
+          selected_professional: selected,
+          month: month,
+          month_input: month_value(month),
+          mode: "month",
+          from: Date.to_iso8601(month),
+          to: Date.to_iso8601(Date.end_of_month(month)),
+          period_params: %{"mode" => "month", "month" => month_value(month)},
+          period_error: nil,
+          summary_error: nil,
+          summary: nil,
+          consulted_from: month,
+          consulted_to: Date.end_of_month(month)
+        )
 
-      {:ok,
-       socket
-       |> assign(
-         page_title: "Resumen económico",
-         current_professional_identity: identity,
-         secretary_identity: secretary_identity,
-         professionals: @professionals,
-         professional_options_open: false,
-         selected_professional: if(expected == :professional, do: "demo-a", else: ""),
-         seed_month: month,
-         month: month,
-         mode: "month",
-         from: Date.to_iso8601(month),
-         to: Date.to_iso8601(Date.end_of_month(month)),
-         period_error: nil,
-         consulted_from: month,
-         consulted_to: Date.end_of_month(month)
-       )
-       |> summarize()}
+      {:ok, load_summary(socket)}
     else
       {:ok, redirect(socket, to: "/")}
     end
   end
 
   @impl true
-  def handle_event("professional", %{"professional" => id}, socket) do
-    # The professional view never accepts a client-selected identity.
-    if socket.assigns.current_role == :secretary do
-      selected = if id in ["demo-a", "demo-b"], do: id, else: ""
+  def handle_event("professional", %{"professional" => ""}, socket) do
+    {:noreply,
+     assign(socket,
+       selected_professional: "",
+       professional_options_open: false,
+       summary: nil,
+       summary_error: nil,
+       period_error: nil
+     )}
+  end
 
+  def handle_event("professional", %{"professional" => id}, socket) do
+    with {:ok, professional_id} <- parse_professional_id(id),
+         true <- listed_professional?(socket.assigns.professionals, professional_id) do
       {:noreply,
        socket
-       |> assign(selected_professional: selected, professional_options_open: false)
-       |> summarize()}
+       |> assign(
+         selected_professional: to_string(professional_id),
+         professional_options_open: false,
+         summary_error: nil,
+         period_error: nil
+       )
+       |> load_summary()}
     else
-      {:noreply, socket}
+      _ ->
+        {:noreply,
+         assign(socket,
+           professional_options_open: false,
+           summary_error: "Seleccioná un profesional activo válido."
+         )}
     end
+  end
+
+  def handle_event("professional", _params, socket) do
+    {:noreply,
+     assign(socket,
+       professional_options_open: false,
+       summary_error: "Seleccioná un profesional activo válido."
+     )}
   end
 
   def handle_event("toggle_professionals", _params, socket) do
@@ -76,26 +108,17 @@ defmodule OrigenWeb.EconomicSummaryLive do
   end
 
   def handle_event("period_change", %{"period" => params}, socket) do
-    if Map.get(params, "mode") == "month" do
-      handle_event("consult", %{"period" => params}, socket)
+    socket = assign_inputs(socket, params)
+
+    if socket.assigns.mode == "month" do
+      {:noreply, consult(socket)}
     else
-      {:noreply, assign_inputs(socket, params)}
+      {:noreply, socket}
     end
   end
 
   def handle_event("consult", %{"period" => params}, socket) do
-    socket = assign_inputs(socket, params)
-
-    case period(params) do
-      {:ok, from, to} ->
-        {:noreply,
-         socket
-         |> assign(consulted_from: from, consulted_to: to, period_error: nil)
-         |> summarize()}
-
-      {:error, message} ->
-        {:noreply, assign(socket, :period_error, message)}
-    end
+    {:noreply, socket |> assign_inputs(params) |> consult()}
   end
 
   def handle_event("month", %{"direction" => direction}, socket)
@@ -114,11 +137,72 @@ defmodule OrigenWeb.EconomicSummaryLive do
      |> assign(
        month: target,
        mode: "month",
-       consulted_from: target,
-       consulted_to: Date.end_of_month(target),
+       from: Date.to_iso8601(target),
+       to: Date.to_iso8601(Date.end_of_month(target)),
+       month_input: month_value(target),
+       period_params: %{"mode" => "month", "month" => month_value(target)},
        period_error: nil
      )
-     |> summarize()}
+     |> load_summary()}
+  end
+
+  defp consult(socket) do
+    socket = assign(socket, period_params: period_params(socket), period_error: nil)
+
+    case selected_id(socket) do
+      {:ok, _id} -> load_summary(socket)
+      :error -> socket
+    end
+  end
+
+  defp load_summary(socket) do
+    with {:ok, professional_id} <- selected_id(socket),
+         {:ok, summary} <-
+           Booking.economic_summary(
+             socket.assigns.current_internal_session,
+             professional_id,
+             socket.assigns.period_params
+           ) do
+      assign(socket,
+        summary: summary,
+        summary_error: nil,
+        period_error: nil,
+        consulted_from: summary.period.from,
+        consulted_to: summary.period.to
+      )
+    else
+      {:error, reason} -> handle_summary_error(socket, reason)
+      :error -> socket
+    end
+  end
+
+  defp handle_summary_error(socket, reason)
+       when reason in [
+              :invalid_period,
+              :range_reversed,
+              :invalid_timezone,
+              :ambiguous_period_boundary,
+              :nonexistent_period_boundary
+            ] do
+    assign(socket, period_error: period_error_message(reason))
+  end
+
+  defp handle_summary_error(socket, :unauthorized) do
+    assign(socket,
+      summary: nil,
+      summary_error: "No tenés permiso para consultar este resumen."
+    )
+  end
+
+  defp handle_summary_error(socket, :invalid_professional_selection) do
+    assign(socket,
+      summary: nil,
+      summary_error: "Seleccioná un profesional activo válido."
+    )
+  end
+
+  defp handle_summary_error(socket, _reason) do
+    assign(socket, summary: nil, summary_error: "No se pudo cargar el resumen económico.")
   end
 
   defp assign_inputs(socket, params) do
@@ -127,161 +211,117 @@ defmodule OrigenWeb.EconomicSummaryLive do
     |> assign(:from, Map.get(params, "from", socket.assigns.from))
     |> assign(:to, Map.get(params, "to", socket.assigns.to))
     |> then(fn socket ->
-      case Date.from_iso8601(Map.get(params, "month", "") <> "-01") do
+      month_input = Map.get(params, "month", socket.assigns.month_input)
+      month_input = if is_binary(month_input), do: month_input, else: ""
+      socket = assign(socket, :month_input, month_input)
+
+      case Date.from_iso8601(month_input <> "-01") do
         {:ok, date} -> assign(socket, :month, date)
         _ -> socket
       end
     end)
-    |> assign(:period_error, nil)
+    |> assign(period_error: nil, summary_error: nil)
   end
 
-  defp period(%{"mode" => "month", "month" => value}) do
-    case Date.from_iso8601(value <> "-01") do
-      {:ok, date} -> {:ok, date, Date.end_of_month(date)}
-      _ -> {:error, "Completá un período válido."}
+  defp period_params(%{assigns: %{mode: "month", month_input: month_input}}),
+    do: %{"mode" => "month", "month" => month_input}
+
+  defp period_params(%{assigns: %{mode: "range", from: from, to: to}}),
+    do: %{"mode" => "range", "from" => from, "to" => to}
+
+  defp period_params(_socket), do: %{}
+
+  defp selected_id(%{assigns: %{selected_professional: selected}}),
+    do: parse_professional_id(selected)
+
+  defp parse_professional_id(id) when is_integer(id) and id > 0, do: {:ok, id}
+
+  defp parse_professional_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {number, ""} when number > 0 -> {:ok, number}
+      _ -> :error
     end
   end
 
-  defp period(%{"mode" => "range", "from" => from, "to" => to}) do
-    with {:ok, start} <- Date.from_iso8601(from),
-         {:ok, finish} <- Date.from_iso8601(to) do
-      if Date.compare(finish, start) == :lt,
-        do: {:error, "La fecha final no puede ser anterior a la inicial."},
-        else: {:ok, start, finish}
-    else
-      _ -> {:error, "Completá un período válido."}
+  defp parse_professional_id(_id), do: :error
+
+  defp listed_professional?(professionals, id),
+    do: Enum.any?(professionals, &(to_string(&1.id) == to_string(id)))
+
+  defp list_professionals do
+    case DatabaseCalendar.list_professionals() do
+      {:ok, professionals} -> professionals
+      {:error, _reason} -> []
     end
   end
 
-  defp period(_), do: {:error, "Completá un período válido."}
-
-  # Integer centavos keep the fictional example exact. These rows never come
-  # from patient, booking or payment storage and cannot be used to record a payment.
-  defp summarize(socket) do
-    a = socket.assigns
-    multiplier = if a.selected_professional == "demo-b", do: 2, else: 1
-
-    names =
-      if a.selected_professional == "demo-b" do
-        [
-          "Camila Torres",
-          "Bruno Medina",
-          "Elena Suárez",
-          "Gabriel Molina",
-          "Clara Navarro",
-          "Diego Ferreyra",
-          "Inés Ponce",
-          "Mateo Aguirre",
-          "Paula Villalba",
-          "Santiago Vera",
-          "Florencia Castro",
-          "Tomás Peralta",
-          "Marina Godoy",
-          "Lautaro Ibáñez",
-          "Victoria Luna"
-        ]
-      else
-        [
-          "Valentina Ríos",
-          "Julián Acosta",
-          "Sofía Benítez",
-          "Nicolás Duarte",
-          "Emilia Sosa",
-          "Agustín Cabrera",
-          "Catalina Funes",
-          "Benjamín Paz",
-          "Renata Silva",
-          "Franco Correa",
-          "Olivia Ramos",
-          "Manuel Quiroga",
-          "Josefina Arias",
-          "Ignacio Leiva",
-          "Malena Costa"
-        ]
-      end
-
-    # Keep the initial month available and add November/December of that year.
-    # Deduplicate when mounting in November or December to avoid double totals.
-    months =
-      [a.seed_month, Date.new!(a.seed_month.year, 11, 1), Date.new!(a.seed_month.year, 12, 1)]
-      |> Enum.uniq()
-
-    rows =
-      months
-      |> Enum.flat_map(fn month ->
-        [
-          {1, :attended, false, 400_000},
-          {2, :confirmed, false, 600_000},
-          {3, :confirmed, true, 1_000_000},
-          {4, :cancelled, true, 800_000},
-          {5, :no_show, true, 700_000},
-          {6, :cancelled, false, 300_000},
-          {7, :no_show, false, 300_000},
-          {8, :attended, false, 500_000},
-          {10, :attended, false, 750_000},
-          {12, :confirmed, false, 800_000},
-          {15, :attended, true, 900_000},
-          {18, :confirmed, true, 650_000},
-          {20, :cancelled, true, 450_000},
-          {23, :no_show, false, 350_000},
-          {27, :attended, false, 550_000}
-        ]
-        |> Enum.zip(names)
-        |> Enum.map(fn {{day, status, paid, cents}, name} ->
-          %{
-            date: %{month | day: day},
-            patient: name,
-            status: status,
-            paid: paid,
-            cents: cents * multiplier
-          }
-        end)
-      end)
-      |> Enum.filter(
-        &(Date.compare(&1.date, a.consulted_from) != :lt and
-            Date.compare(&1.date, a.consulted_to) != :gt)
-      )
-
-    paid = rows |> Enum.filter(& &1.paid) |> Enum.map(& &1.cents) |> Enum.sum()
-
-    pending =
-      rows
-      |> Enum.filter(&(!&1.paid and &1.status in [:confirmed, :attended]))
-      |> Enum.map(& &1.cents)
-      |> Enum.sum()
-
-    detail = Enum.filter(rows, &(!&1.paid and &1.status == :attended))
-    assign(socket, paid: paid, pending: pending, total: paid + pending, detail: detail)
+  defp secretary_identity(principal) do
+    case Origen.Accounts.get_own_navigation_identity(principal) do
+      {:ok, identity} -> identity
+      {:error, _reason} -> nil
+    end
   end
 
-  defp money(cents) do
-    whole =
-      div(cents, 100)
-      |> Integer.to_string()
-      |> String.reverse()
-      |> String.replace(~r/(\d{3})(?=\d)/, "\\1.")
-      |> String.reverse()
-
-    whole <> "," <> String.pad_leading(Integer.to_string(rem(cents, 100)), 2, "0")
+  defp organization_today do
+    Application.fetch_env!(:origen, :organization_timezone)
+    |> DateTime.now!()
+    |> DateTime.to_date()
   end
 
-  defp date(date), do: Calendar.strftime(date, "%d/%m/%Y")
-  defp month_value(date), do: Calendar.strftime(date, "%Y-%m")
-  defp month_title(date), do: "#{Enum.at(@months, date.month - 1)} #{date.year}"
+  defp period_error_message(:range_reversed),
+    do: "La fecha final no puede ser anterior a la inicial."
+
+  defp period_error_message(_reason), do: "Completá un período válido."
+
+  defp selected_professional(assigns) do
+    Enum.find(assigns.professionals, &(to_string(&1.id) == assigns.selected_professional))
+  end
 
   defp professional_name(%{current_role: :professional, current_professional_identity: identity})
        when is_map(identity) do
-    Enum.join(Enum.reject([identity[:first_name], identity[:last_name]], &(&1 in [nil, ""])), " ")
+    [identity[:first_name], identity[:last_name]]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" ")
     |> case do
       "" -> "Mi resumen"
       value -> value
     end
   end
 
-  defp professional_name(%{current_role: :professional}), do: "Mi resumen"
-  defp professional_name(assigns), do: Map.new(@professionals)[assigns.selected_professional]
+  defp professional_name(assigns) do
+    case selected_professional(assigns) do
+      %{name: name} -> name
+      _ -> "Profesional"
+    end
+  end
 
-  defp specialty(id), do: Map.get(@specialties, id, "")
+  defp specialty(assigns) do
+    case selected_professional(assigns) do
+      %{specialty: specialty} -> specialty
+      _ -> ""
+    end
+  end
+
+  defp zero_summary?(%{total: total}), do: Decimal.equal?(total, Decimal.new("0"))
+  defp zero_summary?(_summary), do: false
+
+  defp money(%Decimal{} = amount) do
+    parts = String.split(Decimal.to_string(amount, :normal), ".") ++ [""]
+    [whole, fraction | _] = Enum.take(parts, 2)
+    fraction = String.pad_trailing(fraction, 2, "0")
+
+    whole =
+      whole
+      |> String.reverse()
+      |> String.replace(~r/(\d{3})(?=\d)/, "\\1.")
+      |> String.reverse()
+
+    whole <> "," <> fraction
+  end
+
+  defp date(date), do: Calendar.strftime(date, "%d/%m/%Y")
+  defp month_value(date), do: Calendar.strftime(date, "%Y-%m")
+  defp month_title(date), do: "#{Enum.at(@months, date.month - 1)} #{date.year}"
 
   @impl true
   def render(assigns) do
@@ -330,7 +370,7 @@ defmodule OrigenWeb.EconomicSummaryLive do
                   id="period-month"
                   type="month"
                   name="period[month]"
-                  value={month_value(@month)}
+                  value={@month_input}
                   class="rounded-control border border-border bg-surface px-3 py-2"
                 />
               </div>
@@ -413,20 +453,18 @@ defmodule OrigenWeb.EconomicSummaryLive do
                   name={professional_name(assigns)}
                   size="md"
                 />
-                <span class="min-w-0">
-                  <span
-                    id="selected-professional-name"
-                    class="block truncate text-sm font-semibold text-text"
-                  >{professional_name(assigns)}</span>
-                  <span id="selected-professional-specialty" class="block text-xs text-text-muted">{specialty(
-                    @selected_professional
-                  )}</span>
-                </span>
+                <span class="min-w-0"><span
+                  id="selected-professional-name"
+                  class="block truncate text-sm font-semibold text-text"
+                >{professional_name(assigns)}</span><span
+                  id="selected-professional-specialty"
+                  class="block text-xs text-text-muted"
+                >{specialty(assigns)}</span></span>
               </span>
-              <span :if={@selected_professional == ""} class="flex flex-1 items-center gap-3 text-sm">
-                <.icon name="hero-user-circle" class="size-10 text-text-muted" />
-                Seleccioná un profesional
-              </span>
+              <span :if={@selected_professional == ""} class="flex flex-1 items-center gap-3 text-sm"><.icon
+                name="hero-user-circle"
+                class="size-10 text-text-muted"
+              />Seleccioná un profesional</span>
               <.icon
                 name="hero-chevron-down"
                 class={["size-4 shrink-0", @professional_options_open && "rotate-180"]}
@@ -438,19 +476,17 @@ defmodule OrigenWeb.EconomicSummaryLive do
               aria-label="Seleccionar profesional"
               class="absolute right-0 z-30 mt-2 w-full min-w-64 overflow-hidden rounded-surface border border-gray-200 bg-surface p-1 shadow-lg"
             >
-              <li :for={{id, name} <- @professionals}>
+              <li :for={professional <- @professionals}>
                 <button
-                  id={"professional-option-#{id}"}
+                  id={"professional-option-#{professional.id}"}
                   type="button"
                   phx-click="professional"
-                  phx-value-professional={id}
-                  aria-pressed={to_string(@selected_professional == id)}
+                  phx-value-professional={professional.id}
+                  aria-pressed={to_string(@selected_professional == to_string(professional.id))}
                   class="flex w-full items-center gap-3 rounded-control px-3 py-3 text-left hover:bg-accent-100 focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
-                  <.avatar name={name} size="sm" />
-                  <span><span class="block text-sm font-semibold">{name}</span><span class="block text-xs text-text-muted">{specialty(
-                    id
-                  )}</span></span>
+                  <.avatar name={professional.name} size="sm" />
+                  <span><span class="block text-sm font-semibold">{professional.name}</span><span class="block text-xs text-text-muted">{professional.specialty}</span></span>
                 </button>
               </li>
               <li>
@@ -460,7 +496,9 @@ defmodule OrigenWeb.EconomicSummaryLive do
                   phx-click="professional"
                   phx-value-professional=""
                   class="w-full rounded-control px-3 py-2 text-left text-sm text-text-muted hover:bg-accent-100"
-                >Limpiar selección</button>
+                >
+                  Limpiar selección
+                </button>
               </li>
             </ul>
           </div>
@@ -482,7 +520,23 @@ defmodule OrigenWeb.EconomicSummaryLive do
         >
           Seleccioná un profesional para consultar su resumen.
         </p>
-        <div :if={@selected_professional != ""} class="space-y-6">
+        <p
+          :if={@professionals_error}
+          id="summary-error"
+          role="alert"
+          class="rounded-surface border border-red-200 bg-red-50 p-5 text-sm text-red-700"
+        >
+          No se pudo cargar la lista de profesionales activos.
+        </p>
+        <p
+          :if={@summary_error}
+          id="summary-error"
+          role="alert"
+          class="rounded-surface border border-red-200 bg-red-50 p-5 text-sm text-red-700"
+        >
+          {@summary_error}
+        </p>
+        <div :if={@selected_professional != "" and @summary} class="space-y-6">
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-4">
             <h2 class="text-lg font-semibold">{professional_name(assigns)}</h2>
             <p id="period-context" class="text-sm text-text-muted">
@@ -493,12 +547,12 @@ defmodule OrigenWeb.EconomicSummaryLive do
           <div class="grid gap-4 md:grid-cols-3" aria-label="Importes del período">
             <section
               :for={
-                {id, label, cents, explanation} <- [
-                  {"paid", "Pagado", @paid,
+                {id, label, amount, explanation} <- [
+                  {"paid", "Pagado", @summary.paid,
                    "Incluye pagos conservados en cancelaciones y ausencias."},
-                  {"pending", "Pendiente", @pending,
+                  {"pending", "Pendiente", @summary.pending,
                    "Turnos confirmados o asistidos que estén impagos."},
-                  {"total", "Total considerado", @total, "Pagado + Pendiente."}
+                  {"total", "Total considerado", @summary.total, "Pagado + Pendiente."}
                 ]
               }
               id={"summary-#{id}"}
@@ -512,7 +566,7 @@ defmodule OrigenWeb.EconomicSummaryLive do
             >
               <h3 class="text-sm font-semibold">{label}</h3>
               <p class="mt-4 text-3xl font-semibold tracking-tight">
-                <span class="mr-1 text-sm font-medium">ARS</span> {money(cents)}
+                <span class="mr-1 text-sm font-medium">ARS</span> {money(amount)}
               </p>
               <p class={[
                 "mt-4 text-sm leading-relaxed",
@@ -523,57 +577,13 @@ defmodule OrigenWeb.EconomicSummaryLive do
             </section>
           </div>
           <p
-            :if={@total == 0}
+            :if={zero_summary?(@summary)}
             id="empty-summary"
             role="status"
             class="rounded-surface border border-gray-200 bg-surface p-5 text-sm"
           >
             No hay turnos elegibles en este período. Los tres importes son cero.
           </p>
-          <details
-            id="attended-unpaid"
-            open
-            class="overflow-hidden rounded-surface border border-gray-200 bg-surface shadow-sm"
-          >
-            <summary class="cursor-pointer px-6 py-5 font-semibold hover:bg-accent-50">
-              Atenciones pendientes de pago
-              <span class="ml-2 rounded-full bg-accent-200 px-2.5 py-1 text-xs">{length(@detail)}</span>
-            </summary>
-            <div class="border-t border-gray-200">
-              <p class="px-6 py-4 text-sm text-text-muted">
-                Sólo turnos con asistencia registrada y sin pago. Es un subconjunto de Pendiente; no incluye reservas confirmadas.
-              </p>
-              <div :if={@detail != []} class="overflow-x-auto">
-                <table class="w-full text-left text-sm">
-                  <caption class="sr-only">
-                    Atenciones impagas del profesional y período consultados.
-                  </caption>
-                  <thead class="bg-accent-100 text-text-muted">
-                    <tr>
-                      <th scope="col" class="px-6 py-3 font-medium">Fecha del turno</th><th
-                        scope="col"
-                        class="px-6 py-3 font-medium"
-                      >
-                        Paciente
-                      </th><th scope="col" class="px-6 py-3 text-right font-medium">Importe</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr :for={row <- @detail} class="border-t border-gray-100">
-                      <td class="whitespace-nowrap px-6 py-4">{date(row.date)}</td><td class="px-6 py-4">
-                        {row.patient}
-                      </td><td class="whitespace-nowrap px-6 py-4 text-right font-semibold">
-                        ARS {money(row.cents)}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p :if={@detail == []} class="px-6 pb-5 text-sm text-text-muted">
-                No hay atenciones pendientes de pago en este período.
-              </p>
-            </div>
-          </details>
         </div>
       </div>
     </main>
