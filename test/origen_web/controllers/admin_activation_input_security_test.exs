@@ -92,7 +92,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     def activation_error(assigns) do
       ~H"""
       <.alert id="activation-error" color="danger" heading="Activation failed">
-        Activation details are invalid
+        Los datos de activación no son válidos
       </.alert>
       """
     end
@@ -116,7 +116,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
       })
       |> html_response(422)
 
-    assert body =~ "Activation details are invalid"
+    assert body =~ "Los datos de activación no son válidos"
     assert body =~ ~s(name="password")
     assert body =~ ~s(name="password_confirmation")
     assert body =~ ~s(name="totp_code")
@@ -169,7 +169,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
     assert flash =~ ~s(id="activation-error")
     assert flash =~ ~s(role="alert")
     assert flash =~ "Activation failed"
-    assert flash =~ "Activation details are invalid"
+    assert flash =~ "Los datos de activación no son válidos"
   end
 
   defp issue_invitation do

@@ -1,90 +1,54 @@
 defmodule OrigenWeb.AdminActivationHTML do
   use OrigenWeb, :html
 
+  import OrigenWeb.ActivationComponents
+
   def exchange(assigns) do
     ~H"""
-    <main class="mx-auto max-w-lg p-8">
-      <h1 class="text-2xl font-semibold">Administrator activation</h1>
-
-      <p id="activation-status" class="mt-4">Checking invitation…</p>
-      <meta name="_csrf_token" content={@csrf_token} />
-      <form
-        id="fragment-exchange"
-        action={~p"/administrador/activar/intercambiar"}
-        method="post"
-        hidden
-      >
-        <input type="hidden" name="_csrf_token" value={@csrf_token} />
-        <input id="invitation-id" type="hidden" name="invitation_id" />
-        <input id="invitation-token" type="hidden" name="token" />
-      </form>
-
-      <script>
-        (() => {
-          const fragment = new URLSearchParams(window.location.hash.slice(1));
-          const invitationId = fragment.get("invitation_id");
-          const token = fragment.get("token");
-          history.replaceState(null, "", window.location.pathname);
-
-          if (/^[1-9][0-9]*$/.test(invitationId || "") && token) {
-            const form = document.getElementById("fragment-exchange");
-            document.getElementById("invitation-id").value = invitationId;
-            document.getElementById("invitation-token").value = token;
-            form.submit();
-          } else {
-            document.getElementById("activation-status").textContent =
-              "Activation invitation is unavailable.";
-          }
-        })();
-      </script>
-    </main>
+    <.exchange_page
+      title="Activar cuenta de administrador"
+      action={~p"/administrador/activar/intercambiar"}
+      csrf_token={@csrf_token}
+    />
     """
   end
 
   def enrollment(assigns) do
     ~H"""
-    <main class="mx-auto max-w-lg p-8">
-      <h1 class="text-2xl font-semibold">Secure administrator account</h1>
+    <.activation_page
+      title="Activar cuenta de administrador"
+      subtitle="Elegí la contraseña de la cuenta de administrador."
+    >
+      <.activation_error error={@error} />
 
-      <p :if={@error} role="alert" class="mt-4">{@error}</p>
+      <div
+        :if={@account_id}
+        id="login-identifier"
+        data-login-identifier={@account_id}
+        class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-text"
+      >
+        Esta cuenta no tiene email. Para iniciar sesión vas a usar el ID de cuenta
+        <strong class="font-semibold">{@account_id}</strong>
+        y la contraseña que elijas acá.
+      </div>
 
-      <section :if={@totp_uri} class="mt-6">
-        <h2 class="font-semibold">Add the authenticator factor</h2>
+      <.totp_enrollment totp_uri={@totp_uri} />
 
-        <p>Scan this one-time enrollment payload with your authenticator application.</p>
-        <code data-totp-uri={@totp_uri} class="mt-2 block break-all">{@totp_uri}</code>
-      </section>
-
-      <form action={~p"/administrador/activar"} method="post" class="mt-6 space-y-4">
+      <form
+        id="admin-activation-form"
+        action={~p"/administrador/activar"}
+        method="post"
+        class="flex flex-col gap-4"
+      >
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
-        <.input
-          name="password"
-          type="password"
-          label="Password"
-          value=""
-          required
-          autocomplete="new-password"
-        />
-        <.input
-          name="password_confirmation"
-          type="password"
-          label="Confirm password"
-          value=""
-          required
-          autocomplete="new-password"
-        />
-        <.input
-          :if={!@password_only}
-          name="totp_code"
-          type="text"
-          label="Authenticator code"
-          value=""
-          required
-          inputmode="numeric"
-          autocomplete="one-time-code"
-        /> <button type="submit" class="btn btn-primary">Activate administrator</button>
+        <.credential_fields password_only={@password_only} />
+        <div class="pt-2">
+          <.button type="submit" color="primary" size="lg" class="w-full">
+            Activar cuenta
+          </.button>
+        </div>
       </form>
-    </main>
+    </.activation_page>
     """
   end
 end
