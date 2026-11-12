@@ -143,7 +143,8 @@ defmodule OrigenWeb.InternalActivationController do
     |> put_status(:unprocessable_entity)
     |> render(:enrollment,
       totp_uri: nil,
-      error: "Activation details are invalid",
+      error:
+        "Los datos de activación no son válidos. Revisá que las dos contraseñas coincidan y tengan al menos 12 caracteres.",
       csrf_token: get_csrf_token(),
       password_only: AcademicDemo.password_only?()
     )
