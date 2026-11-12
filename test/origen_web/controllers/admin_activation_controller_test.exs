@@ -207,6 +207,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       page_conn
       |> recycle()
       |> post(https(~p"/administrador/activar"), %{
+        "email" => "admin@example.test",
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password",
         "totp_code" => wrong_totp_code(seed)
@@ -232,13 +233,14 @@ defmodule OrigenWeb.AdminActivationControllerTest do
     code = NimbleTOTP.verification_code(seed)
 
     submission = %{
+      "email" => "admin@example.test",
       "password" => "a-secure-password",
       "password_confirmation" => "a-secure-password",
       "totp_code" => code
     }
 
     success_conn = page_conn |> recycle() |> post(https(~p"/administrador/activar"), submission)
-    assert redirected_to(success_conn) == ~p"/"
+    assert redirected_to(success_conn) == ~p"/login"
 
     [["active", password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
     assert Credentials.verify_password("a-secure-password", password_hash)
@@ -274,12 +276,13 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       page_conn
       |> recycle()
       |> post(https(~p"/administrador/activar"), %{
+        "email" => "admin@example.test",
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password",
         "totp_code" => NimbleTOTP.verification_code(seed)
       })
 
-    assert redirected_to(success_conn) == ~p"/"
+    assert redirected_to(success_conn) == ~p"/login"
     [["active", _password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
     assert {:ok, ^seed} = Credentials.decrypt_seed(encrypted_seed, keyring())
   end
@@ -306,11 +309,17 @@ defmodule OrigenWeb.AdminActivationControllerTest do
         page_conn
         |> recycle()
         |> post(https(~p"/administrador/activar"), %{
+          "email" => " Admin.Demo@Gmail.com ",
           "password" => "a-secure-password",
           "password_confirmation" => "a-secure-password"
         })
 
-      assert redirected_to(success_conn) == ~p"/"
+      assert redirected_to(success_conn) == ~p"/login"
+
+      assert Repo.query!("SELECT email FROM internal_accounts WHERE id = $1", [
+               invitation.account_id
+             ]).rows == [["admin.demo@gmail.com"]]
+
       [["active", password_hash, encrypted_seed]] = account_credentials(invitation.account_id)
       assert Credentials.verify_password("a-secure-password", password_hash)
       assert {:ok, seed} = Credentials.decrypt_seed(encrypted_seed, keyring())
@@ -318,17 +327,17 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       assert [[consumed_at, nil]] = invitation_state(invitation.invitation_id)
       assert not is_nil(consumed_at)
 
-      # The first Administrator has no email: it signs in with its account id.
+      # The first Administrator signs in with the email chosen at activation.
       login_conn =
         post(build_conn(), https(~p"/login"), %{
-          "identifier" => to_string(invitation.account_id),
+          "identifier" => "admin.demo@gmail.com",
           "password" => "a-secure-password"
         })
 
       assert redirected_to(login_conn) == "/administrador/cuentas"
     end
 
-    test "labels both password fields, uses the app theme and names the login identifier", %{
+    test "labels both password fields, uses the app theme and asks for the sign-in email", %{
       conn: conn
     } do
       invitation = issue_invitation()
@@ -343,8 +352,9 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       assert body =~ ~s(data-theme="light")
       assert body =~ ~r/<label[^>]*for="password"[^>]*>\s*Contraseña\s*</
       assert body =~ ~r/<label[^>]*for="password_confirmation"[^>]*>\s*Confirmar contraseña\s*</
-      assert body =~ "ID de cuenta"
-      assert body =~ ~s(data-login-identifier="#{invitation.account_id}")
+      assert body =~ ~r/<label[^>]*for="email"[^>]*>\s*Email\s*</
+      assert body =~ ~s(type="email")
+      refute body =~ "ID de cuenta"
     end
 
     test "still rejects a password shorter than 12 bytes without persisting factors", %{
@@ -359,6 +369,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
         page_conn
         |> recycle()
         |> post(https(~p"/administrador/activar"), %{
+          "email" => "admin@example.test",
           "password" => "short",
           "password_confirmation" => "short"
         })
@@ -366,6 +377,80 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       body = html_response(conn, 422)
       assert body =~ "Los datos de activación no son válidos"
       refute body =~ ~s(name="totp_code")
+      assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
+    end
+
+    test "names each rejection reason on screen and in the log, without secrets", %{conn: conn} do
+      cases = [
+        {%{
+           "email" => "admin@example.test",
+           "password" => "a-secure-password",
+           "password_confirmation" => "another-password"
+         }, "Las contraseñas no coinciden", "password_mismatch"},
+        {%{
+           "email" => "admin@example.test",
+           "password" => "short",
+           "password_confirmation" => "short"
+         }, "al menos 12 caracteres", "password_length"},
+        {%{"password" => "a-secure-password"}, "Completá todos los campos", "missing_fields"},
+        {%{
+           "email" => "not-an-email",
+           "password" => "a-secure-password",
+           "password_confirmation" => "a-secure-password"
+         }, "El email no tiene un formato válido", "invalid_email"}
+      ]
+
+      for {params, message, reason} <- cases do
+        invitation = issue_invitation()
+
+        page_conn =
+          conn |> exchange(invitation) |> recycle() |> get(https(~p"/administrador/activar"))
+
+        {post_conn, log} =
+          ExUnit.CaptureLog.with_log(fn ->
+            page_conn |> recycle() |> post(https(~p"/administrador/activar"), params)
+          end)
+
+        body = html_response(post_conn, 422)
+        assert body =~ message
+        assert log =~ "admin activation rejected reason=#{reason}"
+        refute log =~ "a-secure-password"
+        refute log =~ "another-password"
+        assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
+
+        Repo.query!("DELETE FROM internal_account_invitations")
+        Repo.query!("DELETE FROM internal_accounts")
+      end
+    end
+
+    test "reports an invalid server TOTP keyring as unavailable, not as a user error", %{
+      conn: conn
+    } do
+      invitation = issue_invitation()
+
+      page_conn =
+        conn |> exchange(invitation) |> recycle() |> get(https(~p"/administrador/activar"))
+
+      bad_keyring = %{active: %{tag: "seed.prod.v1", key: "too-short"}, retired: []}
+      Application.put_env(:origen, :totp_keyring, bad_keyring)
+      Application.put_env(:origen, :bootstrap_admin_totp_keyring, bad_keyring)
+
+      {post_conn, log} =
+        ExUnit.CaptureLog.with_log(fn ->
+          page_conn
+          |> recycle()
+          |> post(https(~p"/administrador/activar"), %{
+            "email" => "admin@example.test",
+            "password" => "a-secure-password",
+            "password_confirmation" => "a-secure-password"
+          })
+        end)
+
+      body = html_response(post_conn, 503)
+      assert body =~ "problema de configuración del servidor"
+      refute body =~ "Los datos de activación no son válidos"
+      assert log =~ "admin activation rejected reason=totp_keyring_invalid"
+      refute log =~ "too-short"
       assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
     end
   end
@@ -385,6 +470,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       page_conn
       |> recycle()
       |> post(https(~p"/administrador/activar"), %{
+        "email" => "admin@example.test",
         "password" => "a-secure-password",
         "password_confirmation" => "a-secure-password"
       })

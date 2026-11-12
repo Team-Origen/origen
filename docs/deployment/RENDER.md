@@ -70,10 +70,10 @@ The free Render plan has no shell, so the command runs from the operator's machi
    ```bash
    docker run --rm --env-file ~/origen-ops.env origen:ops /app/bin/issue_admin_invitation --host origen-4kju.onrender.com
    ```
-   It prints the **login identifier** (the account id; this account has no email), the expiry and the activation link. It refuses with `administrator_exists` if an Administrator already exists.
+   It prints the account id (used only to reissue with `--account-id`), the expiry and the activation link. It refuses with `administrator_exists` if an Administrator already exists.
 5. **Hand the link only to the account holder**, through a private channel. Whoever has the link can activate the account until it is used or expires.
 6. **Clean up:** delete `~/origen-ops.env`, remove your IP from `origen-db`, and clear the terminal scrollback (the link was printed there).
-7. **Account holder:** open the link, set a password (at least 12 characters), scan the QR code with an authenticator app and enter the code. Then sign in at `/login` with the account id, the password and a TOTP code. With the [academic demo mode](#academic-demo-mode-password-only) on, there is no QR code or TOTP code: only the password.
+7. **Account holder:** open the link, enter the email to sign in with, set a password (at least 12 characters), scan the QR code with an authenticator app and enter the code. The page then redirects to `/login`: sign in with that email, the password and a TOTP code. With the [academic demo mode](#academic-demo-mode-password-only) on, there is no QR code or TOTP code: only the email and the password. If activation is rejected, the page names the reason and the Render log records it as `admin activation rejected reason=<reason>`.
 
 If the link expires or is lost before activation, issue a new one for the same pending account; the previous link stops working:
 
@@ -103,7 +103,7 @@ Turning the mode off later restores TOTP on the next sign-in, but accounts activ
 
 There is no email provider, so every link is handed over by hand, through a private channel.
 
-1. **First Administrator:** follow [Create the first Administrator](#create-the-first-administrator). The holder opens the link and sets a password. This account has no email: its login identifier is the account id that `bin/issue_admin_invitation` prints.
+1. **First Administrator:** follow [Create the first Administrator](#create-the-first-administrator). The holder opens the link, enters their email and sets a password, then signs in at `/login` with that email.
 2. **Professionals and secretaries:** the Administrator signs in, opens `/administrador/cuentas`, enters the person's email and role, and issues the invitation. The screen shows the activation link (**Enlace de invitación**) to copy; the app does not send it. If the link expires or is lost, use **Reemitir** on the same screen; the previous link stops working.
 3. Each person opens their link, chooses a password, and signs in at `/login` with their email and that password.
 

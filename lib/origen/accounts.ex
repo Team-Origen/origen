@@ -831,32 +831,51 @@ defmodule Origen.Accounts do
     end
   end
 
-  defp normalize_update_email!(attrs) do
-    attrs
-    |> Map.get(:email)
-    |> Kernel.||(Map.get(attrs, "email"))
-    |> case do
-      raw when is_binary(raw) ->
-        clean = raw |> String.trim() |> String.downcase()
+  @doc """
+  Normalizes an internal account email (`trim + downcase`) and checks its shape.
 
-        if Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, clean) do
-          clean
-        else
-          Repo.rollback(:invalid_email)
-        end
+  Shared by staff email edits and first-Administrator activation so both apply
+  the same rule.
+  """
+  @spec normalize_internal_email(term()) :: {:ok, String.t()} | {:error, :invalid_email}
+  def normalize_internal_email(raw) when is_binary(raw) do
+    clean = raw |> String.trim() |> String.downcase()
 
-      _missing_or_invalid ->
-        Repo.rollback(:invalid_email)
-    end
+    if Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, clean),
+      do: {:ok, clean},
+      else: {:error, :invalid_email}
   end
 
-  defp ensure_email_available!(email, account_id) do
+  def normalize_internal_email(_raw), do: {:error, :invalid_email}
+
+  @doc """
+  Returns `:ok` when no other internal account uses `email` (case-insensitive),
+  else `{:error, :email_taken}`. Meant to run inside the caller's transaction.
+  """
+  @spec internal_email_available(String.t(), integer()) :: :ok | {:error, :email_taken}
+  def internal_email_available(email, account_id) do
     case Repo.query!(
            "SELECT 1 FROM internal_accounts WHERE lower(email) = lower($1) AND id != $2",
            [email, account_id]
          ).rows do
       [] -> :ok
-      _taken -> Repo.rollback(:email_taken)
+      _taken -> {:error, :email_taken}
+    end
+  end
+
+  defp normalize_update_email!(attrs) do
+    raw = Map.get(attrs, :email) || Map.get(attrs, "email")
+
+    case normalize_internal_email(raw) do
+      {:ok, clean} -> clean
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp ensure_email_available!(email, account_id) do
+    case internal_email_available(email, account_id) do
+      :ok -> :ok
+      {:error, reason} -> Repo.rollback(reason)
     end
   end
 
