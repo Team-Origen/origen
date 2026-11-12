@@ -38,6 +38,12 @@ services:
       # Signs activation tokens. At least 32 bytes; Render generates 44.
       - key: ORIGEN_VERIFIER_KEY
         generateValue: true
+      # Academic demo: internal staff sign in with email and password only, no
+      # TOTP. Deliberate security gap for fictitious data only; remove it (or set
+      # it to "false") before any real data reaches this instance.
+      # See "Academic demo mode" in docs/deployment/RENDER.md.
+      - key: ORIGEN_ACADEMIC_DEMO_PASSWORD_ONLY
+        value: "true"
 
 databases:
   - name: origen-db
