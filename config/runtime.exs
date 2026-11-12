@@ -36,6 +36,13 @@ config :origen,
        :bootstrap_admin_enabled,
        config_env() != :prod and System.get_env("ORIGEN_BOOTSTRAP_ADMIN_ENABLED") == "true"
 
+# Academic demo mode (see Origen.AcademicDemo): internal staff sign in and activate
+# with email and password only, without TOTP. This is a deliberate security gap for
+# a demo with fictitious data; only the Render demo instance sets the variable.
+config :origen,
+       :academic_demo_password_only,
+       System.get_env("ORIGEN_ACADEMIC_DEMO_PASSWORD_ONLY") == "true"
+
 # Delivery requires an explicitly validated staging capability map. Runtime
 # configuration remains disabled until a later provider integration supplies it.
 config :origen, :bootstrap_admin_delivery, %{enabled: false}

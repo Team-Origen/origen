@@ -77,6 +77,7 @@ end
 defmodule OrigenWeb.AdminActivationController do
   use OrigenWeb, :controller
 
+  alias Origen.AcademicDemo
   alias Origen.BootstrapAdmin
   alias Origen.BootstrapAdmin.Credentials
   alias Origen.BootstrapAdmin.Local.Endpoint, as: LocalEndpoint
@@ -123,7 +124,8 @@ defmodule OrigenWeb.AdminActivationController do
     with :ok <- require_tls(conn),
          true <- is_binary(nonce),
          {:ok, session} <- AdminActivationSessionStore.fetch(nonce),
-         {:ok, credentials} <- build_credentials(params, session.seed),
+         {:ok, credentials} <-
+           build_credentials(params, session.seed, AcademicDemo.password_only?()),
          {:ok, _result} <-
            BootstrapAdmin.activate_bound(
              session.invitation_id,
@@ -153,16 +155,25 @@ defmodule OrigenWeb.AdminActivationController do
   defp render_enrollment(conn, nonce) do
     case AdminActivationSessionStore.take_for_render(nonce) do
       {:ok, session} ->
+        password_only = AcademicDemo.password_only?()
+
         totp_uri =
-          NimbleTOTP.otpauth_uri(
-            "Origen:administrator-#{session.account_id}",
-            session.seed,
-            issuer: "Origen"
-          )
+          unless password_only do
+            NimbleTOTP.otpauth_uri(
+              "Origen:administrator-#{session.account_id}",
+              session.seed,
+              issuer: "Origen"
+            )
+          end
 
         conn
         |> secure_headers()
-        |> render(:enrollment, totp_uri: totp_uri, error: nil, csrf_token: get_csrf_token())
+        |> render(:enrollment,
+          totp_uri: totp_uri,
+          error: nil,
+          csrf_token: get_csrf_token(),
+          password_only: password_only
+        )
 
       {:error, :invalid_session} ->
         unavailable(conn)
@@ -176,24 +187,24 @@ defmodule OrigenWeb.AdminActivationController do
     |> render(:enrollment,
       totp_uri: nil,
       error: "Activation details are invalid",
-      csrf_token: get_csrf_token()
+      csrf_token: get_csrf_token(),
+      password_only: AcademicDemo.password_only?()
     )
   end
 
+  # In academic demo mode the TOTP code is not requested or checked, but the seed is
+  # still encrypted and stored because active accounts must carry a TOTP secret.
   defp build_credentials(
-         %{
-           "password" => password,
-           "password_confirmation" => confirmation,
-           "totp_code" => code
-         },
-         seed
+         %{"password" => password, "password_confirmation" => confirmation} = params,
+         seed,
+         password_only
        )
-       when is_binary(password) and is_binary(confirmation) and is_binary(code) do
+       when is_binary(password) and is_binary(confirmation) do
     size = byte_size(password)
 
     with true <- password == confirmation,
          true <- size >= @minimum_password_bytes and size <= @maximum_password_bytes,
-         true <- NimbleTOTP.valid?(seed, code),
+         true <- password_only or valid_totp_code?(seed, Map.get(params, "totp_code")),
          {:ok, keyring} <- totp_keyring(),
          {:ok, encrypted_seed} <- Credentials.encrypt_seed(seed, keyring) do
       {:ok,
@@ -206,7 +217,10 @@ defmodule OrigenWeb.AdminActivationController do
     end
   end
 
-  defp build_credentials(_params, _seed), do: {:error, :invalid_credentials}
+  defp build_credentials(_params, _seed, _password_only), do: {:error, :invalid_credentials}
+
+  defp valid_totp_code?(seed, code) when is_binary(code), do: NimbleTOTP.valid?(seed, code)
+  defp valid_totp_code?(_seed, _code), do: false
 
   defp verifier_key do
     case activation_secret(:verifier_key, :bootstrap_admin_verifier_key) do

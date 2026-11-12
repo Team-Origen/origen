@@ -17,7 +17,8 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     previous = %{
       verifier_key: Application.get_env(:origen, :bootstrap_admin_verifier_key),
       keyring: Application.get_env(:origen, :totp_keyring),
-      ttl: Application.get_env(:origen, :internal_activation_session_ttl_seconds)
+      ttl: Application.get_env(:origen, :internal_activation_session_ttl_seconds),
+      academic_demo: Application.get_env(:origen, :academic_demo_password_only)
     }
 
     Application.put_env(:origen, :bootstrap_admin_verifier_key, @verifier_key)
@@ -33,6 +34,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
       restore_env(:bootstrap_admin_verifier_key, previous.verifier_key)
       restore_env(:totp_keyring, previous.keyring)
       restore_env(:internal_activation_session_ttl_seconds, previous.ttl)
+      restore_env(:academic_demo_password_only, previous.academic_demo)
       InternalActivationSessionStore.clear()
     end)
 
@@ -208,6 +210,96 @@ defmodule OrigenWeb.InternalActivationControllerTest do
 
     assert redirected_to(success_conn) == "/login"
     assert [["active", _hash, _seed, _consumed_at]] = pending_state(invitation)
+  end
+
+  describe "with the academic demo flag on" do
+    setup do
+      Application.put_env(:origen, :academic_demo_password_only, true)
+      :ok
+    end
+
+    test "activates staff with password only, still storing an encrypted TOTP secret", %{
+      conn: conn
+    } do
+      invitation = issue_staff_invitation(:professional)
+      page_conn = conn |> exchange(invitation) |> recycle() |> get(https(~p"/activar"))
+      body = html_response(page_conn, 200)
+
+      assert body =~ ~s(type="password")
+      refute body =~ "otpauth://"
+      refute body =~ ~s(name="totp_code")
+      refute body =~ "Código del autenticador"
+
+      success_conn =
+        page_conn
+        |> recycle()
+        |> post(https(~p"/activar"), %{
+          "password" => "a-secure-password",
+          "password_confirmation" => "a-secure-password"
+        })
+
+      assert redirected_to(success_conn) == "/login"
+
+      [["active", password_hash, encrypted_seed, consumed_at]] = pending_state(invitation)
+      assert Credentials.verify_password("a-secure-password", password_hash)
+      assert {:ok, seed} = Credentials.decrypt_seed(encrypted_seed, keyring())
+      assert byte_size(seed) > 0
+      assert not is_nil(consumed_at)
+
+      login_conn =
+        post(build_conn(), https(~p"/login"), %{
+          "identifier" => invitation_email(invitation),
+          "password" => "a-secure-password"
+        })
+
+      assert redirected_to(login_conn) == "/profesional/agenda"
+    end
+
+    test "still rejects a mismatched password confirmation and keeps the invitation pending",
+         %{conn: conn} do
+      invitation = issue_staff_invitation(:secretary)
+      page_conn = conn |> exchange(invitation) |> recycle() |> get(https(~p"/activar"))
+
+      conn =
+        page_conn
+        |> recycle()
+        |> post(https(~p"/activar"), %{
+          "password" => "a-secure-password",
+          "password_confirmation" => "another-secure-password"
+        })
+
+      body = html_response(conn, 422)
+      assert body =~ "Activation details are invalid"
+      refute body =~ ~s(name="totp_code")
+      assert pending_state(invitation) == [["pending_activation", nil, nil, nil]]
+    end
+  end
+
+  test "without the academic demo flag, activation without a TOTP code stays rejected", %{
+    conn: conn
+  } do
+    Application.put_env(:origen, :academic_demo_password_only, false)
+    invitation = issue_staff_invitation(:professional)
+    page_conn = conn |> exchange(invitation) |> recycle() |> get(https(~p"/activar"))
+    assert html_response(page_conn, 200) =~ "otpauth://"
+
+    conn =
+      page_conn
+      |> recycle()
+      |> post(https(~p"/activar"), %{
+        "password" => "a-secure-password",
+        "password_confirmation" => "a-secure-password"
+      })
+
+    assert html_response(conn, 422) =~ "Activation details are invalid"
+    assert pending_state(invitation) == [["pending_activation", nil, nil, nil]]
+  end
+
+  defp invitation_email(invitation) do
+    %{rows: [[email]]} =
+      Repo.query!("SELECT email FROM internal_accounts WHERE id = $1", [invitation.account_id])
+
+    email
   end
 
   defp issue_staff_invitation(role) do
