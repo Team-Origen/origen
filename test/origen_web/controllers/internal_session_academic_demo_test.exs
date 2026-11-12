@@ -47,6 +47,9 @@ defmodule OrigenWeb.InternalSessionAcademicDemoTest do
       assert Enum.empty?(LazyHTML.query(document, ~s(input[name="totp_code"])))
       refute body =~ "Código del autenticador"
       refute body =~ "aplicación autenticadora"
+
+      assert body =~
+               "Ingresá con el email (o el ID de cuenta) y la contraseña de tu cuenta interna."
     end
 
     for {role, destination} <- [

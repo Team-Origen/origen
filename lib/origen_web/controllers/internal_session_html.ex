@@ -22,7 +22,7 @@ defmodule OrigenWeb.InternalSessionHTML do
               Ingresá con tu cuenta interna y el código actual de tu aplicación autenticadora.
             </.text_muted>
             <.text_muted :if={@password_only} class="text-text-muted">
-              Ingresá con el email y la contraseña de tu cuenta interna.
+              Ingresá con el email (o el ID de cuenta) y la contraseña de tu cuenta interna.
             </.text_muted>
           </header>
 

@@ -317,6 +317,15 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       assert byte_size(seed) > 0
       assert [[consumed_at, nil]] = invitation_state(invitation.invitation_id)
       assert not is_nil(consumed_at)
+
+      # The first Administrator has no email: it signs in with its account id.
+      login_conn =
+        post(build_conn(), https(~p"/login"), %{
+          "identifier" => to_string(invitation.account_id),
+          "password" => "a-secure-password"
+        })
+
+      assert redirected_to(login_conn) == "/administrador/cuentas"
     end
 
     test "still rejects a password shorter than 12 bytes without persisting factors", %{
