@@ -172,7 +172,8 @@ defmodule OrigenWeb.AdminActivationController do
           totp_uri: totp_uri,
           error: nil,
           csrf_token: get_csrf_token(),
-          password_only: password_only
+          password_only: password_only,
+          account_id: session.account_id
         )
 
       {:error, :invalid_session} ->
@@ -186,9 +187,11 @@ defmodule OrigenWeb.AdminActivationController do
     |> put_status(:unprocessable_entity)
     |> render(:enrollment,
       totp_uri: nil,
-      error: "Activation details are invalid",
+      error:
+        "Los datos de activación no son válidos. Revisá que las dos contraseñas coincidan y tengan al menos 12 caracteres.",
       csrf_token: get_csrf_token(),
-      password_only: AcademicDemo.password_only?()
+      password_only: AcademicDemo.password_only?(),
+      account_id: nil
     )
   end
 

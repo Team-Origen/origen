@@ -212,7 +212,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
         "totp_code" => wrong_totp_code(seed)
       })
 
-    assert html_response(conn, 422) =~ "Activation details are invalid"
+    assert html_response(conn, 422) =~ "Los datos de activación no son válidos"
     assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
     assert invitation_state(invitation.invitation_id) == [[nil, nil]]
   end
@@ -328,6 +328,25 @@ defmodule OrigenWeb.AdminActivationControllerTest do
       assert redirected_to(login_conn) == "/administrador/cuentas"
     end
 
+    test "labels both password fields, uses the app theme and names the login identifier", %{
+      conn: conn
+    } do
+      invitation = issue_invitation()
+
+      body =
+        conn
+        |> exchange(invitation)
+        |> recycle()
+        |> get(https(~p"/administrador/activar"))
+        |> html_response(200)
+
+      assert body =~ ~s(data-theme="light")
+      assert body =~ ~r/<label[^>]*for="password"[^>]*>\s*Contraseña\s*</
+      assert body =~ ~r/<label[^>]*for="password_confirmation"[^>]*>\s*Confirmar contraseña\s*</
+      assert body =~ "ID de cuenta"
+      assert body =~ ~s(data-login-identifier="#{invitation.account_id}")
+    end
+
     test "still rejects a password shorter than 12 bytes without persisting factors", %{
       conn: conn
     } do
@@ -345,7 +364,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
         })
 
       body = html_response(conn, 422)
-      assert body =~ "Activation details are invalid"
+      assert body =~ "Los datos de activación no son válidos"
       refute body =~ ~s(name="totp_code")
       assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
     end
@@ -370,7 +389,7 @@ defmodule OrigenWeb.AdminActivationControllerTest do
         "password_confirmation" => "a-secure-password"
       })
 
-    assert html_response(conn, 422) =~ "Activation details are invalid"
+    assert html_response(conn, 422) =~ "Los datos de activación no son válidos"
     assert account_credentials(invitation.account_id) == [["pending_activation", nil, nil]]
   end
 

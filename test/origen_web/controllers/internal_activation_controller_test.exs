@@ -58,7 +58,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     assert replace_index < submit_index
 
     admin_body = build_conn() |> get(https(~p"/administrador/activar")) |> html_response(200)
-    assert admin_body =~ "Administrator activation"
+    assert admin_body =~ "Activar cuenta de administrador"
     refute admin_body =~ ~s(action="/activar/intercambiar")
   end
 
@@ -99,7 +99,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
     body = html_response(page_conn, 200)
     seed = totp_seed_from_page(body)
 
-    assert body =~ "Secure internal account"
+    assert body =~ "Activar cuenta"
     assert body =~ ~s(type="password")
     refute body =~ invitation.token
 
@@ -142,7 +142,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
         "totp_code" => wrong_totp_code(seed)
       })
 
-    assert html_response(conn, 422) =~ "Activation details are invalid"
+    assert html_response(conn, 422) =~ "Los datos de activación no son válidos"
     assert pending_state(invitation) == [["pending_activation", nil, nil, nil]]
 
     audit_dump =
@@ -190,12 +190,12 @@ defmodule OrigenWeb.InternalActivationControllerTest do
 
     # First GET
     page_conn1 = exchange_conn |> recycle() |> get(https(~p"/activar"))
-    assert html_response(page_conn1, 200) =~ "Secure internal account"
+    assert html_response(page_conn1, 200) =~ "Activar cuenta"
 
     # Second GET (reload / F5)
     page_conn2 = page_conn1 |> recycle() |> get(https(~p"/activar"))
     body = html_response(page_conn2, 200)
-    assert body =~ "Secure internal account"
+    assert body =~ "Activar cuenta"
     seed = totp_seed_from_page(body)
 
     # Submit activation POST
@@ -269,7 +269,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
         })
 
       body = html_response(conn, 422)
-      assert body =~ "Activation details are invalid"
+      assert body =~ "Los datos de activación no son válidos"
       refute body =~ ~s(name="totp_code")
       assert pending_state(invitation) == [["pending_activation", nil, nil, nil]]
     end
@@ -291,7 +291,7 @@ defmodule OrigenWeb.InternalActivationControllerTest do
         "password_confirmation" => "a-secure-password"
       })
 
-    assert html_response(conn, 422) =~ "Activation details are invalid"
+    assert html_response(conn, 422) =~ "Los datos de activación no son válidos"
     assert pending_state(invitation) == [["pending_activation", nil, nil, nil]]
   end
 
