@@ -1,6 +1,7 @@
 defmodule Origen.BootstrapAdmin.Invitation do
   @moduledoc "Locked invitation consumption and account activation."
 
+  alias Origen.Accounts
   alias Origen.Audit.{Events, Writer}
   alias Origen.Authorization
   alias Origen.Authorization.{Fact, Request}
@@ -121,11 +122,19 @@ defmodule Origen.BootstrapAdmin.Invitation do
 
   def activate(_invitation_id, _token, _key, _credentials), do: {:error, :invalid_request}
 
+  @doc """
+  Activates the account bound to an exchanged invitation session.
+
+  `credentials` may carry an optional `:email`: the sign-in email the first
+  Administrator chooses at activation. It is normalized and must be unused by
+  any other internal account; otherwise the invitation is left unconsumed.
+  """
   @spec activate_bound(integer(), integer(), map()) :: {:ok, map()} | {:error, atom()}
-  def activate_bound(invitation_id, account_id, %{
-        password_hash: password_hash,
-        totp_secret: totp_secret
-      })
+  def activate_bound(
+        invitation_id,
+        account_id,
+        %{password_hash: password_hash, totp_secret: totp_secret} = credentials
+      )
       when is_integer(invitation_id) and is_integer(account_id) and is_binary(password_hash) and
              is_binary(totp_secret) do
     Repo.transaction(fn ->
@@ -149,6 +158,7 @@ defmodule Origen.BootstrapAdmin.Invitation do
         when role in ["administrator", "professional", "secretary"] ->
           ensure_usable!(expires_at, consumed_at, revoked_at)
           authorize_activation!(role)
+          email = activation_email!(credentials, account_id)
 
           Repo.query!(
             "UPDATE internal_account_invitations SET consumed_at = clock_timestamp() WHERE id = $1",
@@ -156,6 +166,8 @@ defmodule Origen.BootstrapAdmin.Invitation do
           )
 
           persist_activation!(account_id, invitation_id, password_hash, totp_secret)
+          if email, do: persist_email!(account_id, email)
+          %{account_id: account_id, invitation_id: invitation_id}
 
         _invalid ->
           Repo.rollback(:invalid_session_binding)
@@ -274,6 +286,24 @@ defmodule Origen.BootstrapAdmin.Invitation do
       [] ->
         Repo.rollback(:account_not_pending)
     end
+  end
+
+  defp activation_email!(%{email: raw}, account_id) do
+    with {:ok, email} <- Accounts.normalize_internal_email(raw),
+         :ok <- Accounts.internal_email_available(email, account_id) do
+      email
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp activation_email!(_credentials, _account_id), do: nil
+
+  defp persist_email!(account_id, email) do
+    Repo.query!(
+      "UPDATE internal_accounts SET email = $2, updated_at = clock_timestamp() WHERE id = $1",
+      [account_id, email]
+    )
   end
 
   defp unwrap_transaction({:ok, result}), do: {:ok, result}

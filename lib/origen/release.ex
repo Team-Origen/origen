@@ -66,7 +66,7 @@ defmodule Origen.Release do
       {:ok, {:ok, result}, _apps} ->
         IO.puts("""
         Pending Administrator created.
-        Login identifier (account id): #{result.account_id}
+        Account id (for --account-id when reissuing): #{result.account_id}
         Expires at: #{DateTime.to_iso8601(result.expires_at)}
         Activation link (single use, give it only to the account holder):
         #{result.link}

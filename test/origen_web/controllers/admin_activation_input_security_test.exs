@@ -110,6 +110,7 @@ defmodule OrigenWeb.AdminActivationInputSecurityTest do
       enrollment_conn
       |> recycle()
       |> post(https(~p"/administrador/activar"), %{
+        "email" => "admin@example.test",
         "password" => password,
         "password_confirmation" => password,
         "totp_code" => totp_code
