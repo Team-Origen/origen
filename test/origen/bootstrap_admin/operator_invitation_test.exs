@@ -197,14 +197,14 @@ defmodule Origen.BootstrapAdmin.OperatorInvitationTest do
       end)
     end
 
-    test "prints the login identifier, the expiry and the activation link" do
+    test "prints the account id, the expiry and the activation link" do
       System.put_env("ORIGEN_OPERATOR_INVITATION_ENABLED", "true")
 
       output =
         capture_io(fn -> assert :ok = Release.issue_admin_invitation(["--host", @host]) end)
 
       [[account_id]] = Repo.query!("SELECT id FROM internal_accounts").rows
-      assert output =~ "Login identifier (account id): #{account_id}"
+      assert output =~ "Account id (for --account-id when reissuing): #{account_id}"
       assert output =~ "Expires at:"
       assert output =~ "https://#{@host}/administrador/activar#invitation_id="
     end

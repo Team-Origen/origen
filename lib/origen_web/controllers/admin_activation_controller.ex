@@ -77,6 +77,8 @@ end
 defmodule OrigenWeb.AdminActivationController do
   use OrigenWeb, :controller
 
+  require Logger
+
   alias Origen.AcademicDemo
   alias Origen.BootstrapAdmin
   alias Origen.BootstrapAdmin.Credentials
@@ -123,26 +125,33 @@ defmodule OrigenWeb.AdminActivationController do
 
     with :ok <- require_tls(conn),
          true <- is_binary(nonce),
-         {:ok, session} <- AdminActivationSessionStore.fetch(nonce),
-         {:ok, credentials} <-
-           build_credentials(params, session.seed, AcademicDemo.password_only?()),
-         {:ok, _result} <-
-           BootstrapAdmin.activate_bound(
-             session.invitation_id,
-             session.account_id,
-             credentials
-           ) do
-      AdminActivationSessionStore.delete(nonce)
-      notify_local_activation()
-
-      conn
-      |> delete_session(@session_key)
-      |> put_flash(:info, "Administrator activation completed")
-      |> secure_headers()
-      |> redirect(to: ~p"/")
+         {:ok, session} <- AdminActivationSessionStore.fetch(nonce) do
+      case build_credentials(params, session.seed, AcademicDemo.password_only?()) do
+        {:ok, credentials} -> activate(conn, nonce, session, credentials)
+        {:error, reason} -> reject(conn, reason)
+      end
     else
-      {:error, :invalid_credentials} -> invalid_credentials(conn)
       _denied -> unavailable(conn)
+    end
+  end
+
+  defp activate(conn, nonce, session, credentials) do
+    case BootstrapAdmin.activate_bound(session.invitation_id, session.account_id, credentials) do
+      {:ok, _result} ->
+        AdminActivationSessionStore.delete(nonce)
+        notify_local_activation()
+
+        conn
+        |> delete_session(@session_key)
+        |> put_flash(:info, "Cuenta activada. Ingresá con tu email y tu contraseña.")
+        |> secure_headers()
+        |> redirect(to: ~p"/login")
+
+      {:error, reason} when reason in [:invalid_email, :email_taken] ->
+        reject(conn, reason)
+
+      _denied ->
+        unavailable(conn)
     end
   end
 
@@ -172,8 +181,7 @@ defmodule OrigenWeb.AdminActivationController do
           totp_uri: totp_uri,
           error: nil,
           csrf_token: get_csrf_token(),
-          password_only: password_only,
-          account_id: session.account_id
+          password_only: password_only
         )
 
       {:error, :invalid_session} ->
@@ -181,46 +189,84 @@ defmodule OrigenWeb.AdminActivationController do
     end
   end
 
-  defp invalid_credentials(conn) do
+  @server_reasons [:totp_keyring_invalid, :seed_encryption_failed]
+
+  # Logs only the reason atom: never the submitted password, the code or the key.
+  defp reject(conn, reason) do
+    Logger.warning("admin activation rejected reason=#{reason}")
+
+    status = if reason in @server_reasons, do: :service_unavailable, else: :unprocessable_entity
+
     conn
     |> secure_headers()
-    |> put_status(:unprocessable_entity)
+    |> put_status(status)
     |> render(:enrollment,
       totp_uri: nil,
-      error:
-        "Los datos de activación no son válidos. Revisá que las dos contraseñas coincidan y tengan al menos 12 caracteres.",
+      error: rejection_message(reason),
       csrf_token: get_csrf_token(),
-      password_only: AcademicDemo.password_only?(),
-      account_id: nil
+      password_only: AcademicDemo.password_only?()
     )
   end
+
+  @invalid_prefix "Los datos de activación no son válidos."
+
+  defp rejection_message(:missing_fields), do: "#{@invalid_prefix} Completá todos los campos."
+
+  defp rejection_message(:invalid_email),
+    do: "#{@invalid_prefix} El email no tiene un formato válido."
+
+  defp rejection_message(:email_taken),
+    do: "#{@invalid_prefix} Ese email ya lo usa otra cuenta interna."
+
+  defp rejection_message(:password_mismatch),
+    do: "#{@invalid_prefix} Las contraseñas no coinciden."
+
+  defp rejection_message(:password_length),
+    do: "#{@invalid_prefix} La contraseña tiene que tener al menos 12 caracteres."
+
+  defp rejection_message(:invalid_totp_code),
+    do: "#{@invalid_prefix} El código del autenticador no es válido o ya venció."
+
+  defp rejection_message(_server_reason),
+    do:
+      "La activación no está disponible por un problema de configuración del servidor. " <>
+        "Avisale al equipo técnico."
 
   # In academic demo mode the TOTP code is not requested or checked, but the seed is
   # still encrypted and stored because active accounts must carry a TOTP secret.
   defp build_credentials(
-         %{"password" => password, "password_confirmation" => confirmation} = params,
+         %{"email" => email, "password" => password, "password_confirmation" => confirmation} =
+           params,
          seed,
          password_only
        )
-       when is_binary(password) and is_binary(confirmation) do
+       when is_binary(email) and is_binary(password) and is_binary(confirmation) do
     size = byte_size(password)
 
-    with true <- password == confirmation,
-         true <- size >= @minimum_password_bytes and size <= @maximum_password_bytes,
-         true <- password_only or valid_totp_code?(seed, Map.get(params, "totp_code")),
-         {:ok, keyring} <- totp_keyring(),
-         {:ok, encrypted_seed} <- Credentials.encrypt_seed(seed, keyring) do
+    with {:match, true} <- {:match, password == confirmation},
+         {:length, true} <-
+           {:length, size >= @minimum_password_bytes and size <= @maximum_password_bytes},
+         {:totp, true} <-
+           {:totp, password_only or valid_totp_code?(seed, Map.get(params, "totp_code"))},
+         {:keyring, {:ok, keyring}} <- {:keyring, totp_keyring()},
+         {:encrypt, {:ok, encrypted_seed}} <-
+           {:encrypt, Credentials.encrypt_seed(seed, keyring)} do
       {:ok,
        %{
+         email: email,
          password_hash: Credentials.hash_password(password),
          totp_secret: encrypted_seed
        }}
     else
-      _invalid -> {:error, :invalid_credentials}
+      {:match, _} -> {:error, :password_mismatch}
+      {:length, _} -> {:error, :password_length}
+      {:totp, _} -> {:error, :invalid_totp_code}
+      {:keyring, _} -> {:error, :totp_keyring_invalid}
+      {:encrypt, _} -> {:error, :seed_encryption_failed}
     end
   end
 
-  defp build_credentials(_params, _seed, _password_only), do: {:error, :invalid_credentials}
+  defp build_credentials(_params, _seed, _password_only), do: {:error, :missing_fields}
 
   defp valid_totp_code?(seed, code) when is_binary(code), do: NimbleTOTP.valid?(seed, code)
   defp valid_totp_code?(_seed, _code), do: false

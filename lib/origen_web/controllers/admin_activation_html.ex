@@ -17,20 +17,9 @@ defmodule OrigenWeb.AdminActivationHTML do
     ~H"""
     <.activation_page
       title="Activar cuenta de administrador"
-      subtitle="Elegí la contraseña de la cuenta de administrador."
+      subtitle="Elegí el email y la contraseña con los que vas a iniciar sesión."
     >
       <.activation_error error={@error} />
-
-      <div
-        :if={@account_id}
-        id="login-identifier"
-        data-login-identifier={@account_id}
-        class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-text"
-      >
-        Esta cuenta no tiene email. Para iniciar sesión vas a usar el ID de cuenta
-        <strong class="font-semibold">{@account_id}</strong>
-        y la contraseña que elijas acá.
-      </div>
 
       <.totp_enrollment totp_uri={@totp_uri} />
 
@@ -41,6 +30,23 @@ defmodule OrigenWeb.AdminActivationHTML do
         class="flex flex-col gap-4"
       >
         <input type="hidden" name="_csrf_token" value={@csrf_token} />
+        <div class="flex flex-col gap-2">
+          <.field
+            id="email"
+            name="email"
+            type="email"
+            label="Email"
+            value=""
+            required
+            autocomplete="email"
+            aria-describedby="email-help"
+            label_class="text-text"
+            no_margin
+          />
+          <.field_help_text id="email-help" class="mt-0 text-text-muted">
+            Con este email vas a iniciar sesión como administrador.
+          </.field_help_text>
+        </div>
         <.credential_fields password_only={@password_only} />
         <div class="pt-2">
           <.button type="submit" color="primary" size="lg" class="w-full">

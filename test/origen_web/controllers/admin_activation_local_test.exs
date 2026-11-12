@@ -87,13 +87,14 @@ defmodule OrigenWeb.AdminActivationLocalTest do
         page_conn
         |> recycle()
         |> post(https(~p"/administrador/activar"), %{
+          "email" => "admin@example.test",
           "password" => password,
           "password_confirmation" => password,
           "totp_code" => NimbleTOTP.verification_code(seed)
         })
       end)
 
-    assert redirected_to(activated_conn) == ~p"/"
+    assert redirected_to(activated_conn) == ~p"/login"
     assert [["active", password_hash, encrypted_seed]] = account_credentials(issued.account_id)
 
     unless Credentials.verify_password(password, password_hash),
