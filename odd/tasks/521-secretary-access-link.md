@@ -112,10 +112,10 @@ Capturas sanitizadas (con el enlace redactado) del resultado y los controles reu
 - T6 [S2] DONE: mailer returned errors and raised exceptions are logged (Logger.warning) and never gate issuance or rollback the link; stub-mailer tests cover both and normal mode stays opaque with the link persisted. Route: inline. Commit: fix slice of this branch.
 - T7 [S2] DONE: #btn-open-replace-access wired to open_replace_access for patients with an access email; UI test covers open, submit and the academic result; seven old-behavior refutes updated to asserts. Route: inline. Commit: fix slice of this branch.
 - T8 [S2] DONE: GREEN 78/78 across eight files (new tests plus maintenance, secretary, patient access, controller and integration regressions); format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0. PR to develop next; release refresh follows develop merge.
-- T9 [S3] DONE (pending verification): delivery wrapper catches process exits (catch :exit) so mailer GenServer exits never gate issuance; test with ExitingMailer plus consumable-token assertion. Route: inline. Commit: pending.
-- T10 [S3] DONE (pending verification): sanitized classification logging (returned_error / process_exit) without email, body or token; LeakyMailer test asserts sensitive data absent from captured logs. Route: inline. Commit: pending.
-- T11 [S3] DONE (pending verification): production mailer resolved explicitly to Origen.Mailer.NullDelivery (no-op adapter, no provider until #490); module + direct deliver test. Route: inline. Commit: pending.
-- T12 [S3] PENDING: GREEN run, format, compile, dialyzer; PR to develop; refresh chore/release-academic-access-links after develop merge so #524 carries these fixes.
+- T9 [S3] DONE: delivery wrapper catches process exits (catch :exit) so mailer GenServer exits never gate issuance; ExitingMailer test plus consumable-token assertion. Route: inline. Commit: fix slice of this branch.
+- T10 [S3] DONE: sanitized classification logging (returned_error / process_exit) without email, body or token; LeakyMailer test asserts sensitive data absent from captured logs. Route: inline. Commit: fix slice of this branch.
+- T11 [S3] DONE: production mailer resolved explicitly to Origen.Mailer.NullDelivery (no-op adapter, no provider until #490) via config/prod.exs override; module with deliver/2 + validate_config/1 and direct deliver test. Route: inline. Commit: fix slice of this branch.
+- T12 [S3] DONE: GREEN 81/81 (eight-file batch plus three new tests); format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0. PR to develop next; release refresh follows develop merge.
 
 
 
@@ -146,3 +146,5 @@ L12: RED observed 5 behavioral failures (13/18: full-origin equivalence, mailer 
 L13: Segunda ronda del review: HAS ESTE ARREGLO, Y UNA VES TERMINADO, HAS UN PR A DEVELOP PRIMERO, UNA VEZ QUE ESTE EN DEVELOP, Y SI ES NECESARIO, HAS LO CAMBIO NECESARIO EN EL PR 524 PARA QUE YA ESTE IMPLEMENTADO
 
 L14: Config verified: config/config.exs:53 Local adapter, config/prod.exs:31 local:false — MemCacheStore GenServer absent in prod, GenServer.call exits (:noproc) escaping rescue. Plan: Origen.Mailer.NullDelivery explicit prod adapter (no provider until #490), catch :exit in the delivery wrapper, sanitized classification logs (returned_error / process_exit) with no email/body/token, tests with ExitingMailer + LeakyMailer + CaptureLog and consumable-token assertion. RED-first.
+
+L15: RED observed 11/14 (three new-behavior failures: mailer process exit escaped rescue, SECRETTOKEN123 and academic@example.test leaked into captured logs via inspect(reason), Origen.Mailer.NullDelivery missing). Fixes: catch :exit on the delivery wrapper with sanitized classification logging (returned_error / process_exit, no inspected reason), Origen.Mailer.NullDelivery adapter (deliver/2 + validate_config/1) selected explicitly in config/prod.exs until #490, tests for exit survival with consumable token, log sanitization and adapter behavior. GREEN 81/81 across the eight-file batch; format, compile --warnings-as-errors, git diff --check and dialyzer exit 0.
