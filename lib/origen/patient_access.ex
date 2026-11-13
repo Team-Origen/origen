@@ -169,11 +169,16 @@ defmodule Origen.PatientAccess do
               mailer.deliver(email_msg)
             rescue
               exception -> {:error, exception}
+            catch
+              :exit, reason -> {:exit, reason}
             end
 
           case delivery_outcome do
-            {:error, reason} ->
-              Logger.warning("patient magic link email delivery failed: " <> inspect(reason))
+            {:error, _reason} ->
+              Logger.warning("patient magic link email delivery failed: returned_error")
+
+            {:exit, _reason} ->
+              Logger.warning("patient magic link email delivery failed: process_exit")
 
             _ ->
               :ok

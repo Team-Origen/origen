@@ -30,6 +30,10 @@ config :swoosh, api_client: Swoosh.ApiClient.Req
 # Disable Swoosh Local Memory Storage
 config :swoosh, local: false
 
+# Explicit no-op delivery until an email provider is configured (#490): the
+# inherited Local adapter plus `local: false` would exit on delivery attempts.
+config :origen, Origen.Mailer, adapter: Origen.Mailer.NullDelivery
+
 # Do not print debug messages in production
 config :logger, level: :info
 
