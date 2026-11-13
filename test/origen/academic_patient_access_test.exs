@@ -98,4 +98,41 @@ defmodule Origen.AcademicPatientAccessTest do
     assert_email_sent()
     assert {:ok, :delivered} = PatientAccess.request_magic_link("unknown@example.test")
   end
+
+  describe "request_magic_link_details/2" do
+    test "combined issuance delivers the same token by email and transient URL" do
+      enable()
+
+      assert {:ok, %{transient_url: url}} =
+               PatientAccess.request_magic_link_details("academic@example.test")
+
+      assert String.starts_with?(
+               url,
+               "https://evaluation.example.test/paciente/acceso/verificar?token="
+             )
+
+      url_token = token(url)
+
+      assert_email_sent(fn email ->
+        assert email.to == [{"", "academic@example.test"}]
+
+        [_, raw] = Regex.run(~r/token=([^"&]+)/, email.html_body)
+        assert URI.decode_www_form(raw) == url_token
+
+        true
+      end)
+
+      assert {:ok, %{email: "academic@example.test"}} =
+               PatientAccess.consume_magic_link(url_token)
+    end
+
+    test "combined issuance returns nil transient URL and keeps opaque delivery when disabled" do
+      enable(enabled: false, isolated_fictional_data_confirmed: false, public_origin: nil)
+
+      assert {:ok, %{transient_url: nil}} =
+               PatientAccess.request_magic_link_details("academic@example.test")
+
+      assert_email_sent()
+    end
+  end
 end
