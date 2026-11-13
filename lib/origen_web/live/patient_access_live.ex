@@ -16,6 +16,8 @@ defmodule OrigenWeb.PatientAccessLive do
      socket
      |> assign(:form, to_form(new_changeset(), as: :access))
      |> assign(:submitted, false)
+     |> assign(:academic_url, nil)
+     |> assign(:academic_mode, Origen.PatientAccess.academic_display_enabled?())
      |> assign(:submitted_email, nil)}
   end
 
@@ -31,12 +33,25 @@ defmodule OrigenWeb.PatientAccessLive do
 
     if changeset.valid? do
       email = Changeset.get_change(changeset, :email) || Changeset.get_field(changeset, :email)
-      Origen.PatientAccess.request_magic_link(email)
+      mode = Origen.PatientAccess.academic_display_enabled?()
 
-      # Security: Non-enumerating response (does not disclose account existence)
+      url =
+        if mode do
+          case Origen.PatientAccess.request_academic_magic_link(email) do
+            {:ok, url} -> url
+            _ -> nil
+          end
+        else
+          Origen.PatientAccess.request_magic_link(email)
+          nil
+        end
+
+      # Only explicitly isolated evaluation may disclose a transient access URL.
       {:noreply,
        socket
        |> assign(:submitted, true)
+       |> assign(:academic_mode, mode)
+       |> assign(:academic_url, url)
        |> assign(:submitted_email, email)}
     else
       {:noreply, assign(socket, :form, to_form(changeset, as: :access))}
@@ -49,6 +64,8 @@ defmodule OrigenWeb.PatientAccessLive do
      socket
      |> assign(:form, to_form(new_changeset(), as: :access))
      |> assign(:submitted, false)
+     |> assign(:academic_url, nil)
+     |> assign(:academic_mode, Origen.PatientAccess.academic_display_enabled?())
      |> assign(:submitted_email, nil)}
   end
 
@@ -146,12 +163,95 @@ defmodule OrigenWeb.PatientAccessLive do
           </div>
 
           <h2 class="text-xl font-semibold text-[#0A3847] mb-2 font-inter">
-            Revisá tu casilla de correo
+            {if @academic_mode,
+              do: "Acceso de evaluación académica",
+              else: "Revisá tu casilla de correo"}
           </h2>
 
-          <p class="text-sm text-[#35545A] mb-4 leading-relaxed font-inter">
+          <p :if={not @academic_mode} class="text-sm text-[#35545A] mb-4 leading-relaxed font-inter">
             Si el correo ingresado corresponde a un paciente registrado, enviamos un enlace de acceso temporal para que puedas ingresar.
           </p>
+
+          <p :if={@academic_mode} class="text-sm text-[#35545A] mb-4">
+            Evaluación con pacientes ficticios: el enlace aparece aquí si el correo está registrado,
+            sin depender de la entrega de correo. Esto no verifica posesión del correo.
+          </p>
+          <div
+            :if={@academic_url}
+            id="academic-access"
+            phx-hook=".AcademicAccessCopy"
+            class="mt-3 space-y-3"
+          >
+            <label for="academic-access-url" class="block text-sm font-medium text-gray-700">
+              Enlace de acceso
+            </label>
+            <input
+              id="academic-access-url"
+              type="text"
+              value={@academic_url}
+              readonly
+              autocomplete="off"
+              spellcheck="false"
+              aria-describedby="academic-access-help"
+              class="w-full min-w-0 rounded-md border border-gray-300 p-2 text-sm text-black focus:ring-2 focus:ring-[#174B63]"
+            />
+            <p id="academic-access-help" class="text-sm text-gray-600">
+              Solo para pacientes ficticios. No compartas el enlace ni lo incluyas en capturas. Conserva su vencimiento y uso único.
+              Por seguridad, no se mostrará al recargar esta página.
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+              <.button id="copy-academic-access" type="button">
+                Copiar enlace
+              </.button>
+              <.link
+                id="academic-access-link"
+                href={@academic_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="rounded-md px-2 py-2 text-sm text-[#174B63] underline underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#174B63]"
+              >
+                Abrir acceso
+              </.link>
+            </div>
+            <p
+              id="academic-copy-status"
+              role="status"
+              aria-live="polite"
+              class="text-sm text-gray-700"
+            >
+            </p>
+          </div>
+
+          <script :type={Phoenix.LiveView.ColocatedHook} name=".AcademicAccessCopy">
+            export default {
+              mounted() {
+                this.copy = async () => {
+                  const input = this.el.querySelector("#academic-access-url");
+                  const status = this.el.querySelector("#academic-copy-status");
+                  const value = input.value;
+                  try {
+                    await navigator.clipboard.writeText(value);
+                    if (input.isConnected && input.value === value) {
+                      status.textContent = "Enlace copiado.";
+                    }
+                  } catch (_) {
+                    if (input.isConnected && input.value === value) {
+                      input.focus();
+                      input.select();
+                      status.textContent = "No se pudo copiar automáticamente. Copiá el enlace seleccionado.";
+                    }
+                  }
+                };
+                this.el.querySelector("#copy-academic-access").addEventListener("click", this.copy);
+              },
+              updated() {
+                this.el.querySelector("#academic-copy-status").textContent = "";
+              },
+              destroyed() {
+                this.el.querySelector("#copy-academic-access")?.removeEventListener("click", this.copy);
+              }
+            }
+          </script>
 
           <p class="text-xs text-[#35545A]/80 mb-6 font-inter">
             El enlace es de un solo uso y expira en pocos minutos por motivos de seguridad.
