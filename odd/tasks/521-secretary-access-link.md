@@ -80,6 +80,28 @@ Capturas sanitizadas (con el enlace redactado) del resultado y los controles reu
 >
 > También falta el botón que abre el reemplazo de correo: si se incluye ese recorrido en el alcance, hay que conectarlo y probarlo. El CI está verde, pero no cubre estos casos.
 
+### S3 — Segunda ronda del review de #524 (verbatim, vía usuario)
+
+> **Parcialmente resuelto:** maneja errores retornados y excepciones, pero no salidas de proceso (`exit`).
+>
+> La configuración del repositorio todavía combina:
+>
+> ```elixir
+> # config/config.exs
+> adapter: Swoosh.Adapters.Local
+>
+> # config/prod.exs
+> config :swoosh, local: false
+> ```
+>
+> Eso deja seleccionado el adaptador local, pero desactiva su almacenamiento. Revisé también Swoosh 1.28.0: ese adaptador llama a un `GenServer`. Si el proceso no está disponible, produce un **`exit`**, que el nuevo `rescue` **no captura**. Por eso, el flujo de Secretaría todavía puede interrumpirse antes de mostrar el enlace académico. Los tests nuevos simulan `{:error, ...}` y `raise`, pero no este caso.
+>
+> Además, agregaron: `Logger.warning("patient magic link email delivery failed: " <> inspect(reason))`. Conviene reemplazarlo por un mensaje o clasificación sanitizada: el error de un proveedor puede incluir contenido del correo, direcciones o el enlace con token. No comprobó una filtración real; el problema es registrar ese contenido sin filtrarlo.
+>
+> **Estos dos ajustes antes de aprobar el despliegue de la funcionalidad.**
+>
+> Las correcciones de URL, cambio de paciente y botón de reemplazo quedaron bien y tienen tests. Falta cerrar el manejo de fallos del mailer: en producción sigue seleccionado `Swoosh.Adapters.Local` con `local: false`, y su `GenServer.call` puede terminar con `exit(:noproc)`, que `rescue` no captura. Hay que resolver esa configuración y garantizar que ese fallo no bloquee el enlace académico, con un test específico que también compruebe que el token se puede consumir. También reemplazá `inspect(reason)` en el warning por un error sanitizado, sin correo, cuerpo ni token, y agregá una prueba de que esos datos no aparecen en los logs.
+
 ## Tasks
 
 - T1 [S1] DONE: request_magic_link_details/2 on PatientAccess with single-token combined delivery (email delivery preserved, URL only in the return value); Patients.link/replace return access_url and specs updated. Route: inline. Commit: feat slice of this branch.
@@ -90,6 +112,13 @@ Capturas sanitizadas (con el enlace redactado) del resultado y los controles reu
 - T6 [S2] DONE: mailer returned errors and raised exceptions are logged (Logger.warning) and never gate issuance or rollback the link; stub-mailer tests cover both and normal mode stays opaque with the link persisted. Route: inline. Commit: fix slice of this branch.
 - T7 [S2] DONE: #btn-open-replace-access wired to open_replace_access for patients with an access email; UI test covers open, submit and the academic result; seven old-behavior refutes updated to asserts. Route: inline. Commit: fix slice of this branch.
 - T8 [S2] DONE: GREEN 78/78 across eight files (new tests plus maintenance, secretary, patient access, controller and integration regressions); format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0. PR to develop next; release refresh follows develop merge.
+- T9 [S3] DONE: delivery wrapper catches process exits (catch :exit) so mailer GenServer exits never gate issuance; ExitingMailer test plus consumable-token assertion. Route: inline. Commit: fix slice of this branch.
+- T10 [S3] DONE: sanitized classification logging (returned_error / process_exit) without email, body or token; LeakyMailer test asserts sensitive data absent from captured logs. Route: inline. Commit: fix slice of this branch.
+- T11 [S3] DONE: production mailer resolved explicitly to Origen.Mailer.NullDelivery (no-op adapter, no provider until #490) via config/prod.exs override; module with deliver/2 + validate_config/1 and direct deliver test. Route: inline. Commit: fix slice of this branch.
+- T12 [S3] DONE: GREEN 81/81 (eight-file batch plus three new tests); format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0. PR to develop next; release refresh follows develop merge.
+- T13 [S3] DONE (round 3, external-verification item 1): NullDelivery no longer silent — deliver/2 logs a content-free warning ("email delivery skipped: no provider configured (NullDelivery adapter; see issue #490)") per skipped send; RED observed (empty captured log), GREEN with CaptureLog test asserting the warning present and email/token absent; guide documents the global scope until #490. Route: inline. Commit: round-3 fix slice.
+- T14 [S3] DONE (round 3, external-verification item 3): negative replace assertions pinned — failed replace with an occupied email shows #replace-access-error ("ya está registrado") and no academic link block; replace success with academic mode disabled keeps the current feedback with no link block and still sends the email. Both born-GREEN (characterization of existing behavior). Route: inline. Commit: round-3 fix slice.
+
 
 
 ## Log
@@ -115,3 +144,11 @@ L10: HAS ESTE ARREGLO, Y UNA VES TERMINADO, HAS UN PR A DEVELOP PRIMERO, UNA VES
 L11: Reopened #521 per user order after the colleague review of #524 (S2 verbatim). All findings accepted as valid: fallback localhost (pre-existing, preserved by extraction), access_url leak on patient switch (introduced by this implementation), mailer dependency contradicting the no-provider requirement, incoherent email/screen origin, and the pre-existing missing replace button (included in scope to fulfill S1 "vincular o reemplazar"). Branch fix/521-review-corrections from develop e17c7e8; RED-first per item; PR to develop planned, then refresh chore/release-academic-access-links so #524 carries the fixes after develop merge.
 
 L12: RED observed 5 behavioral failures (13/18: full-origin equivalence, mailer exception, persisted link on raise, A→B leak, replace button) plus one test-side defect fixed (Ecto get_by forbids nil comparisons; replaced with an is_nil query). GREEN 78/78 across eight files after updating seven old-behavior refutes (#btn-open-replace-access) to asserts for patients with an access email and fixing the replace test fixture (persona→profile). Delivery failure now logs Logger.warning with the inspected reason and never gates issuance. Format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0.
+
+L13: Segunda ronda del review: HAS ESTE ARREGLO, Y UNA VES TERMINADO, HAS UN PR A DEVELOP PRIMERO, UNA VEZ QUE ESTE EN DEVELOP, Y SI ES NECESARIO, HAS LO CAMBIO NECESARIO EN EL PR 524 PARA QUE YA ESTE IMPLEMENTADO
+
+L14: Config verified: config/config.exs:53 Local adapter, config/prod.exs:31 local:false — MemCacheStore GenServer absent in prod, GenServer.call exits (:noproc) escaping rescue. Plan: Origen.Mailer.NullDelivery explicit prod adapter (no provider until #490), catch :exit in the delivery wrapper, sanitized classification logs (returned_error / process_exit) with no email/body/token, tests with ExitingMailer + LeakyMailer + CaptureLog and consumable-token assertion. RED-first.
+
+L15: RED observed 11/14 (three new-behavior failures: mailer process exit escaped rescue, SECRETTOKEN123 and academic@example.test leaked into captured logs via inspect(reason), Origen.Mailer.NullDelivery missing). Fixes: catch :exit on the delivery wrapper with sanitized classification logging (returned_error / process_exit, no inspected reason), Origen.Mailer.NullDelivery adapter (deliver/2 + validate_config/1) selected explicitly in config/prod.exs until #490, tests for exit survival with consumable token, log sanitization and adapter behavior. GREEN 81/81 across the eight-file batch; format, compile --warnings-as-errors, git diff --check and dialyzer exit 0.
+
+L16: External verification by a second AI model returned 9/9 checklist approvals and four requested changes before merging #524: (1) NullDelivery global scope and silent success, (2) carry #526 fixes into #524 (its green CI does not cover them), (3) complete negative replace assertions, (4) accredit manual Secretary/academic-environment checks before enabling. Round 3 implemented items 1 and 3 on fix/521-review-corrections (extends PR #526): NullDelivery logs a content-free warning per skipped delivery; negative replace assertions pinned (failed replace -> error + no link block; disabled mode -> feedback without link block). RED observed for the warning (empty captured log), negative assertions born-GREEN. GREEN 83/83 across the eight-file batch; format, compile --warnings-as-errors, git diff --check and dialyzer exit 0. Item 2 is the release-refresh sequence after #526 merges; item 4 stays an explicit activation gate.

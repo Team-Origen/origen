@@ -6,6 +6,15 @@ defmodule Origen.RaisingMailer do
   def deliver(_email), do: raise("provider unavailable")
 end
 
+defmodule Origen.ExitingMailer do
+  def deliver(_email), do: exit(:noproc)
+end
+
+defmodule Origen.LeakyMailer do
+  def deliver(_email),
+    do: raise("smtp relay rejected mail for academic@example.test with token=SECRETTOKEN123")
+end
+
 defmodule Origen.AcademicPatientAccessTest do
   use Origen.DataCase
 
@@ -196,6 +205,59 @@ defmodule Origen.AcademicPatientAccessTest do
                from m in Origen.PatientAccess.MagicLink,
                  where: m.email == "academic@example.test" and is_nil(m.consumed_at)
              ) != nil
+    end
+
+    test "combined issuance survives a mailer process exit and the token stays consumable" do
+      enable()
+
+      assert {:ok, %{transient_url: url}} =
+               PatientAccess.request_magic_link_details("academic@example.test",
+                 mailer: Origen.ExitingMailer
+               )
+
+      assert is_binary(url)
+      refute_email_sent()
+
+      assert {:ok, %{email: "academic@example.test"}} =
+               PatientAccess.consume_magic_link(token(url))
+    end
+
+    test "delivery failure logs are sanitized and classified" do
+      enable()
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %{transient_url: url}} =
+                   PatientAccess.request_magic_link_details("academic@example.test",
+                     mailer: Origen.LeakyMailer
+                   )
+
+          assert is_binary(url)
+        end)
+
+      assert log =~ "delivery failed"
+      refute log =~ "SECRETTOKEN123"
+      refute log =~ "academic@example.test"
+    end
+
+    test "production null delivery adapter succeeds, logs a warning and leaks no email content" do
+      assert Code.ensure_loaded?(Origen.Mailer.NullDelivery)
+
+      email =
+        Swoosh.Email.new()
+        |> Swoosh.Email.to({"", "secret-patient@example.test"})
+        |> Swoosh.Email.subject("token=SECRETTOKEN123")
+        |> Swoosh.Email.text_body("token=SECRETTOKEN123")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %{}} = Origen.Mailer.NullDelivery.deliver(email, %{})
+        end)
+
+      assert log =~ "email delivery skipped"
+      assert log =~ "NullDelivery"
+      refute log =~ "SECRETTOKEN123"
+      refute log =~ "secret-patient@example.test"
     end
   end
 end

@@ -219,6 +219,64 @@ defmodule OrigenWeb.SecretaryPatientAcademicLinkTest do
     assert has_element?(view, "#secretary-academic-access-url[readonly]")
   end
 
+  test "failed replace shows the current error with no link block",
+       %{conn: conn, persona: persona, profile: profile, secretary_account: secretary_account} do
+    {:ok, %{profile: other_profile}} =
+      Patients.register_absent_patient(
+        %{@patient_attrs | document_number: "43.555.666", first_name: "Clara"},
+        secretary_account.id
+      )
+
+    {:ok, _} =
+      Patients.link_patient_access_email(profile, "viejo@example.test", secretary_account.id)
+
+    {:ok, _} =
+      Patients.link_patient_access_email(
+        other_profile,
+        "nuevo@example.test",
+        secretary_account.id
+      )
+
+    {:ok, view, _html} = live(conn, @path)
+    search_patient(view, persona)
+    view |> element("#btn-open-replace-access") |> render_click()
+
+    view
+    |> form("#replace-access-form",
+      access: %{"new_email" => "nuevo@example.test", "reason" => "Cambio de casilla"}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#replace-access-error", "ya está registrado")
+    refute has_element?(view, "#secretary-academic-access")
+  end
+
+  test "replace success without academic mode keeps the current feedback with no link block",
+       %{conn: conn, persona: persona, profile: profile, secretary_account: secretary_account} do
+    {:ok, _} =
+      Patients.link_patient_access_email(profile, "viejo@example.test", secretary_account.id)
+
+    Application.put_env(:origen, :academic_patient_access,
+      enabled: false,
+      isolated_fictional_data_confirmed: false,
+      public_origin: nil
+    )
+
+    {:ok, view, _html} = live(conn, @path)
+    search_patient(view, persona)
+    view |> element("#btn-open-replace-access") |> render_click()
+
+    view
+    |> form("#replace-access-form",
+      access: %{"new_email" => "nuevo@example.test", "reason" => "Cambio de casilla"}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#access-feedback", "Correo de acceso reemplazado exitosamente")
+    refute has_element?(view, "#secretary-academic-access")
+    assert_email_sent()
+  end
+
   defp insert_active_internal_account!(role) do
     %{rows: [[account_id]]} =
       Origen.Repo.query!(
