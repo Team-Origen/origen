@@ -38,6 +38,23 @@ defmodule Origen.PatientAccess do
   def request_magic_link(_invalid, _opts), do: {:ok, :delivered}
 
   @doc """
+  Issues a magic link exactly like request_magic_link/2 and additionally returns
+  the transient verification URL when the explicit academic modality is valid.
+  Delivery, audit and non-enumerating behavior are unchanged; the URL is a single
+  token returned only in this value and is never persisted.
+  """
+  @spec request_magic_link_details(String.t(), keyword()) ::
+          {:ok, %{transient_url: String.t() | nil}}
+  def request_magic_link_details(email, opts \\ []) do
+    case issue_magic_link(email, Keyword.put(opts, :transient_url, true), :email) do
+      {:ok, url} when is_binary(url) -> {:ok, %{transient_url: url}}
+      _ -> {:ok, %{transient_url: nil}}
+    end
+  rescue
+    _ -> {:ok, %{transient_url: nil}}
+  end
+
+  @doc """
   Issues a transient access URL only for the isolated fictional-data evaluation.
   This deliberately does not verify email possession and never contacts the mailer.
   """
@@ -146,7 +163,22 @@ defmodule Origen.PatientAccess do
           _ -> Repo.rollback(:audit_unavailable)
         end
 
-        if delivery == :academic, do: Email.magic_link_url(raw_token, opts), else: nil
+        transient_url =
+          cond do
+            delivery == :academic ->
+              Email.magic_link_url(raw_token, opts)
+
+            delivery == :email and opts[:transient_url] == true ->
+              case academic_origin() do
+                {:ok, origin} -> Email.magic_link_url(raw_token, origin: origin)
+                :disabled -> nil
+              end
+
+            true ->
+              nil
+          end
+
+        transient_url
       end)
       |> case do
         {:ok, url} -> {:ok, url}

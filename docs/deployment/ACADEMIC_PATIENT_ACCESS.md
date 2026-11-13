@@ -72,6 +72,21 @@ ficticio registrado: el resultado debe decir «Acceso de evaluación académica�
 Para desactivar, reiniciar sin las variables anteriores. No activar esta opción
 si la base local contiene datos reales ni conecta a una base compartida real.
 
+## Secretaría: enlace al vincular o reemplazar correo
+
+Con la modalidad habilitada, al vincular o reemplazar el correo de acceso de un
+paciente ficticio en `/secretaria/pacientes`, la misma pantalla muestra, además
+del envío por correo, el enlace de comprobación con **Copiar enlace** y
+**Abrir acceso**, con el mismo formato de la pantalla de acceso del paciente.
+
+- Es el mismo token del correo enviado: un solo token con el vencimiento y uso
+  único existentes. Mostrarlo no marca el correo como verificado.
+- El enlace aparece solo en el resultado de la operación exitosa y desaparece al
+  recargar o cambiar de pantalla; no se persiste ni se recupera desde su hash.
+- Si la operación falla o la modalidad está desactivada, el recorrido queda igual
+  que antes y no se muestra ningún enlace.
+- No requiere proveedor de correo disponible para completar el acceso académico.
+
 ## Instrucciones para profesores
 
 1. Abrir `https://<origen-aprobado>/paciente/acceso`.
