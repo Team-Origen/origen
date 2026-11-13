@@ -42,7 +42,8 @@ defmodule Origen.PatientAccess.Email do
 
   @doc "Builds the existing patient verification URL without persisting the token."
   def magic_link_url(raw_token, opts \\ []) do
-    origin = Keyword.get(opts, :origin, "http://localhost:4000")
+    origin = Keyword.get_lazy(opts, :origin, fn -> OrigenWeb.Endpoint.url() end)
+
     "#{origin}/paciente/acceso/verificar?token=#{URI.encode_www_form(raw_token)}"
   end
 end

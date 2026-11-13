@@ -531,6 +531,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
     |> assign(:access_form, nil)
     |> assign(:access_error, nil)
     |> assign(:access_feedback, nil)
+    |> assign(:access_url, nil)
   end
 
   defp register_patient(socket, params) do
@@ -1166,6 +1167,20 @@ defmodule OrigenWeb.SecretaryPatientLive do
                       phx-click="open_link_access"
                     >
                       Vincular correo de acceso
+                    </.button>
+
+                    <.button
+                      :if={
+                        @search_result.profile && not is_nil(@search_result.profile.email) &&
+                          is_nil(@access_action)
+                      }
+                      id="btn-open-replace-access"
+                      color="secondary"
+                      variant="outline"
+                      size="xs"
+                      phx-click="open_replace_access"
+                    >
+                      Reemplazar correo de acceso
                     </.button>
                   </dd>
 

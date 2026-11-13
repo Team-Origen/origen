@@ -55,11 +55,42 @@ Frontend
 Capturas sanitizadas (con el enlace redactado) del resultado y los controles reutilizados; pruebas de copiar, abrir y recargar; comprobación de que un fallo no muestra enlace y de que la modalidad desactivada conserva el recorrido actual; referencia a la configuración usada sin secretos. Crear esta issue no implica implementación ni habilitación.
 
 
+### S2 — Review de #524 (verbatim, compañero vía usuario)
+
+> Revisé los **13 archivos del [PR #524](https://github.com/Team-Origen/origen/pull/524)**, hacia `main` **pediría cambios antes de habilitar esta funcionalidad en el despliegue académico**.
+>
+> - **En [`lib/origen/patient_access/email.ex`, línea 45](https://github.com/Team-Origen/origen/blob/e17c7e8c17130bcf84e726e422fa3eaa5e676681/lib/origen/patient_access/email.ex#L45), el fallback a `localhost` debe corregirse para los correos del sistema desplegado.** Un paciente que abre ese enlace intenta acceder a su propia computadora.
+>
+> No pondría el dominio de Render fijo en el código. Usaría la configuración del endpoint, por ejemplo:
+>
+> ```elixir
+> origin = Keyword.get_lazy(opts, :origin, fn -> OrigenWeb.Endpoint.url() end)
+> ```
+>
+> Así, local usa la URL local y Render usa `PHX_HOST` o `RENDER_EXTERNAL_HOSTNAME`. Este problema ya existía: el PR lo conserva al extraer la función `magic_link_url/2`.
+>
+> **Encontré además estos problemas en los demás cambios:**
+>
+> | Hallazgo | Consecuencia | Cambio recomendado |
+> |---|---|---|
+> | **Secretaría conserva `access_url` al cambiar de paciente.** `clear_registration/1` limpia el resto del formulario, pero no ese valor. | Después de generar el enlace de A y buscar B, puede aparecer el enlace de A dentro del resultado de B. | Agregar `assign(:access_url, nil)` al limpiar la búsqueda y un test A → B. |
+> | **El enlace académico de Secretaría todavía depende de ejecutar el mailer.** Se llama a `mailer.deliver/1` antes de construir el resultado. | Si el mailer lanza una excepción, no se devuelve el enlace, aunque la documentación dice que no requiere proveedor disponible. | Manejar explícitamente el fallo del correo para preservar el acceso académico y probar tanto error retornado como excepción. |
+> | **Correo y pantalla pueden usar dominios distintos.** El correo recibe los `opts` originales; la URL visible usa `ORIGEN_ACADEMIC_PUBLIC_ORIGIN`. | Hoy pueden compartir el mismo token, pero el correo apunta a `localhost` y la pantalla al despliegue. | Resolver el origen coherentemente y comprobar la URL completa en el test, no solamente el token. |
+> | **Se anuncia reemplazo de correo desde Secretaría, pero falta el control que abre ese formulario.** Existe el handler `open_replace_access`, pero no su botón en la plantilla. | El recorrido no está disponible desde la interfaz. | Agregar el control y probarlo, o declarar esa parte pendiente. Es una limitación preexistente. |
+>
+> También falta el botón que abre el reemplazo de correo: si se incluye ese recorrido en el alcance, hay que conectarlo y probarlo. El CI está verde, pero no cubre estos casos.
+
 ## Tasks
 
 - T1 [S1] DONE: request_magic_link_details/2 on PatientAccess with single-token combined delivery (email delivery preserved, URL only in the return value); Patients.link/replace return access_url and specs updated. Route: inline. Commit: feat slice of this branch.
 - T2 [S1] DONE: Secretary LiveView transient block (readonly/copy/open, module-local colocated hook .SecretaryAccessCopy), cleared on mount/open/cancel and each new submission; success and failure paths assign it. Route: inline. Commit: feat slice of this branch.
 - T3 [S1] DONE: guide section "Secretaría: enlace al vincular o reemplazar correo" added (usage, single token, transient behavior, unchanged disabled path); final verification evidence in Log L6 and task 13. Route: inline. Commit: docs slice of this branch.
+- T4 [S2] DONE: magic_link_url/2 falls back to OrigenWeb.Endpoint.url() instead of localhost; combined mode shares the academic origin between email and on-screen link with a full-URL equality test. Route: inline. Commit: fix slice of this branch.
+- T5 [S2] DONE: clear_registration/1 clears access_url; test A → B guards the leak. Route: inline. Commit: fix slice of this branch.
+- T6 [S2] DONE: mailer returned errors and raised exceptions are logged (Logger.warning) and never gate issuance or rollback the link; stub-mailer tests cover both and normal mode stays opaque with the link persisted. Route: inline. Commit: fix slice of this branch.
+- T7 [S2] DONE: #btn-open-replace-access wired to open_replace_access for patients with an access email; UI test covers open, submit and the academic result; seven old-behavior refutes updated to asserts. Route: inline. Commit: fix slice of this branch.
+- T8 [S2] DONE: GREEN 78/78 across eight files (new tests plus maintenance, secretary, patient access, controller and integration regressions); format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0. PR to develop next; release refresh follows develop merge.
+
 
 ## Log
 
@@ -78,3 +109,9 @@ L6: RED/GREEN observed. RED run of the two new test files: 2/5 passed — failur
 L9: User confirmed the patient screen flow works after reactivating the temporary dev activation lost by a server restart, and ordered the PR to develop. Branch pushed with Closes #521, type:feature; merge remains the user's decision.
 
 L8: Final verification before manual review: mix dialyzer passed after the Patients spec changes (56 skipped, no new findings); regression 72 passed across professional_agenda_live_test.exs, secretary_patient_live_test.exs, patient_access_controller_test.exs and patient_access_issue_300_test.exs (seed 214758). Branch feat/521-secretary-access-link stays local with commits cb4f1ed (tracker), 16cf122 (feat slice) and this docs commit; no push and no PR until the user's manual review.
+
+L10: HAS ESTE ARREGLO, Y UNA VES TERMINADO, HAS UN PR A DEVELOP PRIMERO, UNA VES QUE ESTE EN DEVELOP, Y SI ES NECESARIO, HAS LO CAMBIO NECESARIO EN EL PR 524 PARA QUE YA ESTE IMPLEMENTADO
+
+L11: Reopened #521 per user order after the colleague review of #524 (S2 verbatim). All findings accepted as valid: fallback localhost (pre-existing, preserved by extraction), access_url leak on patient switch (introduced by this implementation), mailer dependency contradicting the no-provider requirement, incoherent email/screen origin, and the pre-existing missing replace button (included in scope to fulfill S1 "vincular o reemplazar"). Branch fix/521-review-corrections from develop e17c7e8; RED-first per item; PR to develop planned, then refresh chore/release-academic-access-links so #524 carries the fixes after develop merge.
+
+L12: RED observed 5 behavioral failures (13/18: full-origin equivalence, mailer exception, persisted link on raise, A→B leak, replace button) plus one test-side defect fixed (Ecto get_by forbids nil comparisons; replaced with an is_nil query). GREEN 78/78 across eight files after updating seven old-behavior refutes (#btn-open-replace-access) to asserts for patients with an access email and fixing the replace test fixture (persona→profile). Delivery failure now logs Logger.warning with the inspected reason and never gates issuance. Format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0.
