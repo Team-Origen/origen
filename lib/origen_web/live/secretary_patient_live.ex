@@ -88,7 +88,8 @@ defmodule OrigenWeb.SecretaryPatientLive do
        |> assign(:access_action, nil)
        |> assign(:access_form, nil)
        |> assign(:access_error, nil)
-       |> assign(:access_feedback, nil)}
+       |> assign(:access_feedback, nil)
+       |> assign(:access_url, nil)}
     else
       {:ok, redirect(socket, to: "/")}
     end
@@ -350,7 +351,8 @@ defmodule OrigenWeb.SecretaryPatientLive do
      |> assign(:access_action, :link)
      |> assign(:access_form, to_form(link_access_changeset(%{}), as: :access))
      |> assign(:access_error, nil)
-     |> assign(:access_feedback, nil)}
+     |> assign(:access_feedback, nil)
+     |> assign(:access_url, nil)}
   end
 
   @impl true
@@ -361,7 +363,8 @@ defmodule OrigenWeb.SecretaryPatientLive do
      |> assign(:access_action, :replace)
      |> assign(:access_form, to_form(replace_access_changeset(%{}), as: :access))
      |> assign(:access_error, nil)
-     |> assign(:access_feedback, nil)}
+     |> assign(:access_feedback, nil)
+     |> assign(:access_url, nil)}
   end
 
   @impl true
@@ -370,7 +373,8 @@ defmodule OrigenWeb.SecretaryPatientLive do
      socket
      |> assign(:access_action, nil)
      |> assign(:access_form, nil)
-     |> assign(:access_error, nil)}
+     |> assign(:access_error, nil)
+     |> assign(:access_url, nil)}
   end
 
   @impl true
@@ -395,12 +399,13 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   @impl true
   def handle_event("submit_link_access", %{"access" => params}, socket) do
+    socket = assign(socket, :access_url, nil)
     profile = socket.assigns.search_result.profile
     account_id = socket.assigns.current_internal_session.account_id
     email = Map.get(params, "email", "")
 
     case Patients.link_patient_access_email(profile.id, email, account_id) do
-      {:ok, %{patient_profile: updated_profile}} ->
+      {:ok, %{patient_profile: updated_profile, access_url: access_url}} ->
         search_result = %{socket.assigns.search_result | profile: updated_profile}
 
         {:noreply,
@@ -409,6 +414,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
          |> assign(:access_action, nil)
          |> assign(:access_form, nil)
          |> assign(:access_error, nil)
+         |> assign(:access_url, access_url)
          |> assign(
            :access_feedback,
            "Correo de acceso vinculado exitosamente. Se ha enviado el enlace de comprobación de posesión."
@@ -443,13 +449,14 @@ defmodule OrigenWeb.SecretaryPatientLive do
 
   @impl true
   def handle_event("submit_replace_access", %{"access" => params}, socket) do
+    socket = assign(socket, :access_url, nil)
     profile = socket.assigns.search_result.profile
     account_id = socket.assigns.current_internal_session.account_id
     new_email = Map.get(params, "new_email", "")
     reason = Map.get(params, "reason", "")
 
     case Patients.replace_patient_access_email(profile.id, new_email, account_id, reason) do
-      {:ok, %{patient_profile: updated_profile}} ->
+      {:ok, %{patient_profile: updated_profile, access_url: access_url}} ->
         search_result = %{socket.assigns.search_result | profile: updated_profile}
 
         {:noreply,
@@ -458,6 +465,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
          |> assign(:access_action, nil)
          |> assign(:access_form, nil)
          |> assign(:access_error, nil)
+         |> assign(:access_url, access_url)
          |> assign(
            :access_feedback,
            "Correo de acceso reemplazado exitosamente. Se invalidaron los accesos y enlaces anteriores y se envió el enlace de comprobación al nuevo correo."
@@ -523,6 +531,7 @@ defmodule OrigenWeb.SecretaryPatientLive do
     |> assign(:access_form, nil)
     |> assign(:access_error, nil)
     |> assign(:access_feedback, nil)
+    |> assign(:access_url, nil)
   end
 
   defp register_patient(socket, params) do
@@ -1159,6 +1168,20 @@ defmodule OrigenWeb.SecretaryPatientLive do
                     >
                       Vincular correo de acceso
                     </.button>
+
+                    <.button
+                      :if={
+                        @search_result.profile && not is_nil(@search_result.profile.email) &&
+                          is_nil(@access_action)
+                      }
+                      id="btn-open-replace-access"
+                      color="secondary"
+                      variant="outline"
+                      size="xs"
+                      phx-click="open_replace_access"
+                    >
+                      Reemplazar correo de acceso
+                    </.button>
                   </dd>
 
                   <dt class="font-medium text-text-muted dark:text-gray-300">
@@ -1197,6 +1220,88 @@ defmodule OrigenWeb.SecretaryPatientLive do
                 >
                   {@access_feedback}
                 </.alert>
+
+                <div
+                  :if={@access_url}
+                  id="secretary-academic-access"
+                  phx-hook=".SecretaryAccessCopy"
+                  class="p-4 border border-border rounded-lg bg-surface-muted dark:bg-gray-800 dark:border-gray-700 flex flex-col gap-3"
+                  role="status"
+                >
+                  <label
+                    for="secretary-academic-access-url"
+                    class="text-sm font-medium text-text dark:text-gray-100"
+                  >
+                    Enlace de comprobación de posesión
+                  </label>
+                  <input
+                    id="secretary-academic-access-url"
+                    type="text"
+                    value={@access_url}
+                    readonly
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-describedby="secretary-academic-access-help"
+                    class="w-full min-w-0 rounded-md border border-border p-2 text-sm text-text dark:text-gray-100 focus:ring-2 focus:ring-primary"
+                  />
+                  <p
+                    id="secretary-academic-access-help"
+                    class="text-xs text-text-muted dark:text-gray-300"
+                  >
+                    Solo para pacientes ficticios en la modalidad académica. Conserva su vencimiento y uso único; no se vuelve a mostrar al recargar. No lo compartas ni lo incluyas en capturas.
+                  </p>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <.button type="button" id="copy-secretary-academic-access" size="sm">
+                      Copiar enlace
+                    </.button>
+                    <.link
+                      id="secretary-academic-link"
+                      href={@access_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-sm text-primary underline underline-offset-4"
+                    >
+                      Abrir acceso
+                    </.link>
+                  </div>
+                  <p
+                    id="secretary-academic-copy-status"
+                    role="status"
+                    aria-live="polite"
+                    class="text-sm text-text-muted dark:text-gray-300"
+                  >
+                  </p>
+                </div>
+                <script :type={Phoenix.LiveView.ColocatedHook} name=".SecretaryAccessCopy">
+                  export default {
+                    mounted() {
+                      this.copy = async () => {
+                        const input = this.el.querySelector("#secretary-academic-access-url");
+                        const status = this.el.querySelector("#secretary-academic-copy-status");
+                        const value = input.value;
+                        try {
+                          await navigator.clipboard.writeText(value);
+                          if (input.isConnected && input.value === value) {
+                            status.textContent = "Enlace copiado.";
+                          }
+                        } catch (_) {
+                          if (input.isConnected && input.value === value) {
+                            input.focus();
+                            input.select();
+                            status.textContent = "No se pudo copiar automáticamente. Copiá el enlace seleccionado.";
+                          }
+                        }
+                      };
+                      this.el.querySelector("#copy-secretary-academic-access").addEventListener("click", this.copy);
+                    },
+                    updated() {
+                      this.el.querySelector("#secretary-academic-copy-status").textContent = "";
+                    },
+                    destroyed() {
+                      this.el.querySelector("#copy-secretary-academic-access")?.removeEventListener("click", this.copy);
+                    }
+                  }
+                </script>
 
                 <section
                   :if={@access_action == :link}

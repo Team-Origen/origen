@@ -268,7 +268,8 @@ defmodule Origen.Patients do
           integer(),
           keyword()
         ) ::
-          {:ok, %{patient_profile: PatientProfile.t(), outcome: :linked}}
+          {:ok,
+           %{patient_profile: PatientProfile.t(), outcome: :linked, access_url: String.t() | nil}}
           | {:error, :already_has_access_email}
           | {:error, :email_already_in_use}
           | {:error, :invalid_email}
@@ -292,11 +293,19 @@ defmodule Origen.Patients do
                  |> PatientProfile.changeset(%{email: clean_email})
                  |> Repo.update() do
               {:ok, updated_profile} ->
-                Origen.PatientAccess.request_magic_link(clean_email, opts)
+                {:ok, %{transient_url: transient_url}} =
+                  Origen.PatientAccess.request_magic_link_details(clean_email, opts)
 
                 case audit_email_linked(role, actor_account_id, updated_profile.id) do
-                  :ok -> %{patient_profile: updated_profile, outcome: :linked}
-                  _ -> Repo.rollback(:audit_unavailable)
+                  :ok ->
+                    %{
+                      patient_profile: updated_profile,
+                      outcome: :linked,
+                      access_url: transient_url
+                    }
+
+                  _ ->
+                    Repo.rollback(:audit_unavailable)
                 end
 
               {:error, changeset} ->
@@ -325,7 +334,12 @@ defmodule Origen.Patients do
           String.t(),
           keyword()
         ) ::
-          {:ok, %{patient_profile: PatientProfile.t(), outcome: :replaced}}
+          {:ok,
+           %{
+             patient_profile: PatientProfile.t(),
+             outcome: :replaced,
+             access_url: String.t() | nil
+           }}
           | {:error, :same_email}
           | {:error, :email_already_in_use}
           | {:error, :invalid_email}
@@ -362,11 +376,19 @@ defmodule Origen.Patients do
                  })
                  |> Repo.update() do
               {:ok, updated_profile} ->
-                Origen.PatientAccess.request_magic_link(clean_new_email, opts)
+                {:ok, %{transient_url: transient_url}} =
+                  Origen.PatientAccess.request_magic_link_details(clean_new_email, opts)
 
                 case audit_email_replaced(role, actor_account_id, updated_profile.id) do
-                  :ok -> %{patient_profile: updated_profile, outcome: :replaced}
-                  _ -> Repo.rollback(:audit_unavailable)
+                  :ok ->
+                    %{
+                      patient_profile: updated_profile,
+                      outcome: :replaced,
+                      access_url: transient_url
+                    }
+
+                  _ ->
+                    Repo.rollback(:audit_unavailable)
                 end
 
               {:error, changeset} ->
