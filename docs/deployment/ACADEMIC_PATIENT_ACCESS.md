@@ -86,6 +86,10 @@ del envío por correo, el enlace de comprobación con **Copiar enlace** y
 - Si la operación falla o la modalidad está desactivada, el recorrido queda igual
   que antes y no se muestra ningún enlace.
 - No requiere proveedor de correo disponible para completar el acceso académico.
+- Hasta integrar #490, el despliegue usa el adaptador `Origen.Mailer.NullDelivery`:
+  ninguna entrega envía correo y cada envío omitido registra un warning que nombra el
+  adaptador, sin contenido del mensaje. Afecta a todo el correo del despliegue, no
+  solo a esta modalidad.
 
 ## Instrucciones para profesores
 
@@ -139,6 +143,11 @@ aprobado. No reutilizar su base para pacientes reales.
   (4 aprobadas) en el servidor de desarrollo mediante Tidewave. Falta comprobar el
   recorrido completo en navegador: no había navegador conectado a Tidewave.
 - Pendiente: acta del entorno HTTPS/base aislada exclusivamente ficticia.
+- Verificación externa (otro modelo de IA): 9/9 puntos del checklist aprobados;
+  tercera ronda de correcciones integrada (NullDelivery registra warning por envío
+  omitido y aserciones negativas de reemplazo pinadas). La comprobación manual de
+  Secretaría y del entorno académico, incluida la recarga tras el resultado, queda
+  como requisito explícito antes de habilitar el despliegue.
 - Verificado: compilación con warnings como errores, formato y `git diff --check`.
 - Verificado: prueba aislada de configuración sin base (1 test aprobado), con
   RED/GREEN observado y revalidación independiente del rechazo de loopback y URL
