@@ -78,14 +78,21 @@ defmodule Origen.PatientAccess do
   defp allowed_origin?(%URI{scheme: scheme, host: host}, config) when is_binary(host) do
     public_https = scheme == "https" and public_host?(host)
 
-    local =
-      @development_build and config[:local_development] == true and
-        scheme in ["http", "https"] and host in ["localhost", "127.0.0.1", "::1"]
+    local = config[:local_development] == true and local_loopback_origin?(scheme, host)
 
     public_https or local
   end
 
   defp allowed_origin?(_, _), do: false
+
+  # The local exception is fixed at compile time: only a development build
+  # contains the loopback implementation at all.
+  if @development_build do
+    defp local_loopback_origin?(scheme, host),
+      do: scheme in ["http", "https"] and host in ["localhost", "127.0.0.1", "::1"]
+  else
+    defp local_loopback_origin?(_scheme, _host), do: false
+  end
 
   defp public_host?(host) do
     host = host |> String.downcase() |> String.trim_trailing(".")
