@@ -19,7 +19,6 @@ defmodule Origen.AcademicPatientAccessTest do
   use Origen.DataCase
 
   import Ecto.Query
-  import ExUnit.CaptureLog
   import Swoosh.TestAssertions
   alias Origen.{PatientAccess, Patients}
 
@@ -241,9 +240,24 @@ defmodule Origen.AcademicPatientAccessTest do
       refute log =~ "academic@example.test"
     end
 
-    test "production null delivery adapter succeeds without sending" do
+    test "production null delivery adapter succeeds, logs a warning and leaks no email content" do
       assert Code.ensure_loaded?(Origen.Mailer.NullDelivery)
-      assert {:ok, %{}} = Origen.Mailer.NullDelivery.deliver(Swoosh.Email.new(), %{})
+
+      email =
+        Swoosh.Email.new()
+        |> Swoosh.Email.to({"", "secret-patient@example.test"})
+        |> Swoosh.Email.subject("token=SECRETTOKEN123")
+        |> Swoosh.Email.text_body("token=SECRETTOKEN123")
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, %{}} = Origen.Mailer.NullDelivery.deliver(email, %{})
+        end)
+
+      assert log =~ "email delivery skipped"
+      assert log =~ "NullDelivery"
+      refute log =~ "SECRETTOKEN123"
+      refute log =~ "secret-patient@example.test"
     end
   end
 end
