@@ -16,6 +16,7 @@ defmodule Origen.PatientAccess do
   alias Origen.Patients.PatientProfile
   alias Origen.Repo
 
+  @development_build Application.compile_env(:origen, :env) == :dev
   @default_ttl_seconds 900
   @email_regex ~r/^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+.[a-zA-Z0-9-.]+$/
 
@@ -28,6 +29,74 @@ defmodule Origen.PatientAccess do
   def request_magic_link(email, opts \\ [])
 
   def request_magic_link(email, opts) when is_binary(email) do
+    issue_magic_link(email, opts, :email)
+    {:ok, :delivered}
+  rescue
+    _ -> {:ok, :delivered}
+  end
+
+  def request_magic_link(_invalid, _opts), do: {:ok, :delivered}
+
+  @doc """
+  Issues a transient access URL only for the isolated fictional-data evaluation.
+  This deliberately does not verify email possession and never contacts the mailer.
+  """
+  def request_academic_magic_link(email) do
+    case academic_origin() do
+      {:ok, origin} -> issue_magic_link(email, [origin: origin], :academic)
+      :disabled -> {:error, :disabled}
+    end
+  rescue
+    _ -> {:ok, nil}
+  end
+
+  @doc "Returns whether the explicit evaluation configuration is valid."
+  def academic_display_enabled?, do: match?({:ok, _}, academic_origin())
+
+  defp academic_origin do
+    config = Application.get_env(:origen, :academic_patient_access) || []
+    origin = Keyword.get(config, :public_origin)
+
+    uri =
+      case URI.new(origin || "") do
+        {:ok, uri} -> uri
+        _ -> %URI{}
+      end
+
+    if config[:enabled] == true and config[:isolated_fictional_data_confirmed] == true and
+         allowed_origin?(uri, config) and
+         is_nil(uri.userinfo) and uri.path in [nil, ""] and is_nil(uri.query) and
+         is_nil(uri.fragment) do
+      {:ok, origin}
+    else
+      :disabled
+    end
+  rescue
+    _ -> :disabled
+  end
+
+  defp allowed_origin?(%URI{scheme: scheme, host: host}, config) when is_binary(host) do
+    public_https = scheme == "https" and public_host?(host)
+
+    local =
+      @development_build and config[:local_development] == true and
+        scheme in ["http", "https"] and host in ["localhost", "127.0.0.1", "::1"]
+
+    public_https or local
+  end
+
+  defp allowed_origin?(_, _), do: false
+
+  defp public_host?(host) do
+    host = host |> String.downcase() |> String.trim_trailing(".")
+
+    # A public deployment uses a DNS name, not an IP literal or numeric shorthand.
+    host != "localhost" and not String.ends_with?(host, ".localhost") and
+      String.contains?(host, ".") and not String.contains?(host, ":") and
+      not Regex.match?(~r/^[0-9.]+$/, host)
+  end
+
+  defp issue_magic_link(email, opts, delivery) when is_binary(email) do
     clean_email = email |> String.trim() |> String.downcase()
 
     if Regex.match?(@email_regex, clean_email) and linked_patient_email?(clean_email) do
@@ -51,15 +120,16 @@ defmodule Origen.PatientAccess do
           created_at: now
         }
 
-        magic_link =
-          %MagicLink{}
-          |> MagicLink.changeset(attrs)
-          |> Repo.insert!()
+        %MagicLink{}
+        |> MagicLink.changeset(attrs)
+        |> Repo.insert!()
 
-        # 3. Deliver email via Swoosh
-        email_msg = Email.magic_link(clean_email, raw_token, opts)
-        mailer = Keyword.get(opts, :mailer, Origen.Mailer)
-        mailer.deliver(email_msg)
+        # Normal delivery is unchanged; evaluation does not depend on a provider.
+        if delivery == :email do
+          email_msg = Email.magic_link(clean_email, raw_token, opts)
+          mailer = Keyword.get(opts, :mailer, Origen.Mailer)
+          mailer.deliver(email_msg)
+        end
 
         # 4. Append audit event (reference only, never token or full URL)
         with {:ok, event} <- Events.magic_link_issued({:anonymous, nil}, clean_email),
@@ -69,16 +139,18 @@ defmodule Origen.PatientAccess do
           _ -> Repo.rollback(:audit_unavailable)
         end
 
-        magic_link
+        if delivery == :academic, do: Email.magic_link_url(raw_token, opts), else: nil
       end)
+      |> case do
+        {:ok, url} -> {:ok, url}
+        {:error, _} -> {:ok, nil}
+      end
+    else
+      {:ok, nil}
     end
-
-    {:ok, :delivered}
-  rescue
-    _ -> {:ok, :delivered}
   end
 
-  def request_magic_link(_invalid, _opts), do: {:ok, :delivered}
+  defp issue_magic_link(_invalid, _opts, _delivery), do: {:ok, nil}
 
   defp linked_patient_email?(email) do
     Repo.exists?(from p in PatientProfile, where: p.email == ^email)

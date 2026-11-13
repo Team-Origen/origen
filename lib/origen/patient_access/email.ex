@@ -10,8 +10,7 @@ defmodule Origen.PatientAccess.Email do
   The token is embedded in the link and delivered only to the target mailbox.
   """
   def magic_link(email, raw_token, opts \\ []) do
-    origin = Keyword.get(opts, :origin, "http://localhost:4000")
-    link = "#{origin}/paciente/acceso/verificar?token=#{URI.encode_www_form(raw_token)}"
+    link = magic_link_url(raw_token, opts)
 
     new()
     |> to(email)
@@ -39,5 +38,11 @@ defmodule Origen.PatientAccess.Email do
 
     Este enlace es de un solo uso y vence en 15 minutos.
     """)
+  end
+
+  @doc "Builds the existing patient verification URL without persisting the token."
+  def magic_link_url(raw_token, opts \\ []) do
+    origin = Keyword.get(opts, :origin, "http://localhost:4000")
+    "#{origin}/paciente/acceso/verificar?token=#{URI.encode_www_form(raw_token)}"
   end
 end

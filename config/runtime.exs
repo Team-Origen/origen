@@ -7,6 +7,17 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# Evaluation only: the second flag records the operator's completed isolation
+# check; it cannot establish whether a database actually contains real patients.
+config :origen, :academic_patient_access,
+  enabled: System.get_env("ORIGEN_ACADEMIC_PATIENT_ACCESS_ENABLED") == "true",
+  isolated_fictional_data_confirmed:
+    System.get_env("ORIGEN_ACADEMIC_ISOLATED_FICTIONAL_DATA_CONFIRMED") == "true",
+  public_origin: System.get_env("ORIGEN_ACADEMIC_PUBLIC_ORIGIN"),
+  local_development:
+    config_env() == :dev and
+      System.get_env("ORIGEN_ACADEMIC_LOCAL_PATIENT_ACCESS_ENABLED") == "true"
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server
