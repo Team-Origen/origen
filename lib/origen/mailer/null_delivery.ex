@@ -15,9 +15,7 @@ defmodule Origen.Mailer.NullDelivery do
 
   @impl Swoosh.Adapter
   def deliver(_email, _config) do
-    Logger.warning(
-      "email delivery skipped: no provider configured (NullDelivery adapter)"
-    )
+    Logger.warning("email delivery skipped: no provider configured (NullDelivery adapter)")
 
     {:ok, %{}}
   end
