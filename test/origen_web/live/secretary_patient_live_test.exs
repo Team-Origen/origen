@@ -104,7 +104,7 @@ defmodule OrigenWeb.SecretaryPatientLiveTest do
       assert has_element?(view, "#patient-summary-profile-state", "Completado")
       refute has_element?(view, "#patient-summary-phone")
       refute html =~ "+5491144332211"
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       assert has_element?(view, "#patient-summary-phone-verified", "Teléfono no verificado")
 
       assert has_element?(

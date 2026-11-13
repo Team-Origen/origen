@@ -1,6 +1,15 @@
+defmodule Origen.ReturningErrorMailer do
+  def deliver(_email), do: {:error, :smtp_unavailable}
+end
+
+defmodule Origen.RaisingMailer do
+  def deliver(_email), do: raise("provider unavailable")
+end
+
 defmodule Origen.AcademicPatientAccessTest do
   use Origen.DataCase
 
+  import Ecto.Query
   import Swoosh.TestAssertions
   alias Origen.{PatientAccess, Patients}
 
@@ -133,6 +142,60 @@ defmodule Origen.AcademicPatientAccessTest do
                PatientAccess.request_magic_link_details("academic@example.test")
 
       assert_email_sent()
+    end
+  end
+
+  describe "request_magic_link_details/2 origin coherence and mailer resilience" do
+    test "combined email and transient URL share the full academic origin" do
+      enable()
+
+      assert {:ok, %{transient_url: url}} =
+               PatientAccess.request_magic_link_details("academic@example.test")
+
+      assert_email_sent(fn email ->
+        [_, href] = Regex.run(~r/href="([^"]*paciente\/acceso\/verificar[^"]*)"/, email.html_body)
+
+        assert href == url
+
+        true
+      end)
+    end
+
+    test "combined issuance survives a mailer returned error" do
+      enable()
+
+      assert {:ok, %{transient_url: url}} =
+               PatientAccess.request_magic_link_details("academic@example.test",
+                 mailer: Origen.ReturningErrorMailer
+               )
+
+      assert is_binary(url)
+      refute_email_sent()
+    end
+
+    test "combined issuance survives a mailer exception" do
+      enable()
+
+      assert {:ok, %{transient_url: url}} =
+               PatientAccess.request_magic_link_details("academic@example.test",
+                 mailer: Origen.RaisingMailer
+               )
+
+      assert is_binary(url)
+    end
+
+    test "normal issuance stays opaque and keeps the link when the mailer raises" do
+      enable()
+
+      assert {:ok, :delivered} =
+               PatientAccess.request_magic_link("academic@example.test",
+                 mailer: Origen.RaisingMailer
+               )
+
+      assert Origen.Repo.one(
+               from m in Origen.PatientAccess.MagicLink,
+                 where: m.email == "academic@example.test" and is_nil(m.consumed_at)
+             ) != nil
     end
   end
 end

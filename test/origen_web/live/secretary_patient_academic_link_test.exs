@@ -174,6 +174,51 @@ defmodule OrigenWeb.SecretaryPatientAcademicLinkTest do
            )
   end
 
+  test "searching another patient clears the previous academic link",
+       %{conn: conn, persona: persona, secretary_account: secretary_account} do
+    {:ok, %{persona: persona_b}} =
+      Patients.register_absent_patient(
+        %{@patient_attrs | document_number: "42.444.555", first_name: "Bruno"},
+        secretary_account.id
+      )
+
+    {:ok, view, _html} = live(conn, @path)
+    search_patient(view, persona)
+    view |> element("#btn-open-link-access") |> render_click()
+
+    submit_link(view, "ramiro.suarez@example.test")
+
+    assert has_element?(view, "#secretary-academic-access-url")
+
+    search_patient(view, persona_b)
+
+    refute has_element?(view, "#secretary-academic-access-url")
+  end
+
+  test "replace access button opens the flow and shows the academic result",
+       %{conn: conn, persona: persona, profile: profile, secretary_account: secretary_account} do
+    {:ok, _} =
+      Patients.link_patient_access_email(profile, "viejo@example.test", secretary_account.id)
+
+    {:ok, view, _html} = live(conn, @path)
+    search_patient(view, persona)
+
+    assert has_element?(view, "#btn-open-replace-access", "Reemplazar correo de acceso")
+
+    view |> element("#btn-open-replace-access") |> render_click()
+
+    assert has_element?(view, "#replace-access-section")
+
+    view
+    |> form("#replace-access-form",
+      access: %{"new_email" => "nuevo@example.test", "reason" => "Cambio de casilla"}
+    )
+    |> render_submit()
+
+    assert has_element?(view, "#access-feedback", "Correo de acceso reemplazado exitosamente")
+    assert has_element?(view, "#secretary-academic-access-url[readonly]")
+  end
+
   defp insert_active_internal_account!(role) do
     %{rows: [[account_id]]} =
       Origen.Repo.query!(

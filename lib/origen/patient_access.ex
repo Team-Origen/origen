@@ -11,6 +11,7 @@ defmodule Origen.PatientAccess do
   """
 
   import Ecto.Query
+  require Logger
   alias Origen.Audit.{Events, Writer}
   alias Origen.PatientAccess.{Email, MagicLink}
   alias Origen.Patients.PatientProfile
@@ -148,11 +149,35 @@ defmodule Origen.PatientAccess do
         |> MagicLink.changeset(attrs)
         |> Repo.insert!()
 
-        # Normal delivery is unchanged; evaluation does not depend on a provider.
+        # Coherent origin: when the academic modality is valid, the email and
+        # the on-screen link share it; otherwise the email uses the configured
+        # endpoint origin instead of a localhost fallback.
+        email_opts =
+          case academic_origin() do
+            {:ok, origin} -> Keyword.put(opts, :origin, origin)
+            _ -> opts
+          end
+
         if delivery == :email do
-          email_msg = Email.magic_link(clean_email, raw_token, opts)
+          email_msg = Email.magic_link(clean_email, raw_token, email_opts)
           mailer = Keyword.get(opts, :mailer, Origen.Mailer)
-          mailer.deliver(email_msg)
+
+          # Delivery failure never gates issuance: the link stays valid and the
+          # academic modality does not depend on provider availability.
+          delivery_outcome =
+            try do
+              mailer.deliver(email_msg)
+            rescue
+              exception -> {:error, exception}
+            end
+
+          case delivery_outcome do
+            {:error, reason} ->
+              Logger.warning("patient magic link email delivery failed: " <> inspect(reason))
+
+            _ ->
+              :ok
+          end
         end
 
         # 4. Append audit event (reference only, never token or full URL)

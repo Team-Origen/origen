@@ -159,7 +159,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       assert has_element?(view, "#patient-summary-access-email", new_email)
 
       # Replacement remains an application capability but has no trigger on this card.
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       refute has_element?(view, "#btn-open-link-access")
       refute has_element?(view, "#link-access-section")
 
@@ -243,7 +243,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       assert has_element?(view, "#patient-summary-access-email", "titular@example.test")
       assert has_element?(view, "#patient-summary-access-status", "Pendiente de verificación")
       refute has_element?(view, "#patient-summary-phone")
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       refute has_element?(view, "#btn-open-link-access")
     end
 
@@ -278,7 +278,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
 
       refute has_element?(view, "#patient-summary-access-status")
       refute has_element?(view, "#patient-summary-phone")
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       refute html =~ "Acceso verificado"
       refute html =~ @assisted_attrs.phone
       assert has_element?(view, "#patient-summary-full-name", "Lucía Vázquez")
@@ -290,7 +290,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       html = view |> element("#start-assisted-booking") |> render_click()
       refute html =~ "Acceso verificado"
       refute has_element?(view, "#patient-summary-phone")
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       assert Origen.PatientAccess.access_status(email) == :verified
 
       assert {:ok, %{profile: %{phone: "+5491166667777", email: ^email}}} =
@@ -326,7 +326,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       )
       |> render_submit()
 
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       render_click(view, "open_replace_access")
 
       assert has_element?(view, "#replace-access-section")
@@ -337,7 +337,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       |> render_click()
 
       refute has_element?(view, "#replace-access-section")
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
     end
 
     test "submitting valid replace access updates email, invalidates prior link and shows feedback",
@@ -372,7 +372,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       )
       |> render_submit()
 
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       render_click(view, "open_replace_access")
 
       view
@@ -418,7 +418,7 @@ defmodule OrigenWeb.SecretaryPatientAccessMaintenanceTest do
       )
       |> render_submit()
 
-      refute has_element?(view, "#btn-open-replace-access")
+      assert has_element?(view, "#btn-open-replace-access")
       render_click(view, "open_replace_access")
 
       # Same email
