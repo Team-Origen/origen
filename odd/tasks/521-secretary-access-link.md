@@ -85,11 +85,11 @@ Capturas sanitizadas (con el enlace redactado) del resultado y los controles reu
 - T1 [S1] DONE: request_magic_link_details/2 on PatientAccess with single-token combined delivery (email delivery preserved, URL only in the return value); Patients.link/replace return access_url and specs updated. Route: inline. Commit: feat slice of this branch.
 - T2 [S1] DONE: Secretary LiveView transient block (readonly/copy/open, module-local colocated hook .SecretaryAccessCopy), cleared on mount/open/cancel and each new submission; success and failure paths assign it. Route: inline. Commit: feat slice of this branch.
 - T3 [S1] DONE: guide section "Secretaría: enlace al vincular o reemplazar correo" added (usage, single token, transient behavior, unchanged disabled path); final verification evidence in Log L6 and task 13. Route: inline. Commit: docs slice of this branch.
-- T4 [S2] DONE (pending verification): magic_link_url/2 falls back to OrigenWeb.Endpoint.url() instead of localhost; combined mode shares the academic origin between email and on-screen link; full-URL test. Route: inline. Commit: pending.
-- T5 [S2] DONE (pending verification): clear_registration/1 clears access_url; test A → B. Route: inline. Commit: pending.
-- T6 [S2] DONE (pending verification): mailer failures (returned error and raised exception) do not block academic issuance or rollback; tests with stub mailers. Route: inline. Commit: pending.
-- T7 [S2] DONE (pending verification): #btn-open-replace-access control wired to open_replace_access + UI test. Route: inline. Commit: pending.
-- T8 [S2] PENDING: GREEN run, format, compile, dialyzer, regression; PR to develop; then refresh release branch so #524 carries the fixes (after develop merge).
+- T4 [S2] DONE: magic_link_url/2 falls back to OrigenWeb.Endpoint.url() instead of localhost; combined mode shares the academic origin between email and on-screen link with a full-URL equality test. Route: inline. Commit: fix slice of this branch.
+- T5 [S2] DONE: clear_registration/1 clears access_url; test A → B guards the leak. Route: inline. Commit: fix slice of this branch.
+- T6 [S2] DONE: mailer returned errors and raised exceptions are logged (Logger.warning) and never gate issuance or rollback the link; stub-mailer tests cover both and normal mode stays opaque with the link persisted. Route: inline. Commit: fix slice of this branch.
+- T7 [S2] DONE: #btn-open-replace-access wired to open_replace_access for patients with an access email; UI test covers open, submit and the academic result; seven old-behavior refutes updated to asserts. Route: inline. Commit: fix slice of this branch.
+- T8 [S2] DONE: GREEN 78/78 across eight files (new tests plus maintenance, secretary, patient access, controller and integration regressions); format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0. PR to develop next; release refresh follows develop merge.
 
 
 ## Log
@@ -113,3 +113,5 @@ L8: Final verification before manual review: mix dialyzer passed after the Patie
 L10: HAS ESTE ARREGLO, Y UNA VES TERMINADO, HAS UN PR A DEVELOP PRIMERO, UNA VES QUE ESTE EN DEVELOP, Y SI ES NECESARIO, HAS LO CAMBIO NECESARIO EN EL PR 524 PARA QUE YA ESTE IMPLEMENTADO
 
 L11: Reopened #521 per user order after the colleague review of #524 (S2 verbatim). All findings accepted as valid: fallback localhost (pre-existing, preserved by extraction), access_url leak on patient switch (introduced by this implementation), mailer dependency contradicting the no-provider requirement, incoherent email/screen origin, and the pre-existing missing replace button (included in scope to fulfill S1 "vincular o reemplazar"). Branch fix/521-review-corrections from develop e17c7e8; RED-first per item; PR to develop planned, then refresh chore/release-academic-access-links so #524 carries the fixes after develop merge.
+
+L12: RED observed 5 behavioral failures (13/18: full-origin equivalence, mailer exception, persisted link on raise, A→B leak, replace button) plus one test-side defect fixed (Ecto get_by forbids nil comparisons; replaced with an is_nil query). GREEN 78/78 across eight files after updating seven old-behavior refutes (#btn-open-replace-access) to asserts for patients with an access email and fixing the replace test fixture (persona→profile). Delivery failure now logs Logger.warning with the inspected reason and never gates issuance. Format, MIX_ENV=test compile --warnings-as-errors, git diff --check and dialyzer exit 0.
